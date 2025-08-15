@@ -33,8 +33,10 @@ func main() {
 	// 2. New preview/GA version based on existing preview/GA version
 	// 3. Retire old preview/GA version
 	avis := []*si.ApiVersionInfo{
-		{ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
-		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: v20250808.Routes},
+		// TODO: implement versioning; the below effectively makes versioning optional
+		// {ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
+		// {ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: v20250808.Routes},
+		{ApiVersion: "", BaseApiVersion: "", GetRoutes: v20250808.Routes},
 	}
 
 	s := &http.Server{
