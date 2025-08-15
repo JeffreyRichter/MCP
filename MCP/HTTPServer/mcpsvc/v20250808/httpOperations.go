@@ -114,9 +114,6 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes
 	}
 	*/
 
-	if err := r.UnmarshalBody(&tc); err != nil {
-		return err
-	}
 	return ti.Create(ctx, tc, r)
 }
 
