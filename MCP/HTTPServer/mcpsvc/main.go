@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -42,7 +43,10 @@ func main() {
 		MaxHeaderBytes: http.DefaultMaxHeaderBytes,
 	}
 	fmt.Println("Listening on " + s.Addr)
-	s.ListenAndServe()
+	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		fmt.Println("Error starting server:", err)
+		os.Exit(1)
+	}
 }
 
 func noApiVersionRoutes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
