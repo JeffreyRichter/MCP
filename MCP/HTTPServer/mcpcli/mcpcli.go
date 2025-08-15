@@ -15,7 +15,7 @@ func must[T any](v T, err error) T {
 }
 
 func main() {
-	const mcpServerURL = "https://localhost:8080"
+	const mcpServerURL = "http://localhost:8080"
 	client := http.DefaultClient
 
 	r := must(client.Get(mcpServerURL + "/mcp/tools")) // Get list of all tools
@@ -23,7 +23,7 @@ func main() {
 
 	// Create a tool call
 	toolCallId := time.Now().UnixMicro()
-	toolCallUrl := fmt.Sprintf(mcpServerURL+"/mcp/tools/add/%d", toolCallId)
+	toolCallUrl := fmt.Sprintf(mcpServerURL+"/mcp/tools/add/calls/%d", toolCallId)
 	req := must(http.NewRequest("PUT", toolCallUrl, strings.NewReader(`{"x": 1, "y": 2}`)))
 	r = must(client.Do(req))
 	fmt.Println("Response status:", r.Status)
