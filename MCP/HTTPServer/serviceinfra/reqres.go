@@ -116,8 +116,8 @@ func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode 
 		if err != nil {
 			return err
 		}
-		// If bodyStruct passed, automatically set these response headers
-		rh.ContentLength, rh.ContentType = Ptr(len(body)), Ptr("application/json")
+		// net/http will set Content-Length
+		rh.ContentType = Ptr("application/json")
 	}
 	rwh := r.RW.Header()
 	fields2Header := func(h any) {
