@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -15,6 +17,11 @@ func must[T any](v T, err error) T {
 		panic(err)
 	}
 	return v
+}
+
+func waitForKeypress() {
+	fmt.Print("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func main() {
@@ -27,6 +34,7 @@ func main() {
 	fmt.Println("\n📋 Getting list of all available tools...")
 	req := must(http.NewRequest("GET", mcpServerURL+"/mcp/tools", nil))
 	must(client.Do(req))
+	waitForKeypress()
 
 	fmt.Println("\n➕ Creating a new tool call for 'add' operation...")
 	toolCallId := time.Now().UnixMicro()
@@ -37,25 +45,30 @@ func main() {
 	req = must(http.NewRequest("PUT", toolCallUrl, strings.NewReader(requestBody)))
 	req.Header.Set("Content-Type", "application/json")
 	must(client.Do(req))
+	waitForKeypress()
 
 	fmt.Println("\n🔍 Checking the status of the created tool call...")
 	req = must(http.NewRequest("GET", toolCallUrl, nil))
 	must(client.Do(req))
+	waitForKeypress()
 
 	fmt.Println("\n⏭️ Advancing the tool call with new parameters...")
 	advanceBody := `{"x": 3, "y": 4}`
 	req = must(http.NewRequest("POST", toolCallUrl+"/advance", strings.NewReader(advanceBody)))
 	req.Header.Set("Content-Type", "application/json")
 	must(client.Do(req))
+	waitForKeypress()
 
 	fmt.Println("\n📝 Listing all tool calls for the 'add' operation...")
 	req = must(http.NewRequest("GET", mcpServerURL+"/mcp/tools/add/calls", nil))
 	must(client.Do(req))
+	waitForKeypress()
 
 	fmt.Println("\n❌ Canceling the tool call...")
 	req = must(http.NewRequest("POST", toolCallUrl+"/cancel", nil))
 	req.Header.Set("Content-Type", "application/json")
 	must(client.Do(req))
+	waitForKeypress()
 
 	fmt.Println("\n✅ MCP Client Demo completed!")
 }
