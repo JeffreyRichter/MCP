@@ -1,6 +1,7 @@
 package httpjson
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -66,9 +67,32 @@ func unmarshalMapOfSliceOfStrings(values map[string][]string, s any) error {
 			panic("slice not supported")
 
 		default:
-			panic("Field Kind not supported")
+			panic(fmt.Sprintf("Field kind '%v' not supported", fis[i].kind))
 		}
 	}
+
+	structValue := reflect.ValueOf(s).Elem()
+	for k, v := range o {
+		i := slices.IndexFunc(fis, func(fi fieldInfo) bool { return fi.name == k })
+		if i == -1 {
+			continue // This shouldn't happen since we already checked above
+		}
+
+		fieldValue := structValue.FieldByName(fis[i].structField)
+		if !fieldValue.CanSet() {
+			continue
+		}
+
+		if fieldValue.Type().Kind() == reflect.Pointer {
+			elemType := fieldValue.Type().Elem()
+			newValue := reflect.New(elemType)
+			newValue.Elem().Set(reflect.ValueOf(v).Convert(elemType))
+			fieldValue.Set(newValue)
+		} else {
+			fieldValue.Set(reflect.ValueOf(v).Convert(fieldValue.Type()))
+		}
+	}
+
 	// If struct has an 'Unknown' field of type UnknownFields, set it to the unknown fields
 	reflect.ValueOf(s).Elem().FieldByName("Unknown").Set(reflect.ValueOf(uf))
 	return VerifyStructFields(s) // Validate the struct's fields
@@ -80,7 +104,14 @@ type Unknown []string
 ////////////////////////////////////////////////////////////////////////////////////
 
 func VerifyStructFields(s any) error {
-	structType := reflect.TypeOf(s)
+	if s == nil {
+		return errors.New("VerifyStructFields: s cannot be nil")
+	}
+	if v := reflect.ValueOf(s); v.Kind() == reflect.Pointer && v.IsNil() {
+		return errors.New("VerifyStructFields: s cannot be a nil pointer")
+	}
+
+	structType := dereference(reflect.TypeOf(s))
 	if structType.Kind() != reflect.Struct {
 		return fmt.Errorf("VerifyStructFields: s must be a struct, got %s", structType.Kind())
 	}
@@ -88,7 +119,15 @@ func VerifyStructFields(s any) error {
 	fieldInfos := getFieldInfos(structType)
 	for fieldIndex := range fieldInfos {
 		fi := fieldInfos[fieldIndex]
-		fieldValue := reflect.ValueOf(s).Elem().FieldByName(fi.name)
+		fieldValue := reflect.ValueOf(s).Elem().FieldByName(fi.structField)
+		if fieldValue.Kind() == reflect.Pointer {
+			if fieldValue.IsNil() {
+				// nil is a valid value for any pointer type
+				continue
+			}
+			// dereference the pointer
+			fieldValue = fieldValue.Elem()
+		}
 
 		switch fi.kind {
 		case reflect.Bool:
@@ -131,6 +170,11 @@ func VerifyStructFields(s any) error {
 				return fmt.Errorf("field '%s' does not match regex: %s", fi.name, fi.regx.value.String())
 			}
 
+		case reflect.Struct:
+			if err := VerifyStructFields(fieldValue.Addr().Interface()); err != nil {
+				return fmt.Errorf("field %q: %v", fi.name, err)
+			}
+
 		case reflect.Slice:
 			panic("slice not supported")
 
@@ -151,7 +195,8 @@ func newOptional[T any](value T) optional[T] {
 }
 
 type fieldInfo struct {
-	name           string                   // For all fields
+	name           string                   // JSON field name (for all fields)
+	structField    string                   // Struct field name (for validation)
 	kind           reflect.Kind             // For all fields
 	minval, maxval optional[float64]        // For all ints, uints, & floats
 	minlen, maxlen optional[int64]          // For string, slice
@@ -216,6 +261,7 @@ func tagTo[T any](tag reflect.StructTag, key string, convert func(val string) op
 }
 
 func getFieldInfos(structType reflect.Type) []fieldInfo {
+	structType = dereference(structType)
 	if structType.Kind() != reflect.Struct {
 		panic("getTypeInfo: structType must be a struct")
 	}
@@ -250,19 +296,25 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 		} else {
 			propName = strings.Split(propName, ",")[0]
 		}
+		if propName == "-" {
+			continue
+		}
+
 		// Slice order MUST match struct field order
 		fi := fieldInfo{
-			name:   propName,
-			kind:   structField.Type.Elem().Kind(),
-			minval: tagToFloat64(tag, "minval"),
-			maxval: tagToFloat64(tag, "maxval"),
-			minlen: tagToInt64(tag, "minlen"),
-			maxlen: tagToInt64(tag, "maxlen"),
-			enums:  tagTo(tag, "enums", func(val string) optional[[]string] { return newOptional(strings.Split(val, ",")) }),
+			name:        propName,
+			structField: structField.Name,
+			kind:        dereference(structField.Type).Kind(),
+			minval:      tagToFloat64(tag, "minval"),
+			maxval:      tagToFloat64(tag, "maxval"),
+			minlen:      tagToInt64(tag, "minlen"),
+			maxlen:      tagToInt64(tag, "maxlen"),
+			enums:       tagTo(tag, "enums", func(val string) optional[[]string] { return newOptional(strings.Split(val, ",")) }),
 			regx: tagTo(tag, "regx",
 				func(val string) optional[*regexp.Regexp] {
 					return newOptional(regexp.MustCompile(val))
 				}),
+			timeFmt: tagTo(tag, "time", func(val string) optional[string] { return newOptional(val) }),
 		}
 		fieldInfos = append(fieldInfos, fi)
 	}
@@ -271,3 +323,11 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 }
 
 var typeToFieldInfos = syncmap.Map[reflect.Type, []fieldInfo]{}
+
+// dereference returns the underlying type if t is a pointer type, otherwise returns t itself
+func dereference(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
+}
