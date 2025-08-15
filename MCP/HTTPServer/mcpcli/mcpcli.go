@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -16,28 +19,93 @@ func must[T any](v T, err error) T {
 
 func main() {
 	const mcpServerURL = "http://localhost:8080"
-	client := http.DefaultClient
+	client := &LoggingClient{http.DefaultClient}
 
-	r := must(client.Get(mcpServerURL + "/mcp/tools")) // Get list of all tools
-	fmt.Println("Response status:", r.Status)
+	fmt.Println("🚀 Starting MCP Client Demo")
+	fmt.Printf("Server URL: %s\n", mcpServerURL)
 
-	// Create a tool call
+	fmt.Println("\n📋 Getting list of all available tools...")
+	req := must(http.NewRequest("GET", mcpServerURL+"/mcp/tools", nil))
+	must(client.Do(req))
+
+	fmt.Println("\n➕ Creating a new tool call for 'add' operation...")
 	toolCallId := time.Now().UnixMicro()
 	toolCallUrl := fmt.Sprintf(mcpServerURL+"/mcp/tools/add/calls/%d", toolCallId)
-	req := must(http.NewRequest("PUT", toolCallUrl, strings.NewReader(`{"x": 1, "y": 2}`)))
-	r = must(client.Do(req))
-	fmt.Println("Response status:", r.Status)
+	fmt.Printf("Generated Tool Call ID: %d\n", toolCallId)
 
-	// Poll the tool call's status
-	r = must(client.Get(toolCallUrl))
-	fmt.Println("Response status:", r.Status)
+	requestBody := `{"x": 1, "y": 2}`
+	req = must(http.NewRequest("PUT", toolCallUrl, strings.NewReader(requestBody)))
+	req.Header.Set("Content-Type", "application/json")
+	must(client.Do(req))
 
-	// Advance the tool call
-	r = must(client.Post(toolCallUrl+"/advance", "application/json", strings.NewReader(`{"x": 3, "y": 4}`)))
+	fmt.Println("\n🔍 Checking the status of the created tool call...")
+	req = must(http.NewRequest("GET", toolCallUrl, nil))
+	must(client.Do(req))
 
-	// List all the 'add' tool calls
-	r = must(client.Get(mcpServerURL + "/mcp/tools/add/calls"))
+	fmt.Println("\n⏭️ Advancing the tool call with new parameters...")
+	advanceBody := `{"x": 3, "y": 4}`
+	req = must(http.NewRequest("POST", toolCallUrl+"/advance", strings.NewReader(advanceBody)))
+	req.Header.Set("Content-Type", "application/json")
+	must(client.Do(req))
 
-	// Cancel the tool call
-	r = must(client.Post(toolCallUrl+"/cancel", "application/json", nil))
+	fmt.Println("\n📝 Listing all tool calls for the 'add' operation...")
+	req = must(http.NewRequest("GET", mcpServerURL+"/mcp/tools/add/calls", nil))
+	must(client.Do(req))
+
+	fmt.Println("\n❌ Canceling the tool call...")
+	req = must(http.NewRequest("POST", toolCallUrl+"/cancel", nil))
+	req.Header.Set("Content-Type", "application/json")
+	must(client.Do(req))
+
+	fmt.Println("\n✅ MCP Client Demo completed!")
+}
+
+type LoggingClient struct {
+	*http.Client
+}
+
+func (lc *LoggingClient) Do(req *http.Request) (*http.Response, error) {
+	reqBody := ""
+	if req.Body != nil {
+		bodyBytes, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		if len(bodyBytes) > 0 {
+			reqBody = string(bodyBytes)
+			req.Body = io.NopCloser(strings.NewReader(reqBody))
+		}
+	}
+	fmt.Println("\n=== REQUEST ===")
+	fmt.Println(req.Method, req.URL.String())
+	if reqBody != "" {
+		fmt.Println(reqBody)
+	}
+
+	resp, err := lc.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("=== RESPONSE ===")
+	fmt.Println(resp.Status)
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	resp.Body.Close()
+
+	resBody := "(no content)"
+	if len(b) > 0 {
+		content := bytes.Buffer{}
+		if err := json.Indent(&content, b, "", "  "); err != nil {
+			content.Reset()
+			content.Write(b)
+		}
+		resBody = content.String()
+	}
+	fmt.Println(resBody)
+	fmt.Println("================")
+	return resp, nil
 }
