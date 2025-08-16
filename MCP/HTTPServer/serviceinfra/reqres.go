@@ -331,16 +331,12 @@ func (r *ReqRes) ValidatePreconditions(rv *PreconditionValues) error {
 			}
 			return nil
 		} else {
-			if r.H.IfModifiedSince != nil {
+			// RFC 7232 3.3: if-modified-since applies only to GET and HEAD
+			if r.H.IfModifiedSince != nil && (r.R.Method == http.MethodGet || r.R.Method == http.MethodHead) {
 				if rv.LastModified.After(*r.H.IfModifiedSince) { // true if resource date after If-Mmodifed-Since date
 					return nil
-				} else {
-					if isMethodSafe() {
-						return r.Error(http.StatusNotModified, "Resource not modified since", "")
-					} else {
-						return r.Error(http.StatusPreconditionFailed, "Resource not modified since", "")
-					}
 				}
+				return r.Error(http.StatusNotModified, "Resource not modified since", "")
 			} else {
 				return nil
 			}
