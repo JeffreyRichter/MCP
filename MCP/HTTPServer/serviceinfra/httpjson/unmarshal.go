@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/JeffreyRichter/serviceinfra/internal/syncmap"
 )
@@ -62,6 +63,19 @@ func unmarshalMapOfSliceOfStrings(values map[string][]string, s any) error {
 
 		case reflect.String:
 			o[k] = val[0]
+
+		case reflect.Struct:
+			if !fis[i].timeFmt.isSet {
+				panic(fmt.Sprintf("Struct field kind %q not supported (missing time format tag)", fis[i].structField))
+			}
+			if format := fis[i].timeFmt.value; format != "RFC1123" {
+				panic(fmt.Sprintf("unsupported time format %q", format))
+			}
+			t, err := time.Parse(http.TimeFormat, val[0])
+			if err != nil {
+				return fmt.Errorf("failed to parse time field %q: %v", k, err)
+			}
+			o[k] = t
 
 		case reflect.Slice:
 			panic("slice not supported")
