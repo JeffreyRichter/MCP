@@ -322,15 +322,14 @@ func (r *ReqRes) ValidatePreconditions(rv *PreconditionValues) error {
 	// Algorithm from : https://www.loggly.com/blog/http-status-code-diagram/
 	hasIfNoneMatch := func() error {
 		if r.H.IfNoneMatch != nil {
-			if r.H.IfNoneMatch.Equals(*rv.ETag) { // true if resource etag == If-None-Match etag
-				return nil
-			} else {
+			if r.H.IfNoneMatch.Equals(ETagAny) || r.H.IfNoneMatch.WeakEquals(*rv.ETag) {
 				if isMethodSafe() {
 					return r.Error(http.StatusNotModified, "Resource etag matches", "")
 				} else {
 					return r.Error(http.StatusPreconditionFailed, "Resource etag matches", "")
 				}
 			}
+			return nil
 		} else {
 			if r.H.IfModifiedSince != nil {
 				if rv.LastModified.After(*r.H.IfModifiedSince) { // true if resource date after If-Mmodifed-Since date
