@@ -11,6 +11,7 @@ func Routes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
 	// To existing URL, add/overwrite HTTP method: baseRoutes["<ExistinUrl>"]["<ExistingOrNewHttpMethod>"] = postFoo
 	// To existing URL, remove HTTP method:        delete(baseRoutes["<ExistingUrl>"], "<ExisitngHttpMethod>")
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
+	ops := GetOps()
 	return si.ApiVersionRoutes{
 		// ***** TOOLS *****
 		"/mcp/tools": map[string]*si.MethodInfo{

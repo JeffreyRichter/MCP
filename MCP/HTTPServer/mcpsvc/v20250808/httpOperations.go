@@ -5,6 +5,7 @@ package v20250808
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
@@ -12,53 +13,63 @@ import (
 	si "github.com/JeffreyRichter/serviceinfra"
 )
 
-var toolInfos = map[string]*ToolInfo{
-	"add": {
-		Create:  ops.createToolCallAdd,
-		Get:     ops.getToolCallAdd,
-		Advance: ops.advanceToolCallAdd,
-		Cancel:  ops.cancelToolCallAdd,
-		Tool: &mcp.Tool{
-			BaseMetadata: mcp.BaseMetadata{
-				Name:  "add",
-				Title: si.Ptr("Add two numbers"),
-			},
-			Description: si.Ptr("Add two numbers"),
-			InputSchema: mcp.JSONSchema{
-				Type: "object",
-				Properties: &map[string]any{
-					"x": map[string]any{
-						"type":        "integer",
-						"Description": si.Ptr("The first number"),
+// singletons are defined as function variables so tests can insert mocks
+var (
+	GetOps = sync.OnceValue(func() *httpOperations {
+		store := resources.GetToolCallStore()
+		return &httpOperations{ToolCallStore: store}
+	})
+	GetToolInfos = sync.OnceValue(func() map[string]*ToolInfo {
+		ops := GetOps()
+		return map[string]*ToolInfo{
+			"add": {
+				Create:  ops.createToolCallAdd,
+				Get:     ops.getToolCallAdd,
+				Advance: ops.advanceToolCallAdd,
+				Cancel:  ops.cancelToolCallAdd,
+				Tool: &mcp.Tool{
+					BaseMetadata: mcp.BaseMetadata{
+						Name:  "add",
+						Title: si.Ptr("Add two numbers"),
 					},
-					"y": map[string]any{
-						"type":        "integer",
-						"Description": si.Ptr("The second number"),
+					Description: si.Ptr("Add two numbers"),
+					InputSchema: mcp.JSONSchema{
+						Type: "object",
+						Properties: &map[string]any{
+							"x": map[string]any{
+								"type":        "integer",
+								"Description": si.Ptr("The first number"),
+							},
+							"y": map[string]any{
+								"type":        "integer",
+								"Description": si.Ptr("The second number"),
+							},
+						},
+						Required: []string{"x", "y"},
 					},
+					OutputSchema: &mcp.JSONSchema{
+						Type: "object",
+						Properties: &map[string]any{
+							"result": map[string]any{
+								"type":        "integer",
+								"Description": si.Ptr("The result of the addition"),
+							},
+						},
+						Required: []string{"result"},
+					},
+					Annotations: &mcp.ToolAnnotations{
+						Title:           si.Ptr("Add two numbers"),
+						ReadOnlyHint:    si.Ptr(false),
+						DestructiveHint: si.Ptr(false),
+						IdempotentHint:  si.Ptr(true),
+						OpenWorldHint:   si.Ptr(true),
+					},
+					Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
 				},
-				Required: []string{"x", "y"},
 			},
-			OutputSchema: &mcp.JSONSchema{
-				Type: "object",
-				Properties: &map[string]any{
-					"result": map[string]any{
-						"type":        "integer",
-						"Description": si.Ptr("The result of the addition"),
-					},
-				},
-				Required: []string{"result"},
-			},
-			Annotations: &mcp.ToolAnnotations{
-				Title:           si.Ptr("Add two numbers"),
-				ReadOnlyHint:    si.Ptr(false),
-				DestructiveHint: si.Ptr(false),
-				IdempotentHint:  si.Ptr(true),
-				OpenWorldHint:   si.Ptr(true),
-			},
-			Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
-		},
-	},
-}
+		}
+	})
+)
 
 type toolOp func(ctx context.Context, toolCall *toolcalls.ToolCall, r *si.ReqRes) error
 
@@ -71,10 +82,7 @@ type ToolInfo struct {
 }
 
 // httpOperations wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
-type httpOperations struct{ *resources.ToolCalls }
-
-// ops is the singleton for this api-version of the service
-var ops = httpOperations{ToolCalls: resources.ToolCallOps}
+type httpOperations struct{ resources.ToolCallStore }
 
 func (ops *httpOperations) etag() *si.ETag { return si.Ptr(si.ETag("v20250808")) }
 
@@ -86,7 +94,8 @@ func (ops *httpOperations) lookupToolCall(r *si.ReqRes) (*ToolInfo, *toolcalls.T
 	if toolCallId == "" {
 		return nil, nil, r.Error(http.StatusBadRequest, "BadRequest", "Tool call ID required")
 	}
-	ti, ok := toolInfos[toolName]
+	infos := GetToolInfos()
+	ti, ok := infos[toolName]
 	if !ok {
 		return nil, nil, r.Error(http.StatusBadRequest, "BadRequest", "Tool '%s' not found", toolName)
 	}
