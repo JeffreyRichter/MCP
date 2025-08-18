@@ -288,7 +288,7 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 	}
 
 	// ***** ACCEPT PROCESSING
-	if vh.Accept != nil && !slices.Contains(vh.Accept, *r.H.Accept) {
+	if vh.Accept != nil && (r.H == nil || r.H.Accept == nil || !slices.Contains(vh.Accept, *r.H.Accept)) {
 		// Also check accept language, accept charset, accept encoding - in this order? If any fail, 406-Not Acceptable
 		return r.Error(http.StatusNotAcceptable, "Unsupported Accept", "accept must be one of: %s", strings.Join(vh.Accept, ", "))
 	}
