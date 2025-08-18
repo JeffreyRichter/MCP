@@ -12,7 +12,8 @@
             "program": "${workspaceFolder}/mcpsvc",
             "buildFlags": [
                 "-tags=goexperiment.jsonv2"
-            ]
+            ],
+            "envFile": "${workspaceFolder}/mcpsvc/.env"
         }
     ]
 }

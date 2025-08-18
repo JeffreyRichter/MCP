@@ -2,11 +2,12 @@ package resources
 
 import (
 	"context"
-	"fmt"
+	"net/url"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/JeffreyRichter/mcpsvc/config"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 )
 
@@ -28,7 +29,7 @@ var GetToolCallStore = sync.OnceValue(func() ToolCallStore {
 	return &AzureBlobToolCallStore{
 		client: func() *azblob.Client {
 			cred := must(azidentity.NewDefaultAzureCredential(nil))
-			serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", "chlowemcp") // Replace with your storage account name
+			serviceURL := must(url.Parse(config.Get().AzureStorageURL)).String()
 			client := must(azblob.NewClient(serviceURL, cred, nil))
 			return client
 		}(),
