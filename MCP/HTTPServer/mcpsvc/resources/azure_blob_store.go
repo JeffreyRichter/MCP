@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json/v2"
 	"io"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	si "github.com/JeffreyRichter/serviceinfra"
@@ -58,7 +60,9 @@ func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tenant string, toolCa
 		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(accessConditions)})
 		if err == nil { // Successfully uploaded the Tool Call blob
 			toolCall.ETag = (*si.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
-			return toolCall, nil
+			blockClient := ab.client.ServiceClient().NewContainerClient(tenant).NewBlockBlobClient(blobName)
+			_, err = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)
+			return toolCall, err
 		}
 
 		// An error occured; if not related to missing container, return the error
