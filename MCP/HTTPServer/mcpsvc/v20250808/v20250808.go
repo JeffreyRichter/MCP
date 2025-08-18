@@ -21,7 +21,13 @@ func Routes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
 			"GET": {Policy: ops.listToolCalls},
 		},
 		"/mcp/tools/{toolName}/calls/{toolCallId}": map[string]*si.MethodInfo{
-			"PUT": {Policy: ops.putToolCallResource},
+			"PUT": {
+				Policy: ops.putToolCallResource,
+				ValidHeader: &si.ValidHeader{
+					ContentTypes:     []string{"application/json"},
+					MaxContentLength: int64(1024),
+				},
+			},
 			"GET": {Policy: ops.getToolCallResource},
 		},
 
