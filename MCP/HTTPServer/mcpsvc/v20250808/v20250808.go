@@ -32,11 +32,22 @@ func Routes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
 		},
 
 		"/mcp/tools/{toolName}/calls/{toolCallId}/advance": map[string]*si.MethodInfo{
-			"POST": {Policy: ops.postToolCallAdvance},
+			"POST": {
+				Policy: ops.postToolCallAdvance,
+				ValidHeader: &si.ValidHeader{
+					ContentTypes:     []string{"application/json"},
+					MaxContentLength: int64(1024),
+				},
+			},
 		},
 
 		"/mcp/tools/{toolName}/calls/{toolCallId}/cancel": map[string]*si.MethodInfo{
-			"POST": {Policy: ops.postToolCallCancelResource},
+			"POST": {
+				Policy: ops.postToolCallCancelResource,
+				ValidHeader: &si.ValidHeader{
+					MaxContentLength: int64(0), // No content expected for cancel
+				},
+			},
 		},
 
 		// ***** RESOURCES *****

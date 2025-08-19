@@ -14,62 +14,101 @@ import (
 )
 
 // singletons are defined as function variables so tests can insert mocks
+// TODO: reconsider this architecture; a hierarchy of singletons complicates testing
 var (
 	GetOps = sync.OnceValue(func() *httpOperations {
 		store := resources.GetToolCallStore()
 		return &httpOperations{ToolCallStore: store}
 	})
-	GetToolInfos = sync.OnceValue(func() map[string]*ToolInfo {
-		ops := GetOps()
-		return map[string]*ToolInfo{
-			"add": {
-				Create:  ops.createToolCallAdd,
-				Get:     ops.getToolCallAdd,
-				Advance: ops.advanceToolCallAdd,
-				Cancel:  ops.cancelToolCallAdd,
-				Tool: &mcp.Tool{
-					BaseMetadata: mcp.BaseMetadata{
-						Name:  "add",
-						Title: si.Ptr("Add two numbers"),
-					},
-					Description: si.Ptr("Add two numbers"),
-					InputSchema: mcp.JSONSchema{
-						Type: "object",
-						Properties: &map[string]any{
-							"x": map[string]any{
-								"type":        "integer",
-								"Description": si.Ptr("The first number"),
-							},
-							"y": map[string]any{
-								"type":        "integer",
-								"Description": si.Ptr("The second number"),
-							},
-						},
-						Required: []string{"x", "y"},
-					},
-					OutputSchema: &mcp.JSONSchema{
-						Type: "object",
-						Properties: &map[string]any{
-							"result": map[string]any{
-								"type":        "integer",
-								"Description": si.Ptr("The result of the addition"),
-							},
-						},
-						Required: []string{"result"},
-					},
-					Annotations: &mcp.ToolAnnotations{
-						Title:           si.Ptr("Add two numbers"),
-						ReadOnlyHint:    si.Ptr(false),
-						DestructiveHint: si.Ptr(false),
-						IdempotentHint:  si.Ptr(true),
-						OpenWorldHint:   si.Ptr(true),
-					},
-					Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
-				},
-			},
-		}
-	})
+	GetToolInfos = sync.OnceValue(buildToolInfosMap)
 )
+
+func buildToolInfosMap() map[string]*ToolInfo {
+	ops := GetOps()
+	return map[string]*ToolInfo{
+		"add": {
+			Create:  ops.createToolCallAdd,
+			Get:     ops.getToolCallAdd,
+			Advance: ops.advanceToolCallAdd,
+			Cancel:  ops.cancelToolCallAdd,
+			Tool: &mcp.Tool{
+				BaseMetadata: mcp.BaseMetadata{
+					Name:  "add",
+					Title: si.Ptr("Add two numbers"),
+				},
+				Description: si.Ptr("Add two numbers"),
+				InputSchema: mcp.JSONSchema{
+					Type: "object",
+					Properties: &map[string]any{
+						"x": map[string]any{
+							"type":        "integer",
+							"Description": si.Ptr("The first number"),
+						},
+						"y": map[string]any{
+							"type":        "integer",
+							"Description": si.Ptr("The second number"),
+						},
+					},
+					Required: []string{"x", "y"},
+				},
+				OutputSchema: &mcp.JSONSchema{
+					Type: "object",
+					Properties: &map[string]any{
+						"result": map[string]any{
+							"type":        "integer",
+							"Description": si.Ptr("The result of the addition"),
+						},
+					},
+					Required: []string{"result"},
+				},
+				Annotations: &mcp.ToolAnnotations{
+					Title:           si.Ptr("Add two numbers"),
+					ReadOnlyHint:    si.Ptr(false),
+					DestructiveHint: si.Ptr(false),
+					IdempotentHint:  si.Ptr(true),
+					OpenWorldHint:   si.Ptr(true),
+				},
+				Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
+			},
+		},
+		"pii": {
+			Create:  ops.createToolCallPII,
+			Get:     ops.getToolCallPII,
+			Advance: ops.advanceToolCallPII,
+			Cancel:  ops.cancelToolCallPII,
+			Tool: &mcp.Tool{
+				BaseMetadata: mcp.BaseMetadata{
+					Name:  "pii",
+					Title: si.Ptr("Get PII"),
+				},
+				Description: si.Ptr("Get PII data with client confirmation"),
+				InputSchema: mcp.JSONSchema{
+					Type:       "object",
+					Properties: &map[string]any{},
+					Required:   []string{},
+				},
+				OutputSchema: &mcp.JSONSchema{
+					Type: "object",
+					Properties: &map[string]any{
+						"data": map[string]any{
+							"type":        "string",
+							"Description": si.Ptr("The PII data"),
+						},
+					},
+					Required: []string{"data"},
+				},
+				Annotations: &mcp.ToolAnnotations{
+					Title:           si.Ptr("Get PII"),
+					ReadOnlyHint:    si.Ptr(true),
+					DestructiveHint: si.Ptr(false),
+					IdempotentHint:  si.Ptr(true),
+					OpenWorldHint:   si.Ptr(false),
+				},
+				Meta: mcp.Meta{"sensitive": "true"},
+			},
+		},
+	}
+}
 
 type toolOp func(ctx context.Context, toolCall *toolcalls.ToolCall, r *si.ReqRes) error
 

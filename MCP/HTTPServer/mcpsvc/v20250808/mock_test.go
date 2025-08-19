@@ -28,9 +28,14 @@ func SetupMockStore(t *testing.T) {
 		return &httpOperations{ToolCallStore: mock}
 	})
 
+	// Reset the GetToolInfos singleton so it picks up the new GetOps
+	beforeGetToolInfos := GetToolInfos
+	GetToolInfos = sync.OnceValue(buildToolInfosMap)
+
 	t.Cleanup(func() {
 		resources.GetToolCallStore = before
 		GetOps = beforeGetOps
+		GetToolInfos = beforeGetToolInfos
 	})
 }
 
