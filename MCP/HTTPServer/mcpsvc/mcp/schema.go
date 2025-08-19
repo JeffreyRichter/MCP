@@ -4,6 +4,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 )
 
 // Constants
@@ -550,6 +551,51 @@ func (s StringSchema) isPrimitiveSchema()  {}
 func (s NumberSchema) isPrimitiveSchema()  {}
 func (s BooleanSchema) isPrimitiveSchema() {}
 func (s EnumSchema) isPrimitiveSchema()    {}
+
+// UnmarshalPrimitiveSchemaDefinition unmarshals JSON into the appropriate concrete type
+// based on the "type" field in the JSON object
+func UnmarshalPrimitiveSchemaDefinition(data []byte) (PrimitiveSchemaDefinition, error) {
+	var typeCheck struct {
+		Type string `json:"type"`
+		Enum []any  `json:"enum,omitempty"`
+	}
+
+	if err := json.Unmarshal(data, &typeCheck); err != nil {
+		return nil, err
+	}
+
+	// If enum field exists, it's an EnumSchema regardless of type
+	if typeCheck.Enum != nil {
+		var schema EnumSchema
+		if err := json.Unmarshal(data, &schema); err != nil {
+			return nil, err
+		}
+		return schema, nil
+	}
+
+	switch typeCheck.Type {
+	case "string":
+		var schema StringSchema
+		if err := json.Unmarshal(data, &schema); err != nil {
+			return nil, err
+		}
+		return schema, nil
+	case "number", "integer":
+		var schema NumberSchema
+		if err := json.Unmarshal(data, &schema); err != nil {
+			return nil, err
+		}
+		return schema, nil
+	case "boolean":
+		var schema BooleanSchema
+		if err := json.Unmarshal(data, &schema); err != nil {
+			return nil, err
+		}
+		return schema, nil
+	default:
+		return nil, errors.New("unknown primitive schema type: " + typeCheck.Type)
+	}
+}
 
 type ElicitRequestParams struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L1390
 	RequestParams
