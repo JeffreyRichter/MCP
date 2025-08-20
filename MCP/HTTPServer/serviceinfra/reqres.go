@@ -3,6 +3,7 @@ package serviceinfra
 import (
 	"context"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -165,7 +166,10 @@ func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode 
 		fields2Header(customHeader)
 	}
 	r.RW.WriteHeader(statusCode)
-	_, err = r.RW.Write(body)
+	if _, err = r.RW.Write(body); errors.Is(err, http.ErrBodyNotAllowed) {
+		// e.g. request failed a precondition so we're responding 304 and tried to add a JSON error message to the body
+		err = nil
+	}
 	return err
 }
 
