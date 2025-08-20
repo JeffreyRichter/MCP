@@ -69,10 +69,12 @@ func (r *ReqRes) Error(statusCode int, errorCode, messageFmt string, a ...any) e
 		ErrorCode:  errorCode,
 		Message:    fmt.Sprintf(messageFmt, a...),
 	}
-	return r.WriteResponse(&ResponseHeader{
+	// TODO: log WriteResponse errors
+	_ = r.WriteResponse(&ResponseHeader{
 		XMSErrorCode: &se.ErrorCode,
 		ContentType:  Ptr("application/json"),
 	}, nil, se.StatusCode, se)
+	return se
 }
 
 func (r *ReqRes) UnmarshalQuery(s any) error {
