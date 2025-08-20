@@ -5,37 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
-
-	si "github.com/JeffreyRichter/serviceinfra"
-	"github.com/JeffreyRichter/serviceinfra/policies"
 )
 
 var ctx = context.Background()
-
-func testServer(t *testing.T) *httptest.Server {
-	SetupMockStore(t)
-
-	policies := []si.Policy{
-		policies.NewGracefulShutdownPolicy(),
-		policies.NewLoggingPolicy(os.Stderr),
-		policies.NewThrottlingPolicy(100),
-		policies.NewAuthenticationPolicy(),
-		policies.NewMetricsPolicy(),
-		policies.NewDistributedTracing(),
-	}
-	avis := []*si.ApiVersionInfo{{GetRoutes: Routes}}
-	handler := si.BuildHandler(policies, avis, 5*time.Second)
-
-	srv := httptest.NewServer(handler)
-	t.Cleanup(srv.Close)
-
-	return srv
-}
 
 func TestToolCallAdd(t *testing.T) {
 	srv := testServer(t)
