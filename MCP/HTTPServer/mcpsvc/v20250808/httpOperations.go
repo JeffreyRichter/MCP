@@ -13,6 +13,8 @@ import (
 	si "github.com/JeffreyRichter/serviceinfra"
 )
 
+const v20250808 = "v20250808"
+
 // singletons are defined as function variables so tests can insert mocks
 // TODO: reconsider this architecture; a hierarchy of singletons complicates testing
 var (
@@ -214,10 +216,19 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (ops *httpOperations) getToolList(ctx context.Context, r *si.ReqRes) error {
-	body := any(nil)
+	if err := r.ValidatePreconditions(&si.PreconditionValues{ETag: si.Ptr(si.ETag(v20250808))}); err != nil {
+		return err
+	}
+	info := GetToolInfos()
+	result := mcp.ListToolsResult{
+		Tools: make([]mcp.Tool, 0, len(info)),
+	}
+	for _, ti := range info {
+		result.Tools = append(result.Tools, *ti.Tool)
+	}
 	return r.WriteResponse(&si.ResponseHeader{
-		ETag: ops.etag(),
-	}, nil, http.StatusOK, body)
+		ETag: si.Ptr(si.ETag(v20250808)),
+	}, nil, http.StatusOK, result)
 }
 
 func (ops *httpOperations) listToolCalls(ctx context.Context, r *si.ReqRes) error {

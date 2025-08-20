@@ -24,19 +24,19 @@ func newTestClient(t *testing.T) *testClient {
 	return &testClient{t: t, url: srv.URL}
 }
 
-func (c *testClient) Put(path string, body io.Reader) *http.Response {
-	return c.do(http.MethodPut, path, body)
+func (c *testClient) Put(path string, headers http.Header, body io.Reader) *http.Response {
+	return c.do(http.MethodPut, path, headers, body)
 }
 
-func (c *testClient) Post(path string, body io.Reader) *http.Response {
-	return c.do(http.MethodPost, path, body)
+func (c *testClient) Post(path string, headers http.Header, body io.Reader) *http.Response {
+	return c.do(http.MethodPost, path, headers, body)
 }
 
-func (c *testClient) Get(path string) *http.Response {
-	return c.do(http.MethodGet, path, nil)
+func (c *testClient) Get(path string, headers http.Header) *http.Response {
+	return c.do(http.MethodGet, path, headers, nil)
 }
 
-func (c *testClient) do(method, path string, body io.Reader) *http.Response {
+func (c *testClient) do(method, path string, headers http.Header, body io.Reader) *http.Response {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -46,6 +46,11 @@ func (c *testClient) do(method, path string, body io.Reader) *http.Response {
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range headers {
+		for _, val := range v {
+			req.Header.Add(k, val)
+		}
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -57,7 +62,7 @@ func (c *testClient) do(method, path string, body io.Reader) *http.Response {
 func TestToolCallPIICreate(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
@@ -88,7 +93,7 @@ func TestToolCallPIICreate_Error(t *testing.T) {
 	t.Skip("TODO: service infra writes multiple objects to body")
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), nil)
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, nil)
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -115,14 +120,14 @@ func TestToolCallPIICreate_Error(t *testing.T) {
 func TestToolCallPIIGet(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
 	// get the tool call
-	resp = client.Get("/mcp/tools/pii/calls/" + t.Name())
+	resp = client.Get("/mcp/tools/pii/calls/"+t.Name(), http.Header{})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
@@ -146,13 +151,13 @@ func TestToolCallPIIGet(t *testing.T) {
 func TestToolCallPIIElicitationApproved(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/advance", strings.NewReader(`{"action":"accept","content":{"approved":true}}`))
+	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/advance", http.Header{}, strings.NewReader(`{"action":"accept","content":{"approved":true}}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
@@ -194,13 +199,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 		t.Run(action, func(t *testing.T) {
 			client := newTestClient(t)
 			id := strings.ReplaceAll(t.Name(), "/", "-")
-			resp := client.Put("/mcp/tools/pii/calls/"+id, strings.NewReader(`{"key":"test"}`))
+			resp := client.Put("/mcp/tools/pii/calls/"+id, http.Header{}, strings.NewReader(`{"key":"test"}`))
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Create failed with status %d", resp.StatusCode)
 			}
 			resp.Body.Close()
 
-			resp = client.Post("/mcp/tools/pii/calls/"+id+"/advance", strings.NewReader(fmt.Sprintf(`{"action":%q}`, action)))
+			resp = client.Post("/mcp/tools/pii/calls/"+id+"/advance", http.Header{}, strings.NewReader(fmt.Sprintf(`{"action":%q}`, action)))
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 			}
@@ -231,13 +236,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 	t.Run("disapprove", func(t *testing.T) {
 		client := newTestClient(t)
 		id := strings.ReplaceAll(t.Name(), "/", "-")
-		resp := client.Put("/mcp/tools/pii/calls/"+id, strings.NewReader(`{"key":"test"}`))
+		resp := client.Put("/mcp/tools/pii/calls/"+id, http.Header{}, strings.NewReader(`{"key":"test"}`))
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("Create failed with status %d", resp.StatusCode)
 		}
 		resp.Body.Close()
 
-		resp = client.Post("/mcp/tools/pii/calls/"+id+"/advance", strings.NewReader(`{"action":"accept","content":{"approved":false}}`))
+		resp = client.Post("/mcp/tools/pii/calls/"+id+"/advance", http.Header{}, strings.NewReader(`{"action":"accept","content":{"approved":false}}`))
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 		}
@@ -268,13 +273,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 func TestToolCallPIICancel(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/cancel", nil)
+	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/cancel", http.Header{}, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
@@ -307,19 +312,19 @@ func TestToolCallPIICancel(t *testing.T) {
 func TestToolCallPIICancelAlreadyCompleted(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/advance", strings.NewReader(`{"action":"accept","content":{"approved":true}}`))
+	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/advance", http.Header{}, strings.NewReader(`{"action":"accept","content":{"approved":true}}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Advance failed with status %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/cancel", nil)
+	resp = client.Post("/mcp/tools/pii/calls/"+t.Name()+"/cancel", http.Header{}, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
