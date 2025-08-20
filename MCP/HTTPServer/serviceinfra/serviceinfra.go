@@ -49,6 +49,7 @@ func BuildHandler(policies []Policy, avis []*ApiVersionInfo, maxOperationDuratio
 		ctx, cancel := context.WithTimeout(reqRes.R.Context(), maxOperationDuration)
 		defer cancel()
 		if err := reqRes.Next(ctx); err != nil {
+			fmt.Printf("Error processing request: %v\n", err)
 			if err, ok := err.(*ServiceError); !ok { // A non-AzureError occured
 				reqRes.Error(http.StatusInternalServerError, "InternalServerError", "")
 				panic(err)

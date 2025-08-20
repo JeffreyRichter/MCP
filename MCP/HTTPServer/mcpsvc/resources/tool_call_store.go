@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"sync"
 
@@ -28,6 +29,12 @@ type ToolCallStore interface {
 var GetToolCallStore = sync.OnceValue(func() ToolCallStore {
 	return &AzureBlobToolCallStore{
 		client: func() *azblob.Client {
+			cfg := config.Get()
+			if cfg.AzuriteAccount != "" && cfg.AzuriteKey != "" {
+				fmt.Println("Using Azurite for tool call storage")
+				cred := must(azblob.NewSharedKeyCredential(cfg.AzuriteAccount, cfg.AzuriteKey))
+				return must(azblob.NewClientWithSharedKeyCredential(cfg.AzureStorageURL, cred, nil))
+			}
 			cred := must(azidentity.NewDefaultAzureCredential(nil))
 			serviceURL := must(url.Parse(config.Get().AzureStorageURL)).String()
 			client := must(azblob.NewClient(serviceURL, cred, nil))

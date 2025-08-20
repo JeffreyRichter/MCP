@@ -61,8 +61,9 @@ func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tenant string, toolCa
 		if err == nil { // Successfully uploaded the Tool Call blob
 			toolCall.ETag = (*si.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			blockClient := ab.client.ServiceClient().NewContainerClient(tenant).NewBlockBlobClient(blobName)
-			_, err = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)
-			return toolCall, err
+			// TODO: this error should be logged but isn't cause for panic and shouldn't be sent to the client
+			_, _ = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)
+			return toolCall, nil
 		}
 
 		// An error occured; if not related to missing container, return the error

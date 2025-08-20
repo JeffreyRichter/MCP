@@ -12,6 +12,16 @@
             "program": "${workspaceFolder}/mcpcli"
         },
         {
+            "name": "integration tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/mcpsvc/integration_tests",
+            "buildFlags": [
+                "-tags=goexperiment.jsonv2"
+            ],
+        },
+        {
             "name": "server",
             "type": "go",
             "request": "launch",
