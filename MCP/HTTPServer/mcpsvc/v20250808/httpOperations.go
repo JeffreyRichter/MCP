@@ -148,22 +148,12 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return err
 	}
-
-	// PUT only if if-match matches; PUT only if if-none-match doesn't match
-	// if no if-match, then create a new tool call if it doesn't exist; if does exist & a retry, return current tool state; else 409-conflict (already exists)
-	// if if-match matches, then it does exist; return 409-conflict
-	// If no if-none-match, then it does not exist; create a new tool call
-
-	/* TODO: Find existing tool call or create new tool call for retry idempotency & concurrency
-	tc, err := ops.Get(ctx, tenant, tcc.ToolName, tcc.ToolCallId, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	resourceExists := err == nil
-	if resourceExists {
-		if err := r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if tc, err := ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err == nil {
+		if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
 			return err
 		}
+		return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 	}
-	*/
-
 	return ti.Create(ctx, tc, r)
 }
 
