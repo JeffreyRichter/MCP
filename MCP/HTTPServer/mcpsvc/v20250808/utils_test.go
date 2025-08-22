@@ -23,7 +23,7 @@ func testServer(t *testing.T) *httptest.Server {
 		policies.NewGracefulShutdownPolicy(),
 		policies.NewLoggingPolicy(os.Stderr),
 		policies.NewThrottlingPolicy(100),
-		policies.NewAuthenticationPolicy(),
+		policies.NewAuthorizationPolicy(""),
 		policies.NewMetricsPolicy(),
 		policies.NewDistributedTracing(),
 	}

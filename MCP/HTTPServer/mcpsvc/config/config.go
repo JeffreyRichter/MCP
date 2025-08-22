@@ -13,6 +13,7 @@ type Config struct {
 	AzureStorageURL string `env:"AZURE_STORAGE_URL"`
 	AzuriteAccount  string `env:"AZURITE_ACCOUNT"`
 	AzuriteKey      string `env:"AZURITE_KEY"`
+	Local           bool   `env:"LOCAL"`
 }
 
 func (c *Config) validate() error {
