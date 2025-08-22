@@ -3,7 +3,11 @@ package v20250808
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	si "github.com/JeffreyRichter/serviceinfra"
@@ -39,6 +43,11 @@ func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.
 	tc.Status = si.Ptr(toolcalls.ToolCallStatusSuccess)
 	tresult := &AddToolCallResult{Sum: trequest.X + trequest.Y}
 	tc.Result = must(json.Marshal(tresult))
+
+	// simulate this tool call requiring some effort
+	d := time.Duration(5 + rand.Intn(1500))
+	fmt.Fprintf(os.Stderr, "[%s] blocking for %dms\n", *tc.ToolCallId, d)
+	time.Sleep(d * time.Millisecond)
 
 	tc, err := ops.Put(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
 	if err != nil {
