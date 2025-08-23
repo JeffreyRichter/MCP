@@ -32,6 +32,9 @@ func (m Model) View() string {
 	if m.modal.Visible() {
 		return m.renderModalOverlay(base)
 	}
+	if m.state == StatePathInput {
+		return m.renderPathInputOverlay(base)
+	}
 	return base
 }
 
@@ -40,10 +43,6 @@ func (m Model) renderModalOverlay(base string) string {
 	mw := min(m.windowWidth-4, 60)
 	if mw < 20 {
 		mw = m.windowWidth - 2
-	}
-	mh := min(m.windowHeight-4, 12)
-	if mh < 5 {
-		mh = m.windowHeight - 2
 	}
 	box := lipgloss.NewStyle().Width(mw).Render(modal)
 	placed := lipgloss.Place(m.windowWidth, m.windowHeight, lipgloss.Center, lipgloss.Center, box)
@@ -66,6 +65,7 @@ func (m Model) renderHeader() string {
 		return txt
 	}
 	tabs := []string{label("Tools", m.activePanel == PanelTools), label("Request", m.activePanel == PanelRequest), label("Response", m.activePanel == PanelResponse)}
+	tabs = append(tabs, label("Server", m.activePanel == PanelServer))
 	left := "HTTP MCP Client " + strings.Join(tabs, " ")
 	right := "Connected"
 	if m.err != nil {
@@ -104,6 +104,8 @@ func (m Model) renderActivePanel() string {
 		} else {
 			content = m.renderResponseContent()
 		}
+	case PanelServer:
+		content = m.renderServerContent()
 	default:
 		content = "Unknown panel"
 	}
@@ -128,7 +130,7 @@ func (m Model) renderToolsContent() string {
 		return "Loading tools..."
 	}
 	if len(m.tools) == 0 {
-		return "No tools available. Press 'r' to refresh."
+		return `Press "r" to refresh.`
 	}
 	if m.toolList.Width() == 0 {
 		return "(initializing list)"
@@ -141,7 +143,9 @@ func (m Model) renderRequestContent() string {
 		return "No request yet. Select a tool and press Enter."
 	}
 	s := fmt.Sprintf("%s %s\n", m.lastRequest.Method, m.lastRequest.URL)
-	s += "Content-Type: application/json\n\n"
+	if authz := m.lastRequest.RequestHeaders.Get("Authorization"); authz != "" {
+		s += "Authorization: " + authz + "\n"
+	}
 	s += m.formattedRequestJSON + "\n\n"
 	s += "Sent: " + m.lastRequest.Timestamp.Format("2006-01-02 15:04:05")
 	return s
@@ -152,16 +156,54 @@ func (m Model) renderResponseContent() string {
 		return "No response yet. Execute a tool call."
 	}
 	s := fmt.Sprintf("HTTP/1.1 %d\n", m.lastResponse.StatusCode)
-	if etag, ok := m.lastResponse.Headers["Etag"]; ok {
+	if etag := m.lastResponse.ResponseHeaders.Get("Etag"); etag != "" {
 		s += "ETag: " + etag + "\n"
-	}
-	if ct, ok := m.lastResponse.Headers["Content-Type"]; ok {
-		s += "Content-Type: " + ct + "\n"
 	}
 	s += "\n" + m.formattedResponseJSON + "\n\n"
 	receivedTime := m.lastResponse.Timestamp.Add(m.lastResponse.Duration)
 	s += "Received: " + receivedTime.Format("2006-01-02 15:04:05") + " (" + m.lastResponse.Duration.String() + ")"
 	return s
+}
+
+func (m Model) renderServerContent() string {
+	if m.client == nil {
+		return "Server client not initialized"
+	}
+	if m.localServerPID == 0 {
+		return fmt.Sprintf("Server URL: %s\nAPI Version: %s\n\nPress p to enter a file path", m.client.serverURL, m.client.apiVersion)
+	}
+	line := m.localServerConnectionDetails
+	if line == "" {
+		line = "(waiting for connection details...)"
+	}
+	return fmt.Sprintf("Server URL: %s\nAPI Version: %s\n\nFile: %s\nPID: %d\nConnection details: %s\nPress k to kill process", m.client.serverURL, m.client.apiVersion, m.serverLastPath, m.localServerPID, line)
+}
+
+func (m Model) renderPathInputOverlay(base string) string {
+	title := "Launch Local MCP Server"
+	pathLabel := "Executable Path:"
+	storLabel := "Storage URL:"
+	pathView := m.pathInput.View()
+	storView := m.storageInput.View()
+	help := "Tab=Switch  Enter=Submit  Esc=Cancel"
+	content := title + "\n\n" + pathLabel + "\n" + pathView + "\n\n" + storLabel + "\n" + storView + "\n\n" + help
+	if m.theme != nil {
+		content = m.theme.ModalBorder.Render(content)
+	}
+	mw := min(m.windowWidth-4, 70)
+	if mw < 30 {
+		mw = m.windowWidth - 2
+	}
+	box := lipgloss.NewStyle().Width(mw).Render(content)
+	placed := lipgloss.Place(m.windowWidth, m.windowHeight, lipgloss.Center, lipgloss.Center, box)
+	baseLines := strings.Split(base, "\n")
+	modalLines := strings.Split(placed, "\n")
+	for i := range baseLines {
+		if i < len(modalLines) && strings.TrimSpace(modalLines[i]) != "" {
+			baseLines[i] = modalLines[i]
+		}
+	}
+	return strings.Join(baseLines, "\n")
 }
 
 func (m Model) renderModal() string {
@@ -189,6 +231,8 @@ func (m Model) renderStatusLine() string {
 		st = "Executing..."
 	case StateElicitation:
 		st = "Waiting for approval..."
+	case StatePathInput:
+		st = "Entering file path..."
 	case StateError:
 		if m.err != nil {
 			st = "Error: " + m.err.Error()

@@ -14,6 +14,8 @@ type KeyMap struct {
 	Approve   key.Binding
 	Decline   key.Binding
 	Cancel    key.Binding
+	PathInput key.Binding
+	KillProc  key.Binding
 }
 
 func defaultKeyMap() KeyMap {
@@ -26,5 +28,7 @@ func defaultKeyMap() KeyMap {
 		Approve:   key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "approve")),
 		Decline:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "decline")),
 		Cancel:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+		PathInput: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "path input")),
+		KillProc:  key.NewBinding(key.WithKeys("k"), key.WithHelp("k", "kill process")),
 	}
 }

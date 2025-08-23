@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -21,6 +20,7 @@ type httpClient struct {
 	*http.Client
 	serverURL  string
 	apiVersion string
+	authKey    string
 }
 
 // getTools fetches the list of available tools from the server
@@ -32,6 +32,9 @@ func (c *httpClient) getTools() ([]ToolInfo, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	if c.authKey != "" {
+		req.Header.Set("Authorization", c.authKey)
+	}
 
 	resp, err := c.Do(req)
 	if err != nil {
@@ -67,6 +70,9 @@ func (c *httpClient) createToolCall(toolName, callID string, params map[string]a
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.authKey != "" {
+		req.Header.Set("Authorization", c.authKey)
+	}
 
 	start := time.Now()
 	resp, err := c.Do(req)
@@ -76,20 +82,18 @@ func (c *httpClient) createToolCall(toolName, callID string, params map[string]a
 	}
 
 	transaction := &HTTPTransaction{
-		Method:      req.Method,
-		URL:         req.URL.String(),
-		RequestBody: string(body),
-		Timestamp:   start,
-		Duration:    duration,
-		Error:       err,
+		Method:         req.Method,
+		URL:            req.URL.String(),
+		RequestBody:    string(body),
+		RequestHeaders: req.Header.Clone(),
+		Timestamp:      start,
+		Duration:       duration,
+		Error:          err,
 	}
 
 	if resp != nil {
 		transaction.StatusCode = resp.StatusCode
-		transaction.Headers = make(map[string]string)
-		for k, v := range resp.Header {
-			transaction.Headers[k] = strings.Join(v, ", ")
-		}
+		transaction.ResponseHeaders = resp.Header.Clone()
 
 		if respBody, readErr := io.ReadAll(resp.Body); readErr == nil {
 			transaction.ResponseBody = string(respBody)
@@ -124,6 +128,9 @@ func (c *httpClient) advanceElicitation(callID string, approved bool) (*HTTPTran
 		return nil, fmt.Errorf("failed to create elicitation request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.authKey != "" {
+		req.Header.Set("Authorization", c.authKey)
+	}
 
 	start := time.Now()
 	resp, err := c.Do(req)
@@ -133,20 +140,18 @@ func (c *httpClient) advanceElicitation(callID string, approved bool) (*HTTPTran
 	}
 
 	transaction := &HTTPTransaction{
-		Method:      req.Method,
-		URL:         req.URL.String(),
-		RequestBody: string(body),
-		Timestamp:   start,
-		Duration:    duration,
-		Error:       err,
+		Method:         req.Method,
+		URL:            req.URL.String(),
+		RequestBody:    string(body),
+		RequestHeaders: req.Header.Clone(),
+		Timestamp:      start,
+		Duration:       duration,
+		Error:          err,
 	}
 
 	if resp != nil {
 		transaction.StatusCode = resp.StatusCode
-		transaction.Headers = make(map[string]string)
-		for k, v := range resp.Header {
-			transaction.Headers[k] = strings.Join(v, ", ")
-		}
+		transaction.ResponseHeaders = resp.Header.Clone()
 
 		if respBody, readErr := io.ReadAll(resp.Body); readErr == nil {
 			transaction.ResponseBody = string(respBody)

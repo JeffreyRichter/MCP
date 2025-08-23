@@ -7,12 +7,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 )
 
 func main() {
-	debugViewFlag := flag.String("debug-view", "", "Render a specific component with test data and exit. Available components: main, request, response, elicitation")
+	debugViewFlag := flag.String("debug-view", "", "Render a specific component with test data and exit. Available components: main, request, response, elicitation, server")
 	serverFlag := flag.String("server", "http://localhost:8080", "MCP server URL")
 	flag.Parse()
 
@@ -24,11 +25,13 @@ func main() {
 			apiVersion: "v20250808",
 		},
 		activePanel:  PanelTools,
+		pathInput:    textinput.New(),
 		windowWidth:  80, // Default minimum width
 		windowHeight: 12, // Default minimum height
 		theme:        NewTheme(),
 		keys:         defaultKeyMap(),
 	}
+	model.pathInput.Placeholder = "/path/to/file"
 	model.modal.SetKeys(&model.keys)
 
 	if v := *debugViewFlag; v != "" {
@@ -69,9 +72,9 @@ func setupDebugModel(model Model, viewMode string) Model {
 			URL:          "http://localhost:8080/v20250808/tool_calls",
 			StatusCode:   200,
 			ResponseBody: `{"result":50,"call_id":"test-123","status":"completed"}`,
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-				"Etag":         "W/\"abc123\"",
+			ResponseHeaders: http.Header{
+				"Content-Type": []string{"application/json"},
+				"Etag":         []string{`W/"abc123"`},
 			},
 			Timestamp: time.Now().Add(-5 * time.Second),
 			Duration:  150 * time.Millisecond,
@@ -91,9 +94,12 @@ func setupDebugModel(model Model, viewMode string) Model {
 	case "main":
 		model.activePanel = PanelTools
 		model.state = StateToolList
+	case "server":
+		model.activePanel = PanelServer
+		model.state = StateToolList
 	default:
 		fmt.Printf("Unknown view mode: %s\n", viewMode)
-		fmt.Println("Available views: main, request, response, elicitation")
+		fmt.Println("Available views: main, request, response, elicitation, server")
 		os.Exit(1)
 	}
 	model.tools = []ToolInfo{ // Add sample tools for debug display

@@ -11,7 +11,13 @@ func (m Model) handleHTTPResponse(msg httpResponseMsg) (Model, tea.Cmd) {
 		m.state = StateError
 		return m, nil
 	}
-	m.lastRequest = &HTTPTransaction{Method: msg.transaction.Method, URL: msg.transaction.URL, RequestBody: msg.transaction.RequestBody, Timestamp: msg.transaction.Timestamp}
+	m.lastRequest = &HTTPTransaction{
+		Method:         msg.transaction.Method,
+		URL:            msg.transaction.URL,
+		RequestBody:    msg.transaction.RequestBody,
+		RequestHeaders: msg.transaction.RequestHeaders,
+		Timestamp:      msg.transaction.Timestamp,
+	}
 	m.formattedRequestJSON = m.formatAndIndentJSON(m.lastRequest.RequestBody)
 	m.initOrResizeRequestViewport()
 	m.syncRequestViewportContent()

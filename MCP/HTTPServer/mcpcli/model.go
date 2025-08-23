@@ -1,8 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"time"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -30,6 +38,19 @@ type Model struct {
 
 	// Modal submodel
 	modal ModalModel
+
+	// Path input state
+	pathInput                    textinput.Model
+	storageInput                 textinput.Model
+	serverLastPath               string
+	serverLastStorage            string
+	pathInputActive              bool
+	localServerConnectionDetails string
+	localServerPID               int
+	localServerCmd               *exec.Cmd
+	origServerURL                string
+	origAuthKey                  string
+	usingLocalServer             bool
 
 	keys KeyMap
 
@@ -76,7 +97,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				return m, cmd
 			}
+			// Path input handled separately when state is StatePathInput and modal not reused
 			return m, nil
+		}
+		if m.state == StatePathInput {
+			// handle path input keystrokes directly
+			if msg.String() == "tab" { // toggle focus between path and storage inputs
+				if m.pathInput.Focused() {
+					m.pathInput.Blur()
+					m.storageInput.Focus()
+				} else {
+					m.storageInput.Blur()
+					m.pathInput.Focus()
+				}
+				return m, nil
+			}
+			if msg.Type == tea.KeyEnter { // submit
+				p := m.pathInput.Value()
+				if p == "" { // ignore empty
+					return m, nil
+				}
+				stor := m.storageInput.Value()
+				return m, func() tea.Msg { return pathInputSubmittedMsg{path: p, storageURL: stor} }
+			}
+			if msg.Type == tea.KeyEsc {
+				m.state = StateToolList
+				m.pathInputActive = false
+				return m, nil
+			}
+			var cmd tea.Cmd
+			if m.pathInput.Focused() {
+				m.pathInput, cmd = m.pathInput.Update(msg)
+			} else {
+				m.storageInput, cmd = m.storageInput.Update(msg)
+			}
+			return m, cmd
 		}
 		return m.updateNormal(msg)
 	case toolsLoadedMsg:
@@ -110,6 +165,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errorMsg:
 		m.err = msg.error
 		m.state = StateError
+	case pathInputSubmittedMsg:
+		m.serverLastPath = msg.path
+		m.serverLastStorage = msg.storageURL
+		m.state = StateToolList
+		m.pathInputActive = false
+		// simple status flash can be done by setting err=nil & state revert
+		return m, m.startPathExec(msg.path, msg.storageURL)
+	case pathExecResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.state = StateError
+		} else {
+			// expecting a single line of JSON like {"key":"...","port":<number>}
+			var parsed struct {
+				Key  string `json:"key"`
+				Port int    `json:"port"`
+			}
+			if err := json.Unmarshal([]byte(msg.firstLine), &parsed); err != nil || parsed.Key == "" || parsed.Port == 0 {
+				// invalid; kill process if running
+				if msg.cmd != nil && msg.cmd.Process != nil {
+					_ = msg.cmd.Process.Kill()
+				}
+				m.err = fmt.Errorf("couldn't parse %s", msg.firstLine)
+				m.state = StateError
+				m.localServerPID = 0
+				if m.usingLocalServer { // revert to originals and reload
+					old := m.client.serverURL
+					m.client.serverURL = m.origServerURL
+					m.client.authKey = m.origAuthKey
+					m.usingLocalServer = false
+					if old != m.client.serverURL {
+						return m, m.serverURLChanged()
+					}
+				}
+				return m, nil
+			}
+			if !m.usingLocalServer { // capture originals only once
+				m.origServerURL = m.client.serverURL
+				m.origAuthKey = m.client.authKey
+			}
+			m.localServerConnectionDetails = msg.firstLine
+			m.localServerPID = msg.pid
+			if msg.cmd != nil {
+				m.localServerCmd = msg.cmd
+			}
+			old := m.client.serverURL
+			m.client.serverURL = fmt.Sprintf("http://localhost:%d", parsed.Port)
+			m.client.authKey = parsed.Key
+			m.usingLocalServer = true
+			if old != m.client.serverURL {
+				cmd := m.serverURLChanged() // schedule delayed refresh
+				return m, cmd
+			}
+		}
+	case serverURLRefreshMsg:
+		// Only load if we're still in loading state from a prior URL change
+		if m.state == StateLoading {
+			return m, m.loadTools()
+		}
 	}
 	return m, nil
 }
@@ -134,17 +248,53 @@ func (m Model) updateNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// cycle backwards
 		switch m.activePanel {
 		case PanelTools:
-			m.activePanel = PanelResponse
+			m.activePanel = PanelServer
 		case PanelRequest:
 			m.activePanel = PanelTools
 		case PanelResponse:
 			m.activePanel = PanelRequest
+		case PanelServer:
+			m.activePanel = PanelResponse
 		}
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Refresh) {
 		m.state = StateLoading
 		return m, m.loadTools()
+	}
+
+	if m.activePanel == PanelServer && key.Matches(msg, m.keys.PathInput) && (m.state == StateToolList || m.state == StateShowingResult || m.state == StateError) {
+		if !m.pathInputActive {
+			m.pathInput = textinput.New()
+			m.pathInput.Placeholder = "/path/to/file"
+			m.pathInput.SetValue("")
+			m.pathInput.Focus()
+			m.storageInput = textinput.New()
+			m.storageInput.Placeholder = "https://..."
+			m.pathInputActive = true
+		}
+		m.state = StatePathInput
+		return m, nil
+	}
+
+	if m.activePanel == PanelServer && key.Matches(msg, m.keys.KillProc) {
+		if m.localServerCmd != nil && m.localServerCmd.Process != nil {
+			_ = m.localServerCmd.Process.Kill()
+			m.localServerCmd = nil
+			m.localServerPID = 0
+			m.localServerConnectionDetails = ""
+			if m.usingLocalServer {
+				old := m.client.serverURL
+				m.client.serverURL = m.origServerURL
+				m.client.authKey = m.origAuthKey
+				m.usingLocalServer = false
+				if old != m.client.serverURL {
+					cmd := m.serverURLChanged()
+					return m, cmd
+				}
+			}
+		}
+		return m, nil
 	}
 
 	switch m.state {
@@ -167,8 +317,66 @@ func (m Model) updateNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case StateError:
+		// In error state, still allow scrolling existing request/response viewports
+		if m.activePanel == PanelResponse {
+			prev := m.responseViewport.YOffset
+			var cmd tea.Cmd
+			m.responseViewport, cmd = m.responseViewport.Update(msg)
+			_ = prev
+			return m, cmd
+		}
+		if m.activePanel == PanelRequest {
+			prev := m.requestViewport.YOffset
+			var cmd tea.Cmd
+			m.requestViewport, cmd = m.requestViewport.Update(msg)
+			_ = prev
+			return m, cmd
+		}
+		return m, nil
 	default:
 		return m, nil
+	}
+}
+
+// startPathExec launches the executable at path and captures first line of its combined output.
+func (m Model) startPathExec(path, storageURL string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command(path)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return pathExecResultMsg{err: err}
+		}
+		cmd.Stderr = cmd.Stdout
+		cmd.Env = []string{
+			"MCPSVC_LOCAL=true",
+			"MCPSVC_AZURE_STORAGE_URL=" + storageURL,
+		}
+		if err := cmd.Start(); err != nil {
+			return pathExecResultMsg{err: err}
+		}
+		// store command pointer in model via follow-up message (pid also captured here)
+		pid := cmd.Process.Pid
+		// We can't mutate model here directly besides returning message; embed cmd pointer in closure-scope and assign through global variable not allowed. Instead, we will attach it to a package-level map keyed by pid or extend message (simpler: extend message) but we just need to set Model.pathExecCmd. We'll piggyback on pathExecResultMsg handling? For simplicity, we'll set a package-level variable. (NOTE: This is a deviation; better approach is to return a tea.Cmd that sets it.)
+		// Use a context with timeout for reading first line
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		reader := bufio.NewReader(stdout)
+		lineCh := make(chan string, 1)
+		go func() {
+			line, _ := reader.ReadString('\n')
+			// Trim newline characters
+			for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
+				line = line[:len(line)-1]
+			}
+			lineCh <- line
+		}()
+		select {
+		case line := <-lineCh:
+			return pathExecResultMsg{firstLine: line, pid: pid, cmd: cmd}
+		case <-ctx.Done():
+			return pathExecResultMsg{firstLine: "(no output within 2s)", pid: pid, cmd: cmd}
+		}
 	}
 }
 
@@ -181,9 +389,33 @@ func (m Model) switchPanel() Model {
 	case PanelRequest:
 		m.activePanel = PanelResponse
 	case PanelResponse:
+		m.activePanel = PanelServer
+	case PanelServer:
 		m.activePanel = PanelTools
 	}
 	return m
+}
+
+// serverURLChanged resets UI state for Tools/Request/Response when the server URL changes.
+// It clears loaded tools and any prior request/response so fresh data reflects the new server.
+func (m *Model) serverURLChanged() tea.Cmd {
+	m.tools = nil
+	if m.toolList.Width() != 0 {
+		m.toolList.SetItems([]list.Item{})
+	}
+	m.lastRequest = nil
+	m.lastResponse = nil
+	m.formattedRequestJSON = ""
+	m.formattedResponseJSON = ""
+	if m.requestViewport.Width > 0 {
+		m.requestViewport.SetContent("")
+	}
+	if m.responseViewport.Width > 0 {
+		m.responseViewport.SetContent("")
+	}
+	m.state = StateLoading
+	// allow some time for a local server to start up
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return serverURLRefreshMsg{} })
 }
 
 // (Moved tool execution functions to tools_model.go)
