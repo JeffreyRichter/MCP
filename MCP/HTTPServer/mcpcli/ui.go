@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -67,17 +68,7 @@ func (m Model) renderHeader() string {
 	tabs := []string{label("Tools", m.activePanel == PanelTools), label("Request", m.activePanel == PanelRequest), label("Response", m.activePanel == PanelResponse)}
 	tabs = append(tabs, label("Server", m.activePanel == PanelServer))
 	left := "HTTP MCP Client " + strings.Join(tabs, " ")
-	right := "Connected"
-	if m.err != nil {
-		right = "Error"
-	}
-	if m.theme != nil {
-		if m.err != nil {
-			right = m.theme.StatusError.Render("Error")
-		} else {
-			right = m.theme.StatusSuccess.Render("Connected")
-		}
-	}
+	right := fmt.Sprintf("PID: %d", os.Getpid())
 	pad := m.windowWidth - lipgloss.Width(left) - lipgloss.Width(right)
 	if pad < 1 {
 		pad = 1
