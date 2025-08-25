@@ -45,11 +45,3 @@ func (m *Model) syncRequestViewportContent() {
 	}
 	m.requestViewport.SetContent(m.renderRequestContent())
 }
-
-// JSON formatting
-func (m Model) formatAndIndentJSON(src string) string {
-	if src == "" {
-		return ""
-	}
-	return m.formatJSON(src)
-}

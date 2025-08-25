@@ -27,10 +27,10 @@ type Model struct {
 	toolList     list.Model
 
 	// HTTP transaction display
-	lastRequest           *HTTPTransaction
-	lastResponse          *HTTPTransaction
-	formattedRequestJSON  string
-	formattedResponseJSON string
+	lastRequest       *HTTPTransaction
+	lastResponse      *HTTPTransaction
+	formattedRequest  string
+	formattedResponse string
 
 	// Viewports
 	requestViewport  viewport.Model
@@ -405,8 +405,8 @@ func (m *Model) serverURLChanged() tea.Cmd {
 	}
 	m.lastRequest = nil
 	m.lastResponse = nil
-	m.formattedRequestJSON = ""
-	m.formattedResponseJSON = ""
+	m.formattedRequest = ""
+	m.formattedResponse = ""
 	if m.requestViewport.Width > 0 {
 		m.requestViewport.SetContent("")
 	}

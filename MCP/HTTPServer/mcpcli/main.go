@@ -62,7 +62,7 @@ func setupDebugModel(model Model, viewMode string) Model {
 			RequestBody: `{"tool_name":"add","call_id":"test-123","parameters":{"a":42,"b":8}}`,
 			Timestamp:   time.Now().Add(-5 * time.Second),
 		}
-		model.formattedRequestJSON = model.formatAndIndentJSON(model.lastRequest.RequestBody)
+		model.formattedRequest = model.formatJSON(model.lastRequest.RequestBody)
 		model.initOrResizeRequestViewport()
 		model.syncRequestViewportContent()
 	case "response":
@@ -79,7 +79,7 @@ func setupDebugModel(model Model, viewMode string) Model {
 			Timestamp: time.Now().Add(-5 * time.Second),
 			Duration:  150 * time.Millisecond,
 		}
-		model.formattedResponseJSON = model.formatAndIndentJSON(model.lastResponse.ResponseBody)
+		model.formattedResponse = model.formatJSON(model.lastResponse.ResponseBody)
 		model.initOrResizeResponseViewport()
 		model.syncResponseViewportContent()
 	case "elicitation":

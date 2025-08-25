@@ -140,7 +140,7 @@ func (m Model) renderRequestContent() string {
 	if authz := m.lastRequest.RequestHeaders.Get("Authorization"); authz != "" {
 		s += "Authorization: " + authz + "\n"
 	}
-	s += m.formattedRequestJSON + "\n\n"
+	s += m.formattedRequest + "\n\n"
 	s += "Sent: " + m.lastRequest.Timestamp.Format("2006-01-02 15:04:05")
 	return s
 }
@@ -149,13 +149,22 @@ func (m Model) renderResponseContent() string {
 	if m.lastResponse == nil {
 		return "No response yet. Execute a tool call."
 	}
-	s := fmt.Sprintf("HTTP/1.1 %d\n", m.lastResponse.StatusCode)
-	if etag := m.lastResponse.ResponseHeaders.Get("Etag"); etag != "" {
-		s += "ETag: " + etag + "\n"
+	header := ""
+	if code := m.lastResponse.StatusCode; code != 0 {
+		// we got a response from the server
+		header = fmt.Sprintf("HTTP/1.1 %d", m.lastResponse.StatusCode)
+		if len(m.lastResponse.ResponseHeaders) > 0 {
+			header += "\n"
+			for name, values := range m.lastResponse.ResponseHeaders {
+				for _, v := range values {
+					header += fmt.Sprintf("%s: %s\n", name, v)
+				}
+			}
+		}
 	}
-	s += "\n" + m.formattedResponseJSON + "\n\n"
+
 	receivedTime := m.lastResponse.Timestamp.Add(m.lastResponse.Duration)
-	s += "Received: " + receivedTime.Format("2006-01-02 15:04:05") + " (" + m.lastResponse.Duration.String() + ")"
+	s := header + m.formattedResponse + "\n\n" + receivedTime.Format("2006-01-02 15:04:05") + " (" + m.lastResponse.Duration.String() + ")"
 	return s
 }
 
