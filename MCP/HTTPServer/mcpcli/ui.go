@@ -60,15 +60,18 @@ func (m Model) renderModalOverlay(base string) string {
 func (m Model) renderHeader() string {
 	label := func(name string, active bool) string {
 		txt := "[" + name + "]"
-		if m.theme != nil && active {
+		if active {
 			return m.theme.HeaderActive.Render(txt)
 		}
-		return txt
+		return m.theme.HeaderBase.Render(txt)
 	}
-	tabs := []string{label("Tools", m.activePanel == PanelTools), label("Request", m.activePanel == PanelRequest), label("Response", m.activePanel == PanelResponse)}
-	tabs = append(tabs, label("Server", m.activePanel == PanelServer))
-	left := "HTTP MCP Client " + strings.Join(tabs, " ")
-	right := fmt.Sprintf("PID: %d", os.Getpid())
+	tabs := []string{
+		label("Tools", m.activePanel == PanelTools), label("Request", m.activePanel == PanelRequest),
+		label("Response", m.activePanel == PanelResponse),
+		label("Server", m.activePanel == PanelServer),
+	}
+	left := m.theme.HeaderBase.Render("HTTP MCP Client ") + strings.Join(tabs, " ")
+	right := "PID: " + fmt.Sprint(os.Getpid())
 	pad := m.windowWidth - lipgloss.Width(left) - lipgloss.Width(right)
 	if pad < 1 {
 		pad = 1
@@ -126,7 +129,7 @@ func (m Model) renderToolsContent() string {
 	if m.toolList.Width() == 0 {
 		return "(initializing list)"
 	}
-	return m.toolList.View() + "\n\nPress Enter to execute selected tool | Tab to switch panels | q to quit"
+	return m.toolList.View()
 }
 
 func (m Model) renderRequestContent() string {
@@ -232,7 +235,7 @@ func (m Model) renderStatusLine() string {
 	if m.theme != nil && m.err != nil {
 		st = m.theme.StatusError.Render(st)
 	}
-	line := "Status: " + st + " | q quits"
+	line := "Status: " + st
 	lineWidth := lipgloss.Width(line)
 	if lineWidth < m.windowWidth {
 		line += strings.Repeat(" ", m.windowWidth-lineWidth)

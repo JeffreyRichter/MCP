@@ -11,7 +11,7 @@ import (
 func (m *Model) initToolList() {
 	delegate := newToolItemDelegate(m.theme)
 	m.toolList = list.New(nil, delegate, m.listWidth(), m.listHeight())
-	m.toolList.Title = "Available Tools"
+	m.toolList.SetShowTitle(false)
 	m.toolList.SetShowHelp(false)
 	m.toolList.SetShowStatusBar(false)
 	m.toolList.SetShowPagination(false)

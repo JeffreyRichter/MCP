@@ -17,6 +17,7 @@ type Theme struct {
 	ColorBorder    lipgloss.Color
 
 	HeaderActive  lipgloss.Style
+	HeaderBase    lipgloss.Style
 	StatusSuccess lipgloss.Style
 	StatusError   lipgloss.Style
 	ModalBorder   lipgloss.Style
@@ -32,6 +33,7 @@ func NewTheme() *Theme {
 	}
 
 	t.HeaderActive = lipgloss.NewStyle().Bold(true).Foreground(t.ColorHighlight)
+	t.HeaderBase = lipgloss.NewStyle().Foreground(t.ColorNormal)
 	t.StatusSuccess = lipgloss.NewStyle().Foreground(t.ColorSuccess)
 	t.StatusError = lipgloss.NewStyle().Foreground(t.ColorError)
 	t.ModalBorder = lipgloss.NewStyle().
