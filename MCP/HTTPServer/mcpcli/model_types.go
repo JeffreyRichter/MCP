@@ -58,8 +58,9 @@ type ElicitationData struct {
 
 // Messages for tea.Cmd communication
 type toolsLoadedMsg struct {
-	tools []ToolInfo
-	err   error
+	tools       []ToolInfo
+	transaction *HTTPTransaction
+	err         error
 }
 type httpResponseMsg struct {
 	transaction *HTTPTransaction

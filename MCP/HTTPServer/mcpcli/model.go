@@ -139,6 +139,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			m.state = StateError
 		} else {
+			if msg.transaction != nil {
+				m.lastRequest = &HTTPTransaction{
+					Method:         msg.transaction.Method,
+					URL:            msg.transaction.URL,
+					RequestBody:    msg.transaction.RequestBody,
+					RequestHeaders: msg.transaction.RequestHeaders,
+					Timestamp:      msg.transaction.Timestamp,
+				}
+				m.formattedRequest = m.formatJSON(m.lastRequest.RequestBody)
+				m.initOrResizeRequestViewport()
+				m.syncRequestViewportContent()
+				m.lastResponse = msg.transaction
+				m.formattedResponse = m.formatJSON(m.lastResponse.ResponseBody)
+				m.initOrResizeResponseViewport()
+				m.syncResponseViewportContent()
+			}
 			if m.toolList.Width() == 0 {
 				m.initToolList()
 			}
@@ -231,8 +247,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // loadTools creates a command to load available tools
 func (m Model) loadTools() tea.Cmd {
 	return func() tea.Msg {
-		tools, err := m.client.getTools()
-		return toolsLoadedMsg{tools: tools, err: err}
+		tools, txn, err := m.client.getTools()
+		return toolsLoadedMsg{tools: tools, transaction: txn, err: err}
 	}
 }
 

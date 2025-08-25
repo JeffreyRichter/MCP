@@ -23,37 +23,56 @@ type httpClient struct {
 	authKey    string
 }
 
-// getTools fetches the list of available tools from the server
-func (c *httpClient) getTools() ([]ToolInfo, error) {
+// getTools fetches the list of available tools from the server and returns an HTTPTransaction for UI display
+func (c *httpClient) getTools() ([]ToolInfo, *HTTPTransaction, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.serverURL+"/mcp/tools", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	if c.authKey != "" {
 		req.Header.Set("Authorization", c.authKey)
 	}
 
+	start := time.Now()
 	resp, err := c.Do(req)
+	duration := time.Since(start)
+
+	txn := &HTTPTransaction{
+		Method:         req.Method,
+		URL:            req.URL.String(),
+		RequestHeaders: req.Header.Clone(),
+		Timestamp:      start,
+		Duration:       duration,
+		Error:          err,
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch tools: %w", err)
+		return nil, txn, fmt.Errorf("failed to fetch tools: %w", err)
 	}
 	defer resp.Body.Close()
+	txn.StatusCode = resp.StatusCode
+	txn.ResponseHeaders = resp.Header.Clone()
+	if body, err := io.ReadAll(resp.Body); err == nil {
+		// TODO: clarify responsibility for response formatting, remove the double read
+		txn.ResponseBody = string(body)
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
+		return nil, txn, fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
 	var result struct {
 		Tools []ToolInfo `json:"tools"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode tools response: %w", err)
+		return nil, txn, fmt.Errorf("failed to decode tools response: %w", err)
 	}
 
-	return result.Tools, nil
+	return result.Tools, txn, nil
 }
 
 // createToolCall executes a tool call and returns the HTTP transaction
