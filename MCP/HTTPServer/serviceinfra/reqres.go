@@ -113,16 +113,15 @@ func (r *ReqRes) UnmarshalBody(s any) error {
 // customHeader (pass nil if none), HTTP status code, and body structure (pass nil if none).
 // For more control over the response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
 func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode int, bodyStruct any) error { // customHeader must be *struct
+	rwh := r.RW.Header()
 	body, err := []byte{}, error(nil)
 	if bodyStruct != nil {
 		body, err = json.Marshal(bodyStruct)
 		if err != nil {
 			return err
 		}
-		// net/http will set Content-Length
-		rh.ContentType = Ptr("application/json")
+		rwh.Set("Content-Type", "application/json")
 	}
-	rwh := r.RW.Header()
 	fields2Header := func(h any) {
 		v := reflect.ValueOf(h).Elem()
 		for i := range v.NumField() {
@@ -212,6 +211,7 @@ type ResponseHeader struct { // 'json' tag value MUST be lowercase
 	AzureDeprecating *string `json:"azure-deprecating"` // https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md#deprecating-behavior-notification
 
 	// Message Body Information
+	// TODO: these are unused
 	ContentLength   *int    `json:"content-length"`
 	ContentType     *string `json:"content-type"`
 	ContentEncoding *string `json:"content-encoding"`

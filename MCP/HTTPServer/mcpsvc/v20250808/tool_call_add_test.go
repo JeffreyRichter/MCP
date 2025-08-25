@@ -30,6 +30,12 @@ func TestToolCallAdd(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
+	if actual := len(resp.Header[http.CanonicalHeaderKey("content-type")]); actual != 1 {
+		t.Fatalf("expected 1 content-type, got %d", actual)
+	}
+	if actual := resp.Header.Get("Content-Type"); actual != "application/json" {
+		t.Fatalf("expected application/json, got %q", actual)
+	}
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
