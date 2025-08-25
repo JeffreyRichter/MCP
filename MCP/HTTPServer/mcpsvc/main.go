@@ -7,11 +7,10 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/config"
@@ -23,20 +22,12 @@ import (
 
 func main() {
 	key := ""
-	addr := ":8080"
-	startMsg := "Listening on " + addr
+	port := "8080"
 	if config.Get().Local {
 		b := make([]byte, 16)
 		_, _ = rand.Read(b) // guaranteed to return len(b), nil
 		key = fmt.Sprintf("%x", b)
-		n, _ := rand.Int(rand.Reader, big.NewInt(60000)) // never returns an error
-		addr = fmt.Sprintf(":%d", n.Int64()+1025)
-		port, err := strconv.Atoi(addr[1:])
-		if err != nil {
-			fmt.Println("Error generating port:", err)
-			os.Exit(1)
-		}
-		startMsg = fmt.Sprintf(`{"key":%q,"port":%d}`, key, port)
+		port = "0" // let the OS choose a port
 	}
 
 	policies := []si.Policy{
@@ -61,12 +52,26 @@ func main() {
 	}
 
 	s := &http.Server{
-		Addr:           addr,
 		Handler:        si.BuildHandler(policies, avis, time.Minute*4),
 		MaxHeaderBytes: http.DefaultMaxHeaderBytes,
 	}
+
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		fmt.Println("Error starting listener:", err)
+		os.Exit(1)
+	}
+	if _, port, err = net.SplitHostPort(ln.Addr().String()); err != nil {
+		fmt.Println("Error getting port:", err)
+		os.Exit(1)
+	}
+	startMsg := fmt.Sprintf("Listening on :%s", port)
+	if config.Get().Local {
+		startMsg = fmt.Sprintf(`{"key":%q,"port":%s}`, key, port)
+	}
 	fmt.Println(startMsg)
-	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+
+	if err := s.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Println("Error starting server:", err)
 		os.Exit(1)
 	}
