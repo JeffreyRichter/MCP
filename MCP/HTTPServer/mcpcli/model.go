@@ -41,9 +41,7 @@ type Model struct {
 
 	// Path input state
 	pathInput                    textinput.Model
-	storageInput                 textinput.Model
 	serverLastPath               string
-	serverLastStorage            string
 	pathInputActive              bool
 	localServerConnectionDetails string
 	localServerPID               int
@@ -105,9 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "tab" { // toggle focus between path and storage inputs
 				if m.pathInput.Focused() {
 					m.pathInput.Blur()
-					m.storageInput.Focus()
 				} else {
-					m.storageInput.Blur()
 					m.pathInput.Focus()
 				}
 				return m, nil
@@ -117,8 +113,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if p == "" { // ignore empty
 					return m, nil
 				}
-				stor := m.storageInput.Value()
-				return m, func() tea.Msg { return pathInputSubmittedMsg{path: p, storageURL: stor} }
+				return m, func() tea.Msg { return pathInputSubmittedMsg{path: p} }
 			}
 			if msg.Type == tea.KeyEsc {
 				m.state = StateToolList
@@ -128,8 +123,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			if m.pathInput.Focused() {
 				m.pathInput, cmd = m.pathInput.Update(msg)
-			} else {
-				m.storageInput, cmd = m.storageInput.Update(msg)
 			}
 			return m, cmd
 		}
@@ -183,11 +176,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = StateError
 	case pathInputSubmittedMsg:
 		m.serverLastPath = msg.path
-		m.serverLastStorage = msg.storageURL
 		m.state = StateToolList
 		m.pathInputActive = false
 		// simple status flash can be done by setting err=nil & state revert
-		return m, m.startPathExec(msg.path, msg.storageURL)
+		return m, m.startPathExec(msg.path)
 	case pathExecResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -285,8 +277,6 @@ func (m Model) updateNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.pathInput.Placeholder = "/path/to/file"
 			m.pathInput.SetValue("")
 			m.pathInput.Focus()
-			m.storageInput = textinput.New()
-			m.storageInput.Placeholder = "https://..."
 			m.pathInputActive = true
 		}
 		m.state = StatePathInput
@@ -356,7 +346,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 // startPathExec launches the executable at path and captures first line of its combined output.
-func (m Model) startPathExec(path, storageURL string) tea.Cmd {
+func (m Model) startPathExec(path string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(path)
 		stdout, err := cmd.StdoutPipe()
@@ -364,10 +354,7 @@ func (m Model) startPathExec(path, storageURL string) tea.Cmd {
 			return pathExecResultMsg{err: err}
 		}
 		cmd.Stderr = cmd.Stdout
-		cmd.Env = []string{
-			"MCPSVC_LOCAL=true",
-			"MCPSVC_AZURE_STORAGE_URL=" + storageURL,
-		}
+		cmd.Env = []string{"MCPSVC_LOCAL=true"}
 		if err := cmd.Start(); err != nil {
 			return pathExecResultMsg{err: err}
 		}

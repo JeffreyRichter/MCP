@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JeffreyRichter/serviceinfra/internal/syncmap"
+	"github.com/JeffreyRichter/serviceinfra/syncmap"
 )
 
 // QueryTo "deserializes" a URL's query parameter names/values to an instance of T.

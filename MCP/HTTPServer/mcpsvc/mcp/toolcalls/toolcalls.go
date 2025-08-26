@@ -44,6 +44,17 @@ func NewToolCall(toolName, toolCallId string) *ToolCall {
 	}
 }
 
+// Copy (deeply) the ToolCall
+func (tc *ToolCall) Copy() *ToolCall {
+	if tc == nil {
+		return nil
+	}
+	buffer := must(json.Marshal(tc))
+	cp := ToolCall{}
+	must(0, json.Unmarshal(buffer, &cp))
+	return &cp
+}
+
 type ToolCallStatus string
 
 const (
@@ -222,4 +233,11 @@ func (er *ElicitationRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+func must[T any](val T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return val
 }

@@ -74,8 +74,7 @@ type errorMsg struct{ error error }
 
 // pathInputSubmittedMsg emitted when user submits a path in path input modal.
 type pathInputSubmittedMsg struct {
-	path       string
-	storageURL string
+	path string
 }
 
 // pathExecResultMsg carries first line (if any) or an error from executing the submitted path.

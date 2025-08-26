@@ -17,7 +17,7 @@ type Config struct {
 }
 
 func (c *Config) validate() error {
-	if c.AzureStorageURL == "" {
+	if c.AzureStorageURL == "" && !c.Local {
 		return errors.New("no Azure Storage URL specified")
 	}
 	if c.AzuriteAccount != "" {

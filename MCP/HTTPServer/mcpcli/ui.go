@@ -185,11 +185,9 @@ func (m Model) renderServerContent() string {
 func (m Model) renderPathInputOverlay(base string) string {
 	title := "Launch Local MCP Server"
 	pathLabel := "Executable Path:"
-	storLabel := "Storage URL:"
 	pathView := m.pathInput.View()
-	storView := m.storageInput.View()
 	help := "Tab=Switch  Enter=Submit  Esc=Cancel"
-	content := title + "\n\n" + pathLabel + "\n" + pathView + "\n\n" + storLabel + "\n" + storView + "\n\n" + help
+	content := title + "\n\n" + pathLabel + "\n" + pathView + "\n\n" + help
 	if m.theme != nil {
 		content = m.theme.ModalBorder.Render(content)
 	}

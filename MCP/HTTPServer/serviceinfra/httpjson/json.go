@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/JeffreyRichter/serviceinfra/internal/syncmap"
+	"github.com/JeffreyRichter/serviceinfra/syncmap"
 )
 
 // Holds sentinel values used to send nulls
