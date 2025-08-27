@@ -1,6 +1,7 @@
 package toolcalls
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/json/jsontext"
 	"errors"
@@ -13,11 +14,17 @@ import (
 
 // ToolCall is the data model for the version-agnostic tool calls resource type.
 type ToolCall struct {
+	Tenant             *string             `json:"tenant"`
 	ToolName           *string             `json:"name,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
 	ToolCallId         *string             `json:"toolCallId,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
 	Expiration         *time.Time          `json:"expiration,omitempty"`
-	AdvanceQueue       *string             `json:"advanceQueue,omitempty"` // Name of the queue to advance this ToolCall
+	IdempotencyKey     *[]byte             `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
 	ETag               *si.ETag            `json:"etag"`
+	Phase              *string             `json:"phase,omitempty"`
+	AdvanceQueue       *string             `json:"advanceQueue,omitempty"` // Name of the queue to use for advancing the tool call's phase
+	Attempt            *int32              `json:"attempt,omitempty"`      // Number of times this tool call has been attempted
+	Created            *time.Time          `json:"created,omitempty"`
+	Modified           *time.Time          `json:"modified,omitempty"`
 	Status             *ToolCallStatus     `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
 	Request            jsontext.Value      `json:"request,omitempty"`
 	SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
@@ -34,13 +41,13 @@ type ToolCall struct {
 	IsError           *bool              `json:"isError,omitempty"`
 }*/
 
-func NewToolCall(toolName, toolCallId string) *ToolCall {
+func NewToolCall(tenant, toolName, toolCallId string) *ToolCall {
 	return &ToolCall{
-		ToolName:     si.Ptr(toolName),
-		ToolCallId:   si.Ptr(toolCallId),
-		Expiration:   si.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
-		AdvanceQueue: si.Ptr("ToolCallAdvanceQueue"),         // TODO: Replace with guid value
-		Status:       si.Ptr(ToolCallStatusSubmitted),
+		Tenant:     si.Ptr(tenant),
+		ToolName:   si.Ptr(toolName),
+		ToolCallId: si.Ptr(toolCallId),
+		Expiration: si.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
+		Status:     si.Ptr(ToolCallStatusSubmitted),
 	}
 }
 
@@ -240,4 +247,14 @@ func must[T any](val T, err error) T {
 		panic(err)
 	}
 	return val
+}
+
+/********************* Types for Phase Processing ***************/
+
+type ProcessPhaseFunc func(context.Context, *ToolCall, PhaseProcessor) (*ToolCall, error)
+
+type ToolNameToProcessPhaseFunc func(toolName string) (ProcessPhaseFunc, error)
+
+type PhaseProcessor interface {
+	ExtendProcessingTime(ctx context.Context, phaseExecutionTime time.Duration) error
 }

@@ -265,7 +265,7 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 	}
 
 	// **** CONTENT PROCESSING
-	// Content-Length CAN be always be specified and, if so, must not be > MaxContentLength
+	// Content-Length CAN always be specified and, if so, must not be > MaxContentLength
 	if r.H.ContentLength != nil && *r.H.ContentLength > vh.MaxContentLength {
 		return r.Error(http.StatusRequestEntityTooLarge, "Content body too big", "content-length was %d but must be <= %d", *r.H.ContentLength, vh.MaxContentLength)
 	}
@@ -287,6 +287,7 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 		if r.H.ContentEncoding != nil && !slices.Contains(vh.ContentEncodings, *r.H.ContentEncoding) {
 			return r.Error(http.StatusUnsupportedMediaType, "Unsupported content-encoding", "content-encoding must be one of: %s", strings.Join(vh.ContentEncodings, ", "))
 		}
+		r.R.Body = http.MaxBytesReader(r.RW, r.R.Body, vh.MaxContentLength) // Limit reading body to MaxContentLength
 	}
 
 	if vh.PreconditionRequired && r.H.IfMatch == nil && r.H.IfNoneMatch == nil && r.H.IfModifiedSince == nil && r.H.IfUnmodifiedSince == nil {

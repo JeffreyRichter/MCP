@@ -49,7 +49,7 @@ func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.
 	fmt.Fprintf(os.Stderr, "[%s] blocking for %dms\n", *tc.ToolCallId, d)
 	time.Sleep(d * time.Millisecond)
 
-	tc, err := ops.Put(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
+	tc, err := ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.
 }
 
 func (ops *httpOperations) getToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
-	tc, err := ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func (ops *httpOperations) getToolCallAdd(ctx context.Context, tc *toolcalls.Too
 }
 
 func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
-	tc, err := ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls
 		return r.Error(http.StatusBadRequest, "BadRequest", "tool call status is '%s'; not expecting a result", *tc.Status)
 	}
 
-	tc, err = ops.Put(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
+	tc, err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
 	if err != nil {
 		return err
 	}
@@ -115,4 +115,24 @@ func (ops *httpOperations) cancelToolCallAdd(ctx context.Context, tc *toolcalls.
 	return r.WriteResponse(&si.ResponseHeader{
 		ETag: ops.etag(),
 	}, nil, http.StatusOK, body)
+}
+
+/////////////////////////////////////////////////////////////////////////
+
+func (ops *httpOperations) processPhaseToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, pp toolcalls.PhaseProcessor) (*toolcalls.ToolCall, error) {
+	switch *tc.Phase {
+	case "submitted":
+		// Do work
+		tc.Phase = si.Ptr("one")
+		tc.Status = si.Ptr(toolcalls.ToolCallStatusRunning)
+		return tc, nil
+
+	case "one":
+		// Do work
+		tc.Status = si.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Phase = (*string)(tc.Status) // No more phases
+		return tc, nil
+	}
+	// TODO: Fix the error
+	panic(fmt.Sprintf("Unknown phase: %s", *tc.Phase))
 }

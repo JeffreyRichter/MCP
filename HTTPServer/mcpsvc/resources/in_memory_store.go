@@ -18,8 +18,8 @@ func NewInMemoryToolCallStore() *InMemoryToolCallStore {
 	return &InMemoryToolCallStore{}
 }
 
-func (s *InMemoryToolCallStore) Get(_ context.Context, tenant string, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
-	key := key(tenant, *toolCall.ToolName, *toolCall.ToolCallId)
+func (s *InMemoryToolCallStore) Get(_ context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+	key := key(*toolCall.Tenant, *toolCall.ToolName, *toolCall.ToolCallId)
 
 	stored, ok := s.data.Load(key)
 	if !ok {
@@ -52,8 +52,8 @@ func (s *InMemoryToolCallStore) Get(_ context.Context, tenant string, toolCall *
 	return stored.Copy(), nil
 }
 
-func (s *InMemoryToolCallStore) Put(_ context.Context, tenant string, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
-	key := key(tenant, *toolCall.ToolName, *toolCall.ToolCallId)
+func (s *InMemoryToolCallStore) Put(_ context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+	key := key(*toolCall.Tenant, *toolCall.ToolName, *toolCall.ToolCallId)
 
 	if accessConditions != nil {
 		if stored, ok := s.data.Load(key); ok {
@@ -91,8 +91,8 @@ func (s *InMemoryToolCallStore) Put(_ context.Context, tenant string, toolCall *
 	return toolCall, nil
 }
 
-func (s *InMemoryToolCallStore) Delete(_ context.Context, tenant string, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
-	key := key(tenant, *toolCall.ToolName, *toolCall.ToolCallId)
+func (s *InMemoryToolCallStore) Delete(_ context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+	key := key(*toolCall.Tenant, *toolCall.ToolName, *toolCall.ToolCallId)
 	if accessConditions != nil {
 		if stored, ok := s.data.Load(key); ok {
 			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {

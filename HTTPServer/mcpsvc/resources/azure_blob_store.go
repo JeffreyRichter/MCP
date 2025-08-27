@@ -9,8 +9,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	si "github.com/JeffreyRichter/serviceinfra"
 )
@@ -30,9 +30,9 @@ func (*AzureBlobToolCallStore) accessConditions(ac *toolcalls.AccessConditions) 
 	}
 }
 
-func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tenant string, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (ab *AzureBlobToolCallStore) Get(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
 	// Get the tool call by tenant, tool name and tool call id
-	response, err := ab.client.DownloadStream(ctx, tenant, ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId),
+	response, err := ab.client.DownloadStream(ctx, *toolCall.Tenant, ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId),
 		&azblob.DownloadStreamOptions{AccessConditions: ab.accessConditions(accessConditions)})
 	if err != nil {
 		return toolCall, err // Blob not found; return a brand new one
@@ -52,9 +52,10 @@ func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tenant string, toolCa
 	return toolCall, nil
 }
 
-func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tenant string, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (ab *AzureBlobToolCallStore) Put(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
 	blobName := ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId)
 	buffer := must(json.Marshal(toolCall))
+	tenant := *toolCall.Tenant
 	for {
 		// Attempt to upload the Tool Call blob
 		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(accessConditions)})
@@ -77,14 +78,7 @@ func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tenant string, toolCa
 	}
 }
 
-func (ab *AzureBlobToolCallStore) Delete(ctx context.Context, tenant string, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
-	_, err := ab.client.DeleteBlob(ctx, tenant, ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId), &azblob.DeleteBlobOptions{AccessConditions: ab.accessConditions(accessConditions)})
+func (ab *AzureBlobToolCallStore) Delete(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+	_, err := ab.client.DeleteBlob(ctx, *toolCall.Tenant, ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId), &azblob.DeleteBlobOptions{AccessConditions: ab.accessConditions(accessConditions)})
 	return err // panic?
-}
-
-func must[T any](t T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return t
 }

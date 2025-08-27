@@ -140,7 +140,7 @@ func (ops *httpOperations) lookupToolCall(r *si.ReqRes) (*ToolInfo, *toolcalls.T
 	if !ok {
 		return nil, nil, r.Error(http.StatusBadRequest, "BadRequest", "Tool '%s' not found", toolName)
 	}
-	return ti, toolcalls.NewToolCall(toolName, toolCallId), nil
+	return ti, toolcalls.NewToolCall(tenant, toolName, toolCallId), nil
 }
 
 func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes) error {
@@ -148,7 +148,7 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return err
 	}
-	if tc, err := ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err == nil {
+	if tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err == nil {
 		if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func (ops *httpOperations) getToolCallResource(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return err
 	}
-	tc, err = ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	tc, err = ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
@@ -178,7 +178,7 @@ func (ops *httpOperations) postToolCallAdvance(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return err
 	}
-	tc, err = ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	tc, err = ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
@@ -193,7 +193,7 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 	if err != nil {
 		return err
 	}
-	tc, err = ops.Get(ctx, tenant, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	tc, err = ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
