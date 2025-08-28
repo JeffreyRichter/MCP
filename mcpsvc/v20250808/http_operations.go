@@ -77,6 +77,49 @@ func buildToolInfosMap() map[string]*ToolInfo {
 				Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
 			},
 		},
+		"count": {
+			Cancel: ops.cancelToolCallCount,
+			Create: ops.createToolCallCount,
+			Get:    ops.getToolCallCount,
+			Tool: &mcp.Tool{
+				BaseMetadata: mcp.BaseMetadata{
+					Name:  "count",
+					Title: si.Ptr("Count up from an integer"),
+				},
+				Description: si.Ptr("Count from a starting value, adding 1 to it for the specified number of increments"),
+				InputSchema: mcp.JSONSchema{
+					Type: "object",
+					Properties: &map[string]any{
+						"start": map[string]any{
+							"type":        "integer",
+							"Description": si.Ptr("The starting value"),
+						},
+						"increments": map[string]any{
+							"type":        "integer",
+							"Description": si.Ptr("The number of increments to perform"),
+						},
+					},
+					Required: []string{},
+				},
+				OutputSchema: &mcp.JSONSchema{
+					Type: "object",
+					Properties: &map[string]any{
+						"n": map[string]any{
+							"type":        "integer",
+							"Description": si.Ptr("The final count"),
+						},
+					},
+					Required: []string{"n"},
+				},
+				Annotations: &mcp.ToolAnnotations{
+					Title:           si.Ptr("Count a specified number of increments"),
+					ReadOnlyHint:    si.Ptr(false),
+					DestructiveHint: si.Ptr(false),
+					IdempotentHint:  si.Ptr(true),
+					OpenWorldHint:   si.Ptr(true),
+				},
+			},
+		},
 		"pii": {
 			Create:  ops.createToolCallPII,
 			Get:     ops.getToolCallPII,

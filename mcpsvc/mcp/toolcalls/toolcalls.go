@@ -20,10 +20,15 @@ type ToolCallIdentity struct {
 
 // ToolCall is the data model for the version-agnostic tool calls resource type.
 type ToolCall struct {
-	ToolCallIdentity   `json:",inline"`
-	Expiration         *time.Time          `json:"expiration,omitempty"`
-	IdempotencyKey     *[]byte             `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
-	ETag               *svrcore.ETag       `json:"etag"`
+	ToolCallIdentity `json:",inline"`
+	Tenant           *string       `json:"tenant"`
+	ToolName         *string       `json:"name,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
+	ToolCallId       *string       `json:"toolCallId,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
+	Expiration       *time.Time    `json:"expiration,omitempty"`
+	IdempotencyKey   *[]byte       `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
+	ETag             *svrcore.ETag `json:"etag"`
+	// Phase is for internal LRO processing; never send it to clients. It applies only during status "running" (it's a tool-specific subdivision of
+	// Status: running because Status isn't granular enough for LROs). A phase transition implies persisting the ToolCall.
 	Phase              *string             `json:"phase,omitempty"`
 	Status             *ToolCallStatus     `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
 	Request            jsontext.Value      `json:"request,omitempty"`

@@ -4,9 +4,10 @@ services:
     container_name: azurite
     ports:
       - "10000:10000"
+      - "10001:10001"
     environment:
       - AZURITE_ACCOUNTS=testaccount:eyJ0
-    command: "azurite --inMemoryPersistence --extentMemoryLimit 32 --blobHost 0.0.0.0 --blobPort 10000"
+    command: "azurite --inMemoryPersistence --extentMemoryLimit 32 --blobHost 0.0.0.0 --blobPort 10000 --queueHost 0.0.0.0 --queuePort 10001"
 
   mcpsvc:
     build:
@@ -16,7 +17,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - MCPSVC_AZURE_STORAGE_URL=http://azurite:10000/testaccount
+      - MCPSVC_AZURE_STORAGE_BLOB_URL=http://azurite:10000/testaccount
+      - MCPSVC_AZURE_STORAGE_QUEUE_URL=http://azurite:10001/testaccount
       - MCPSVC_AZURITE_ACCOUNT=testaccount
       - MCPSVC_AZURITE_KEY=eyJ0
     depends_on:

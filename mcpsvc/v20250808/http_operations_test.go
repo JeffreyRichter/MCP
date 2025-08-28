@@ -24,8 +24,8 @@ func TestListTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if actual := len(actual.Tools); actual != 2 {
-		t.Fatalf("expected 2 tools, got %d", actual)
+	if actual := len(actual.Tools); actual != len(buildToolInfosMap()) {
+		t.Fatalf("expected %d tools, got %d", len(buildToolInfosMap()), actual)
 	}
 
 	etag, has := resp.Header[http.CanonicalHeaderKey("etag")]

@@ -10,16 +10,22 @@ import (
 )
 
 type Config struct {
-	AzureStorageURL string `env:"AZURE_STORAGE_URL"`
-	AzuriteAccount  string `env:"AZURITE_ACCOUNT"`
-	AzuriteKey      string `env:"AZURITE_KEY"`
-	Local           bool   `env:"LOCAL"`
+	AzureStorageBlobURL  string `env:"AZURE_STORAGE_BLOB_URL"`
+	AzureStorageQueueURL string `env:"AZURE_STORAGE_QUEUE_URL"`
+	AzuriteAccount       string `env:"AZURITE_ACCOUNT"`
+	AzuriteKey           string `env:"AZURITE_KEY"`
+	Local                bool   `env:"LOCAL"`
 }
 
 func (c *Config) validate() error {
-	if c.AzureStorageURL == "" && !c.Local {
-		return errors.New("no Azure Storage URL specified")
+	if c.AzureStorageBlobURL == "" && !c.Local {
+		return errors.New("no Azure Storage Blob URL specified")
 	}
+	if c.AzureStorageQueueURL == "" && !c.Local {
+		return errors.New("no Azure Storage Queue URL specified")
+	}
+	// AzuriteAccount and AzuriteKey must be both specified or both unspecified
+	// Empty strings are considered unspecified
 	if c.AzuriteAccount != "" {
 		if c.AzuriteKey == "" {
 			return errors.New("no key specified for Azurite account")

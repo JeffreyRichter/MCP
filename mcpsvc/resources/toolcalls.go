@@ -45,6 +45,8 @@ func (tco *ToolCallOperations) toBlobInfo(tc *toolcalls.ToolCall) (containerName
 	if err != nil {
 		return "", "", ""
 	}
+	// TODO: have e.g. "https:/samfzqhbrdlxlsm.blob.core.windows.net/sometenant/count/test9" which
+	// parses to parts.BlobName "sometenant/count/test9" and we return empty strings here
 	segments := strings.Split(parts.BlobName, "/")
 	if segments == nil || len(segments) != 2 {
 		return "", "", ""

@@ -16,15 +16,15 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "URL only",
 			config: Config{
-				AzureStorageURL: "https://example.blob.core.windows.net",
+				AzureStorageBlobURL: "https://example.blob.core.windows.net",
 			},
 		},
 		{
 			name: "URL and Azurite config",
 			config: Config{
-				AzureStorageURL: "http://azurite:10000/devstoreaccount1",
-				AzuriteAccount:  "devstoreaccount1",
-				AzuriteKey:      "some-key",
+				AzureStorageBlobURL: "http://azurite:10000/devstoreaccount1",
+				AzuriteAccount:      "devstoreaccount1",
+				AzuriteKey:          "some-key",
 			},
 		},
 		{
@@ -38,25 +38,25 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Azurite account without key",
 			config: Config{
-				AzureStorageURL: "http://azurite:10000/devstoreaccount1",
-				AzuriteAccount:  "devstoreaccount1",
+				AzureStorageBlobURL: "http://azurite:10000/devstoreaccount1",
+				AzuriteAccount:      "devstoreaccount1",
 			},
 			wantErr: true,
 		},
 		{
 			name: "Azurite key without account",
 			config: Config{
-				AzureStorageURL: "http://azurite:10000/devstoreaccount1",
-				AzuriteKey:      "some-key",
+				AzureStorageBlobURL: "http://azurite:10000/devstoreaccount1",
+				AzuriteKey:          "some-key",
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty strings considered unspecified",
 			config: Config{
-				AzureStorageURL: "http://azurite:10000/devstoreaccount1",
-				AzuriteAccount:  "",
-				AzuriteKey:      "",
+				AzureStorageBlobURL: "http://azurite:10000/devstoreaccount1",
+				AzuriteAccount:      "",
+				AzuriteKey:          "",
 			},
 		},
 	}

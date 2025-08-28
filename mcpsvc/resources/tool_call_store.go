@@ -37,10 +37,10 @@ var GetToolCallStore = sync.OnceValue(func() ToolCallStore {
 			if cfg.AzuriteAccount != "" && cfg.AzuriteKey != "" {
 				fmt.Println("Using Azurite for tool call storage")
 				cred := must(azblob.NewSharedKeyCredential(cfg.AzuriteAccount, cfg.AzuriteKey))
-				return must(azblob.NewClientWithSharedKeyCredential(cfg.AzureStorageURL, cred, nil))
+				return must(azblob.NewClientWithSharedKeyCredential(cfg.AzureStorageBlobURL, cred, nil))
 			}
 			cred := must(azidentity.NewDefaultAzureCredential(nil))
-			serviceURL := must(url.Parse(config.Get().AzureStorageURL)).String()
+			serviceURL := must(url.Parse(config.Get().AzureStorageBlobURL)).String()
 			client := must(azblob.NewClient(serviceURL, cred, nil))
 			return client
 		}(),
