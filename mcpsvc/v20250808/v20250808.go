@@ -1,5 +1,23 @@
 package v20250808
 
+/*
+GET /mcp/tools
+GET /mcp/tools/{toolName}/calls
+PUT/GET /mcp/tools/{toolName}/calls/{toolCallId}
+POST /mcp/tools/{toolName}/calls/{toolCallId}/advance
+POST /mcp/tools/{toolName}/calls/{toolCallId}/cancel
+
+GET /mcp/resources
+GET /mcp/resources-templates
+GET /mcp/resources/{name}
+
+GET /mcp/prompts
+GET /mcp/prompts/{name}
+
+PUT /mcp/roots
+POST /mcp/complete
+*/
+
 import (
 	si "github.com/JeffreyRichter/serviceinfra"
 )

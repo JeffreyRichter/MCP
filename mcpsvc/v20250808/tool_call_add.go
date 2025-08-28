@@ -70,7 +70,7 @@ func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls
 	if err != nil {
 		return err
 	}
-	if err := r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err := r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	switch *tc.Status {
@@ -129,6 +129,7 @@ func (ops *httpOperations) processPhaseToolCallAdd(ctx context.Context, tc *tool
 
 	case "one":
 		// Do work
+		pp.ExtendProcessingTime(ctx, time.Millisecond*300)
 		tc.Status = si.Ptr(toolcalls.ToolCallStatusSuccess)
 		tc.Phase = (*string)(tc.Status) // No more phases
 		return tc, nil

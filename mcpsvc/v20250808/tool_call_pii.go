@@ -69,7 +69,7 @@ func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
@@ -118,7 +118,7 @@ func (ops *httpOperations) cancelToolCallPII(ctx context.Context, tc *toolcalls.
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {

@@ -149,7 +149,7 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes
 		return err
 	}
 	if tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err == nil {
-		if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+		if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 			return err
 		}
 		return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
@@ -166,7 +166,7 @@ func (ops *httpOperations) getToolCallResource(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Get(ctx, tc, r)
@@ -182,7 +182,7 @@ func (ops *httpOperations) postToolCallAdvance(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Advance(ctx, tc, r)
@@ -197,7 +197,7 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Cancel(ctx, tc, r)
@@ -206,7 +206,7 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (ops *httpOperations) getToolList(ctx context.Context, r *si.ReqRes) error {
-	if err := r.ValidatePreconditions(&si.PreconditionValues{ETag: si.Ptr(si.ETag(v20250808))}); err != nil {
+	if err := r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: si.Ptr(si.ETag(v20250808))}); err != nil {
 		return err
 	}
 	info := GetToolInfos()
