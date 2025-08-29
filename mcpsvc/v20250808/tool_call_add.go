@@ -31,8 +31,6 @@ type AddToolCallError struct {
 	Overflow bool `json:"overflowcode,omitempty"`
 }
 
-const tenant = "sometenant"
-
 func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
 	var trequest AddToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
