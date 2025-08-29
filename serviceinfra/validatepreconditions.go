@@ -55,17 +55,17 @@ func ValidatePreconditions(rv ResourceValues, method string, c Conditionals) err
 	}
 
 	// 1. Evaluate If-Match precondition. If-match must be checked before if-None-Match (RFC7232)
-	if c.IfMatch != nil {
+	if c.IfMatch != nil { // if-match failures always return 412; never 304
 		if *c.IfMatch == ETagAny {
 			// If "*" is used, the request fails if the resource doesn't exist.
 			// Assuming the resource exists since we have an ETag, so this is a match.
 			// The only way this would fail is if rv.ETag was empty.
 			if rv.ETag == nil {
-				return NewServiceError(statusCode, "Resource does not exist", "")
+				return NewServiceError(http.StatusPreconditionFailed, "Resource does not exist", "")
 			}
 		} else {
 			if rv.ETag == nil || !c.IfMatch.Equals(*rv.ETag) {
-				return NewServiceError(statusCode, "Resource etag doesn't match", "")
+				return NewServiceError(http.StatusPreconditionFailed, "Resource etag doesn't match", "")
 			}
 		}
 	}
@@ -79,6 +79,7 @@ func ValidatePreconditions(rv ResourceValues, method string, c Conditionals) err
 	}
 
 	// 3. Evaluate If-None-Match (if If-Match and If-Unmodified-Since checks passed).
+	// GET/HEAD failures should set these response headers: cache-control, etag, expires
 	if c.IfNoneMatch != nil {
 		if *c.IfNoneMatch == ETagAny {
 			// If "*" is used, the request fails if the resource exists.

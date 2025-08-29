@@ -170,7 +170,7 @@ func TestValidatePreconditions(t *testing.T) {
 				ETag:                Ptr(ETag("456")),
 				LastModified:        Ptr(baseTime),
 			},
-			expectedCode: http.StatusNotModified,
+			expectedCode: http.StatusPreconditionFailed,
 		},
 
 		// If-Match + If-None-Match tests
