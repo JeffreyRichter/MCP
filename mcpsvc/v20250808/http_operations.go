@@ -3,7 +3,10 @@ package v20250808
 // For timeouts/cancellation, see https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -29,10 +32,11 @@ func buildToolInfosMap() map[string]*ToolInfo {
 	ops := GetOps()
 	return map[string]*ToolInfo{
 		"add": {
-			Create:  ops.createToolCallAdd,
-			Get:     ops.getToolCallAdd,
-			Advance: ops.advanceToolCallAdd,
-			Cancel:  ops.cancelToolCallAdd,
+			Create:       ops.createToolCallAdd,
+			Get:          ops.getToolCallAdd,
+			Advance:      ops.advanceToolCallAdd,
+			Cancel:       ops.cancelToolCallAdd,
+			ProcessPhase: ops.processPhaseToolCallAdd,
 			Tool: &mcp.Tool{
 				BaseMetadata: mcp.BaseMetadata{
 					Name:  "add",
@@ -112,14 +116,15 @@ func buildToolInfosMap() map[string]*ToolInfo {
 	}
 }
 
-type toolOp func(ctx context.Context, toolCall *toolcalls.ToolCall, r *si.ReqRes) error
+type toolOpFunc func(ctx context.Context, toolCall *toolcalls.ToolCall, r *si.ReqRes) error
 
 type ToolInfo struct {
-	Tool    *mcp.Tool
-	Create  toolOp
-	Get     toolOp
-	Advance toolOp
-	Cancel  toolOp
+	Tool         *mcp.Tool
+	Create       toolOpFunc
+	Get          toolOpFunc
+	Advance      toolOpFunc
+	Cancel       toolOpFunc
+	ProcessPhase toolcalls.ProcessPhaseFunc
 }
 
 // httpOperations wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
@@ -128,6 +133,7 @@ type httpOperations struct{ resources.ToolCallStore }
 func (ops *httpOperations) etag() *si.ETag { return si.Ptr(si.ETag("v20250808")) }
 
 func (ops *httpOperations) lookupToolCall(r *si.ReqRes) (*ToolInfo, *toolcalls.ToolCall, error) {
+	tenant := "sometenant"
 	toolName, toolCallId := r.R.PathValue("toolName"), r.R.PathValue("toolCallId")
 	if toolName == "" {
 		return nil, nil, r.Error(http.StatusBadRequest, "BadRequest", "Tool name required")
@@ -143,17 +149,45 @@ func (ops *httpOperations) lookupToolCall(r *si.ReqRes) (*ToolInfo, *toolcalls.T
 	return ti, toolcalls.NewToolCall(tenant, toolName, toolCallId), nil
 }
 
+/*
+	TODO: Fix for error below:
+
+pm, err := resources.NewAzureQueueToolCallPhaseMgr(context.TODO(), "", ops.toolNameToProcessPhaseFunc)
+
+	if err != nil {
+		return nil, err
+	}
+*/
+func (ops *httpOperations) toolNameToProcessPhaseFunc(toolName string) (toolcalls.ProcessPhaseFunc, error) {
+	ti, ok := GetToolInfos()[toolName]
+	if !ok {
+		return nil, fmt.Errorf("tool '%s' not found", toolName)
+	}
+	return ti.ProcessPhase, nil
+}
+
 func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes) error {
+	calcIdempotencyKey := func(s string) []byte { ik := md5.Sum(([]byte)(s)); return ik[:] }
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return err
 	}
-	if tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err == nil {
-		if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
-			return err
-		}
-		return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	if r.H.IfMatch != nil || r.H.IfNoneMatch != nil {
+		return r.Error(http.StatusBadRequest, "BadRequest", "if-match and if-none-match headers are not allowed on PUT")
 	}
+
+	// Calculate idempotency key based on something in the request that should be stable across retries
+	// For example, the Date header (which must be present per RFC 7231)
+	incomingIK := calcIdempotencyKey(r.H.Date.String()) // TODO: Maybe improve key value?
+	if tc.IdempotencyKey != nil {                       // PUT on an existing tool call ID
+		if tc.IdempotencyKey != nil && !bytes.Equal(*tc.IdempotencyKey, incomingIK) { // Not a retry
+			return r.Error(http.StatusConflict, "Conflict", "Tool call ID already exists")
+		}
+	}
+	if err := r.UnmarshalBody(&tc); err != nil {
+		return err
+	}
+	tc.IdempotencyKey = &incomingIK
 	return ti.Create(ctx, tc, r)
 }
 
@@ -166,7 +200,7 @@ func (ops *httpOperations) getToolCallResource(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Get(ctx, tc, r)
@@ -182,7 +216,7 @@ func (ops *httpOperations) postToolCallAdvance(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Advance(ctx, tc, r)
@@ -197,7 +231,7 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Cancel(ctx, tc, r)
@@ -206,7 +240,7 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (ops *httpOperations) getToolList(ctx context.Context, r *si.ReqRes) error {
-	if err := r.ValidatePreconditions(&si.PreconditionValues{ETag: si.Ptr(si.ETag(v20250808))}); err != nil {
+	if err := r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: si.Ptr(si.ETag(v20250808))}); err != nil {
 		return err
 	}
 	info := GetToolInfos()

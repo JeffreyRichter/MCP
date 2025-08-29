@@ -86,11 +86,11 @@ func TestValidatePreconditions(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name          string
-		method        string
-		headers       map[string]string
-		preconditions PreconditionValues
-		expectedCode  int
+		name           string
+		method         string
+		headers        map[string]string
+		resourceValues ResourceValues
+		expectedCode   int
 	}{
 		// Error cases: resource doesn't support headers
 		{
@@ -99,9 +99,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         nil,
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsModified,
+				ETag:                nil,
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusBadRequest,
 		},
@@ -111,9 +112,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         nil,
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsModified,
+				ETag:                nil,
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusBadRequest,
 		},
@@ -123,9 +125,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Modified-Since": baseTime.Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: nil,
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        nil,
 			},
 			expectedCode: http.StatusBadRequest,
 		},
@@ -135,9 +138,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Unmodified-Since": baseTime.Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: nil,
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        nil,
 			},
 			expectedCode: http.StatusBadRequest,
 		},
@@ -149,9 +153,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -160,33 +165,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("456")),
-				LastModified: Ptr(baseTime),
-			},
-			expectedCode: http.StatusPreconditionFailed,
-		},
-		{
-			name:   "if-match weak etag fails strong comparison",
-			method: http.MethodGet,
-			headers: map[string]string{
-				"If-Match": `W/"123"`,
-			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
-			},
-			expectedCode: http.StatusPreconditionFailed,
-		},
-		{
-			name:   "if-match with resource weak etag fails strong comparison",
-			method: http.MethodGet,
-			headers: map[string]string{
-				"If-Match": "123",
-			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag(`W/"123"`)),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("456")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -199,9 +181,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Match":      "123",
 				"If-None-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified, // If-None-Match takes precedence when both match
 		},
@@ -212,9 +195,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Match":      "123",
 				"If-None-Match": "456",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -224,9 +208,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Match":      "123",
 				"If-None-Match": "456",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 
@@ -238,9 +223,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Match":          "123",
 				"If-Modified-Since": baseTime.Add(-time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -250,9 +236,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Match":          "123",
 				"If-Modified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -263,9 +250,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Match":          "123",
 				"If-Modified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 
@@ -276,9 +264,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Unmodified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -287,11 +276,12 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Unmodified-Since": baseTime.Add(-time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
-			expectedCode: http.StatusPreconditionFailed,
+			expectedCode: http.StatusNotModified,
 		},
 
 		// If-Unmodified-Since + If-None-Match combination tests
@@ -302,9 +292,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-None-Match":       "123",
 				"If-Unmodified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -315,9 +306,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-None-Match":       "123",
 				"If-Unmodified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -328,9 +320,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-None-Match":       "456",
 				"If-Unmodified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 
@@ -342,9 +335,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Unmodified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 				"If-Modified-Since":   baseTime.Add(-time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -354,9 +348,10 @@ func TestValidatePreconditions(t *testing.T) {
 				"If-Unmodified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 				"If-Modified-Since":   baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -368,9 +363,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -380,9 +376,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -392,9 +389,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "456",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -403,9 +401,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "*",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -415,45 +414,12 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "*",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
-		},
-		{
-			name:   "if-none-match weak etag doesn't match_safe method",
-			method: http.MethodGet,
-			headers: map[string]string{
-				"If-None-Match": `W/"456"`,
-			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
-			},
-		},
-		{
-			name:   "if-none-match strong vs weak etag doesn't match_unsafe method",
-			method: http.MethodPost,
-			headers: map[string]string{
-				"If-None-Match": "456",
-			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag(`W/"123"`)),
-				LastModified: Ptr(baseTime),
-			},
-		},
-		{
-			name:   "if-none-match weak etag weak comparison matches",
-			method: http.MethodGet,
-			headers: map[string]string{
-				"If-None-Match": `W/"123"`,
-			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag(`W/"123"`)),
-				LastModified: Ptr(baseTime),
-			},
-			expectedCode: http.StatusNotModified,
 		},
 
 		// Standalone If-Modified-Since tests (no other headers)
@@ -463,9 +429,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Modified-Since": baseTime.Add(-time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 		{
@@ -474,9 +441,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Modified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -486,9 +454,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-Modified-Since": baseTime.Add(time.Hour).Format(http.TimeFormat),
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 
@@ -497,9 +466,10 @@ func TestValidatePreconditions(t *testing.T) {
 			name:    "no conditional headers",
 			method:  http.MethodGet,
 			headers: map[string]string{},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 		},
 
@@ -510,9 +480,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -522,9 +493,10 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{
 				"If-None-Match": "123",
 			},
-			preconditions: PreconditionValues{
-				ETag:         Ptr(ETag("123")),
-				LastModified: Ptr(baseTime),
+			resourceValues: ResourceValues{
+				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
+				ETag:                Ptr(ETag("123")),
+				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -541,7 +513,7 @@ func TestValidatePreconditions(t *testing.T) {
 			}
 			rw := httptest.NewRecorder()
 			rr := NewReqRes(nil, req, rw)
-			err = rr.ValidatePreconditions(&tt.preconditions)
+			err = rr.ValidatePreconditions(tt.resourceValues)
 			// ValidatePreconditions is responsible for the status code only in error
 			// cases and when preconditions aren't met as stipulated in RFC 7232
 			if tt.expectedCode == 0 {

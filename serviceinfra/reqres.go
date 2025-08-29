@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json/v2"
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"slices"
@@ -43,40 +42,21 @@ func (r *ReqRes) Next(ctx context.Context) error {
 	return nextPolicy(ctx, r)
 }
 
-// ServiceError represents a standard Service HTTP error response as documented here:
-// https://www.rfc-editor.org/rfc/rfc9457.html
-type ServiceError struct {
-	StatusCode int    `json:"-"`
-	ErrorCode  string `json:"code"`
-	Message    string `json:"message,omitempty"`
-	Target     string `json:"target,omitempty"`
-}
-
-// Error returns an ServiceError in JSON typically returned in an HTTP response.
-func (e *ServiceError) Error() string {
-	v := struct {
-		Error *ServiceError `json:"error"`
-	}{Error: e}
-	json, _ := json.Marshal(v)
-	return string(json)
-}
-
 // Error sets the HTTP response to the specified HTTP status code and Service error.
 // The caller should ensure no further writes are done to the http.ResponseWriter.
 func (r *ReqRes) Error(statusCode int, errorCode, messageFmt string, a ...any) error {
-	se := &ServiceError{
-		StatusCode: statusCode,
-		ErrorCode:  errorCode,
-		Message:    fmt.Sprintf(messageFmt, a...),
-	}
-	// TODO: log WriteResponse errors
-	_ = r.WriteResponse(&ResponseHeader{
+	return r.WriteError(NewServiceError(statusCode, errorCode, messageFmt, a...))
+}
+
+func (r *ReqRes) WriteError(se *ServiceError) error {
+	return r.WriteResponse(&ResponseHeader{
 		XMSErrorCode: &se.ErrorCode,
 		ContentType:  Ptr("application/json"),
 	}, nil, se.StatusCode, se)
-	return se
 }
 
+// UnmarshalQuery unmarshals the request's URL query parameters into the specified struct. If any query parameters
+// are unrecognized, it writes an appropriate ServiceError (BadRequest) to the HTTP response and returns non-nil.
 func (r *ReqRes) UnmarshalQuery(s any) error {
 	values := r.R.URL.Query() // Each call to Query re-parses so we CAN mutate values
 	err := httpjson.UnmarshalQueryToStruct(values, s)
@@ -113,15 +93,16 @@ func (r *ReqRes) UnmarshalBody(s any) error {
 // customHeader (pass nil if none), HTTP status code, and body structure (pass nil if none).
 // For more control over the response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
 func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode int, bodyStruct any) error { // customHeader must be *struct
-	rwh := r.RW.Header()
 	body, err := []byte{}, error(nil)
 	if bodyStruct != nil {
 		body, err = json.Marshal(bodyStruct)
 		if err != nil {
 			return err
 		}
-		rwh.Set("Content-Type", "application/json")
+		// If bodyStruct passed, automatically set these response headers
+		rh.ContentLength, rh.ContentType = Ptr(len(body)), Ptr("application/json")
 	}
+	rwh := r.RW.Header()
 	fields2Header := func(h any) {
 		v := reflect.ValueOf(h).Elem()
 		for i := range v.NumField() {
@@ -190,11 +171,11 @@ type RequestHeader struct { // 'json' tag value MUST be lowercase
 	ContentEncoding *string `json:"content-encoding"`
 
 	// Conditionals
-	IfMatch     *ETag `json:"if-match"`
-	IfNoneMatch *ETag `json:"if-none-match"`
-	//IfRange           *ETag      `json:"if-range"`
+	IfMatch           *ETag      `json:"if-match"`
+	IfNoneMatch       *ETag      `json:"if-none-match"`
 	IfModifiedSince   *time.Time `json:"if-modified-since" time:"RFC1123"`
 	IfUnmodifiedSince *time.Time `json:"if-unmodified-since" time:"RFC1123"`
+	//IfRange           *ETag      `json:"if-range"`
 
 	// Content Negotiation
 	Accept         *string `json:"accept"`          // TODO: slice
@@ -302,111 +283,19 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 	return nil
 }
 
-// PreconditionValues are resource-specific values used to validate the request
-type PreconditionValues struct {
-	ETag         *ETag
-	LastModified *time.Time
-}
-
 // ValidatePreconditions checks the passed-in ETag & LastModified (for the current resource) against the request's
 // If(None)Match & Id(Un)ModifiedSince headers. If preconditions pass, ValidatePreconditions returns nil; else, it
 // writes an appropriate ServiceError to the HTTP response (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]) and return non-nil.
-func (r *ReqRes) ValidatePreconditions(rv *PreconditionValues) error {
-	if rv.ETag == nil && (r.H.IfMatch != nil || r.H.IfNoneMatch != nil) {
-		return r.Error(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
+func (r *ReqRes) ValidatePreconditions(rv ResourceValues) error {
+	se := ValidatePreconditions(rv, r.R.Method, Conditionals{
+		IfMatch:           r.H.IfMatch,
+		IfNoneMatch:       r.H.IfNoneMatch,
+		IfModifiedSince:   r.H.IfModifiedSince,
+		IfUnmodifiedSince: r.H.IfUnmodifiedSince,
+	})
+	if se != nil {
+		_ = r.WriteError(se.(*ServiceError)) // TODO: Log & swallow error
 	}
-
-	if rv.LastModified == nil && (r.H.IfModifiedSince != nil || r.H.IfUnmodifiedSince != nil) {
-		return r.Error(http.StatusBadRequest, "", "if-modified-since and if-unmodified-since headers not supported by this resource")
-	}
-
-	isMethodSafe := func() bool { // Method doesn't alter resource: https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP
-		return r.R.Method == http.MethodGet || r.R.Method == http.MethodHead || r.R.Method == http.MethodOptions
-	}
-
-	// NOTE ORDER: If-match must be checked before if-None-Match (RFC7232)
-	// Algorithm from : https://www.loggly.com/blog/http-status-code-diagram/
-	hasIfNoneMatch := func() error {
-		if r.H.IfNoneMatch != nil {
-			if r.H.IfNoneMatch.Equals(ETagAny) || r.H.IfNoneMatch.WeakEquals(*rv.ETag) {
-				if isMethodSafe() {
-					return r.Error(http.StatusNotModified, "Resource etag matches", "")
-				} else {
-					return r.Error(http.StatusPreconditionFailed, "Resource etag matches", "")
-				}
-			}
-			return nil
-		} else {
-			// RFC 7232 3.3: if-modified-since applies only to GET and HEAD
-			if r.H.IfModifiedSince != nil && (r.R.Method == http.MethodGet || r.R.Method == http.MethodHead) {
-				if rv.LastModified.After(*r.H.IfModifiedSince) { // true if resource date after If-Mmodifed-Since date
-					return nil
-				}
-				return r.Error(http.StatusNotModified, "Resource not modified since", "")
-			} else {
-				return nil
-			}
-		}
-	}
-	if r.H.IfMatch != nil {
-		if !rv.ETag.Equals(*r.H.IfMatch) {
-			return r.Error(http.StatusPreconditionFailed, "Etags do not match", "")
-		} else {
-			return hasIfNoneMatch()
-		}
-	} else {
-		if r.H.IfUnmodifiedSince != nil {
-			if rv.LastModified.Before(*r.H.IfUnmodifiedSince) { // true if resource date before If-Unmodifed-Since date
-				return hasIfNoneMatch()
-			} else {
-				return r.Error(http.StatusPreconditionFailed, "Resource not modified since", "")
-			}
-		} else {
-			return hasIfNoneMatch()
-		}
-	}
-	/* Algorithm from: https://www.loggly.com/blog/http-status-code-diagram/
-	has-if-match {
-	   if-match doesn't match {
-	      412
-	   } else {
-	      has-if-none-match {
-	         if-none-match matches {
-	            Success
-	         } else {
-	            if is-precondition-safe {
-				   304
-				} else {
-				   412
-				}
-	         }
-	      } else {
-	         has-if-modified-since {
-	            if-modified-since matches {
-	                Success
-	            } else {
-	               if is-precondition-safe {
-				      304
-				   } else {
-					  412
-				   }
-				}
-	         } else {
-	            Success
-	         }
-	      }
-	   }
-	} else {// !has-if-match
-	   has-if-unmodified-since {
-	      if-unmodified-since matches {
-			goto "has if_none_match"
-		  } else {
-			412
-		  }
-	   } else {
-	      goto "has_if_none_match"
-	   }
-	}
-	*/
+	return se
 }

@@ -31,8 +31,6 @@ type AddToolCallError struct {
 	Overflow bool `json:"overflowcode,omitempty"`
 }
 
-const tenant = "sometenant"
-
 func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
 	var trequest AddToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
@@ -70,7 +68,7 @@ func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls
 	if err != nil {
 		return err
 	}
-	if err := r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err := r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	switch *tc.Status {
@@ -129,6 +127,7 @@ func (ops *httpOperations) processPhaseToolCallAdd(ctx context.Context, tc *tool
 
 	case "one":
 		// Do work
+		pp.ExtendProcessingTime(ctx, time.Millisecond*300)
 		tc.Status = si.Ptr(toolcalls.ToolCallStatusSuccess)
 		tc.Phase = (*string)(tc.Status) // No more phases
 		return tc, nil
