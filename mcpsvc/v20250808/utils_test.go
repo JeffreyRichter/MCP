@@ -19,7 +19,7 @@ func testServer(t *testing.T) *httptest.Server {
 	setupMockStore(t)
 
 	policies := []si.Policy{
-		policies.NewGracefulShutdownPolicy(),
+		policies.NewGracefulShutdownPolicy(policies.NewShutdownMgr(time.Second*3, time.Second*2)),
 		policies.NewLoggingPolicy(os.Stderr),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),
