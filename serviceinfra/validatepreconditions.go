@@ -94,6 +94,7 @@ func ValidatePreconditions(rv ResourceValues, method string, c Conditionals) err
 	}
 
 	// 4. Evaluate If-Modified-Since (if If-None-Match is not present, for GET/HEAD/OPTIONS).
+	// 200 if last-modified later than if-modified-since etag; else 304 & last-modified response header
 	if c.IfNoneMatch == nil && methodIsSafe && c.IfModifiedSince != nil && rv.LastModified != nil {
 		if !rv.LastModified.After(*c.IfModifiedSince) {
 			return NewServiceError(statusCode, "Resource not modified since", "")
