@@ -32,13 +32,13 @@ func main() {
 		port = "0" // let the OS choose a port
 	}
 
+	logger := slog.Default()
 	policies := []si.Policy{
-		// Add support for https://shopify.engineering/building-resilient-payment-systems (See "4. Add Monitoring and Alerting")
 		policies.NewGracefulShutdownPolicy(shutdownCtx),
-		policies.NewLoggingPolicy(os.Stderr),
+		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(key),
-		policies.NewMetricsPolicy(),
+		policies.NewMetricsPolicy(logger),
 		policies.NewDistributedTracing(),
 	}
 
