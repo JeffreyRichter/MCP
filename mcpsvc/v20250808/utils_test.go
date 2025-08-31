@@ -3,9 +3,9 @@ package v20250808
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -17,13 +17,14 @@ import (
 
 func testServer(t *testing.T) *httptest.Server {
 	setupMockStore(t)
+	logger := slog.Default()
 
 	policies := []si.Policy{
-		policies.NewGracefulShutdownPolicy(policies.NewShutdownMgr(time.Second*3, time.Second*2)),
-		policies.NewLoggingPolicy(os.Stderr),
+		policies.NewGracefulShutdownPolicy(policies.NewShutdownCtx(policies.ShutdownConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancelDelay: time.Second * 2})),
+		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),
-		policies.NewMetricsPolicy(),
+		policies.NewMetricsPolicy(logger),
 		policies.NewDistributedTracing(),
 	}
 	avis := []*si.ApiVersionInfo{{GetRoutes: Routes}}
@@ -31,7 +32,6 @@ func testServer(t *testing.T) *httptest.Server {
 
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-
 	return srv
 }
 

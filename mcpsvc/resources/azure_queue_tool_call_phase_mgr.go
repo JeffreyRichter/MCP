@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
@@ -18,14 +19,25 @@ import (
 	si "github.com/JeffreyRichter/serviceinfra"
 )
 
-type azureQueueToolCallPhaseMgr struct {
-	queueClient            *azqueue.QueueClient
-	toolNameToProcessPhase toolcalls.ToolNameToProcessPhaseFunc
+type PhaseMgrConfig struct {
+	// Logger for logging events
+	*slog.Logger
+
+	// ToolNameToProcessPhaseFunc converts a Tool Name to a function that processes its phases.
+	toolcalls.ToolNameToProcessPhaseFunc
+
+	// PhaseExecutionTime is the initial duration for which a phase is allowed to run.
+	PhaseExecutionTime time.Duration
 }
 
-// NewAzureQueueToolCallPhaseMgr creates a new azureQueueToolCallPhaseMgr.
+type PhaseMgr struct {
+	queueClient *azqueue.QueueClient
+	config      PhaseMgrConfig
+}
+
+// NewPhaseMgr creates a new Mgr.
 // queueUrl must look like: https://myaccount.queue.core.windows.net/<queuename>
-func NewAzureQueueToolCallPhaseMgr(ctx context.Context, queueUrl string, tn2pp toolcalls.ToolNameToProcessPhaseFunc) (*azureQueueToolCallPhaseMgr, error) {
+func NewPhaseMgr(ctx context.Context, queueUrl string, o PhaseMgrConfig) (*PhaseMgr, error) {
 	queueClient, err := azqueue.NewQueueClient(queueUrl, nil /*cred azcore.TokenCredential*/, nil)
 	if err != nil {
 		return nil, err
@@ -33,11 +45,13 @@ func NewAzureQueueToolCallPhaseMgr(ctx context.Context, queueUrl string, tn2pp t
 	if _, err = queueClient.Create(ctx, nil); err != nil { // Make sure the queue exists
 		return nil, err
 	}
-	return &azureQueueToolCallPhaseMgr{queueClient: queueClient, toolNameToProcessPhase: tn2pp}, nil
+	mgr := &PhaseMgr{queueClient: queueClient, config: o}
+	go mgr.processor(ctx)
+	return mgr, nil
 }
 
 // DeleteQueue delete the queue. This is most useful for debugging/testing.
-func (pm *azureQueueToolCallPhaseMgr) DeleteQueue(ctx context.Context) error {
+func (pm *PhaseMgr) DeleteQueue(ctx context.Context) error {
 	_, err := pm.queueClient.Delete(ctx, nil)
 	return err
 }
@@ -45,70 +59,73 @@ func (pm *azureQueueToolCallPhaseMgr) DeleteQueue(ctx context.Context) error {
 // Processor forever loops dequeuing/processing ToolCall Phases.
 // Use ctx to cancel Processor & all ToolCall Phases in flight.
 // Poison messages & other failures are logged.
-func (pm *azureQueueToolCallPhaseMgr) Processor(ctx context.Context, phaseExecutionTime time.Duration, loggerTODO bool) {
+func (pm *PhaseMgr) processor(ctx context.Context) {
 	o := &azqueue.DequeueMessagesOptions{
 		NumberOfMessages:  si.Ptr(int32(10)),
-		VisibilityTimeout: si.Ptr(int32(phaseExecutionTime.Seconds())),
+		VisibilityTimeout: si.Ptr(int32(pm.config.PhaseExecutionTime.Seconds())),
 	}
 	for {
 		time.Sleep(time.Millisecond * 200)
+		// TODO: If CPU Usage > 90%, continue
 		resp, err := pm.queueClient.DequeueMessages(ctx, o)
 		if err != nil {
-			// TODO: log
+			pm.config.Logger.Error("DequeueMessages", slog.String("error", err.Error()))
 			continue // Maybe exponential delay for time.Sleep if service is down?
 		}
-		// TODO: For each message, GET its TC resource and then call ContinueToolCallPhaseProcessing
 		for _, m := range resp.Messages {
 			if *m.DequeueCount > 3 { // Poison Message
-				// TODO: log
+				pm.config.Logger.Error("PoisonMessage", slog.String("messageID", *m.MessageID))
 				continue
 			}
-			var aqm azureQueueMessage
-			if err := json.Unmarshal(([]byte)(*m.MessageText), &aqm); err != nil {
-				// TODO: Log unexpected message format
-			}
-			tc := toolcalls.NewToolCall(aqm.Parse())
-			// TODO: use the ToolCallStore singleton (it's a sync.OnceValue)
-			tc, err := ToolCallOps.Get(ctx, tc, nil)
-			if err != nil { // ToolCallID not expired/not found
-				// No more phases to execute; delete the queue message (or let it become a poison message)
-				// ContinuePhaseProcessing will delete the message if Status != toolcalls.ToolCallStatusRunning
-				// TODO: log; maybe not
-				continue
-			}
-			pp := pm.NewPhaseProcessor(*m.MessageID, *m.PopReceipt)
-			pm.ContinuePhaseProcessing(ctx, tc, pp)
+			go func() {
+				var aqm queueMsg
+				if err := json.Unmarshal(([]byte)(*m.MessageText), &aqm); err != nil {
+					pm.config.Logger.Error("UnexpectedMessageFormat", slog.String("messageID", *m.MessageID), slog.String("error", err.Error()))
+					return
+				}
+				tc := toolcalls.NewToolCall(aqm.parse())
+				// TODO: use the ToolCallStore singleton (it's a sync.OnceValue)
+				tc, err := ToolCallOps.Get(ctx, tc, nil)
+				if err != nil { // ToolCallID not expired/not found
+					// No more phases to execute; delete the queue message (or let it become a poison message)
+					// continuePhaseProcessing will delete the message if Status != toolcalls.ToolCallStatusRunning
+					// TODO: log; maybe not
+					return
+				}
+				pp := pm.newPhaseProcessor(*m.MessageID, *m.PopReceipt)
+				pm.continuePhaseProcessing(ctx, tc, pp)
+			}()
 		}
 	}
 }
 
-type azureQueueMessage struct {
+type queueMsg struct {
 	ToolCallIDUrl string `json:"toolCallIDUrl"`
 }
 
-func (m *azureQueueMessage) Parse() (tenant, toolName, toolCallID string) {
+func (m *queueMsg) parse() (tenant, toolName, toolCallID string) {
 	return ToolCallOps.fromBlobUrl(m.ToolCallIDUrl)
 }
 
 // StartPhaseProcessing: enqueues a new tool call phase with tool name & tool call id.
 // Calls continuePhaseProcessing (passing time extender in PhaseProcessor interface) while status is in progress. Updates tc resource after continue returns. Deletes queue message when status is not in progress.
-func (pm *azureQueueToolCallPhaseMgr) StartPhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall, phaseExecutionTime time.Duration) error {
+func (pm *PhaseMgr) StartPhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall) error {
 	containerName, blobName := ToolCallOps.toBlobInfo(tc)
-	data := must(json.Marshal(azureQueueMessage{
+	data := must(json.Marshal(queueMsg{
 		ToolCallIDUrl: fmt.Sprintf("https://%s.blob.core.windows.net/%s", containerName, blobName),
 	}))
 	resp, err := pm.queueClient.EnqueueMessage(ctx, string(data),
-		&azqueue.EnqueueMessageOptions{VisibilityTimeout: si.Ptr(int32(phaseExecutionTime.Seconds()))})
+		&azqueue.EnqueueMessageOptions{VisibilityTimeout: si.Ptr(int32(pm.config.PhaseExecutionTime.Seconds()))})
 	if err != nil {
 		return nil
 	}
-	pp := pm.NewPhaseProcessor(*resp.Messages[0].MessageID, *resp.Messages[0].PopReceipt)
-	return pm.ContinuePhaseProcessing(ctx, tc, pp)
+	pp := pm.newPhaseProcessor(*resp.Messages[0].MessageID, *resp.Messages[0].PopReceipt)
+	return pm.continuePhaseProcessing(ctx, tc, pp)
 }
 
-func (pm *azureQueueToolCallPhaseMgr) ContinuePhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall, pp *azureQueuePhaseProcessor) error {
+func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall, pp *phaseProcessor) error {
 	// Lookup PhaseProcessor for this ToolName
-	tnpp, err := pm.toolNameToProcessPhase(*tc.ToolName)
+	tnpp, err := pm.config.ToolNameToProcessPhaseFunc(*tc.ToolName)
 	if err != nil {
 		return err // unrecognized tool name; log?
 	}
@@ -129,17 +146,17 @@ func (pm *azureQueueToolCallPhaseMgr) ContinuePhaseProcessing(ctx context.Contex
 	return err // Ignore any failure
 }
 
-func (pm *azureQueueToolCallPhaseMgr) NewPhaseProcessor(messageID, popReceipt string) *azureQueuePhaseProcessor {
-	return &azureQueuePhaseProcessor{mgr: pm, messageID: messageID, popReceipt: popReceipt}
+func (pm *PhaseMgr) newPhaseProcessor(messageID, popReceipt string) *phaseProcessor {
+	return &phaseProcessor{mgr: pm, messageID: messageID, popReceipt: popReceipt}
 }
 
-type azureQueuePhaseProcessor struct {
-	mgr        *azureQueueToolCallPhaseMgr
+type phaseProcessor struct {
+	mgr        *PhaseMgr
 	messageID  string
 	popReceipt string
 }
 
-func (pp *azureQueuePhaseProcessor) ExtendProcessingTime(ctx context.Context, phaseExecutionTime time.Duration) error {
+func (pp *phaseProcessor) ExtendProcessingTime(ctx context.Context, phaseExecutionTime time.Duration) error {
 	resp, err := pp.mgr.queueClient.UpdateMessage(ctx, pp.messageID, pp.popReceipt, "",
 		&azqueue.UpdateMessageOptions{VisibilityTimeout: si.Ptr(int32(phaseExecutionTime.Seconds()))})
 	if err != nil {
