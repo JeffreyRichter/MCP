@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -19,7 +20,7 @@ import (
 	"github.com/JeffreyRichter/serviceinfra/policies"
 )
 
-var shutdownMgr = policies.NewShutdownMgr(time.Second*2, time.Second*3)
+var shutdownCtx = policies.NewShutdownCtx(policies.ShutdownConfig{Logger: slog.Default(), HealthProbeDelay: time.Second * 2, CancelDelay: time.Second * 3})
 
 func main() {
 	key := ""
@@ -33,7 +34,7 @@ func main() {
 
 	policies := []si.Policy{
 		// Add support for https://shopify.engineering/building-resilient-payment-systems (See "4. Add Monitoring and Alerting")
-		policies.NewGracefulShutdownPolicy(shutdownMgr), // Incorporate?: https://github.com/enrichman/httpgrace
+		policies.NewGracefulShutdownPolicy(shutdownCtx),
 		policies.NewLoggingPolicy(os.Stderr),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(key),

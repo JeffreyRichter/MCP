@@ -17,7 +17,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	si "github.com/JeffreyRichter/serviceinfra"
-	"github.com/shirou/gopsutil/v4/cpu"
 )
 
 type PhaseMgrConfig struct {
@@ -67,9 +66,7 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 	}
 	for {
 		time.Sleep(time.Millisecond * 200)
-		if percent, err := cpu.Percent(0, false); err == nil && percent[0] > 99.0 {
-			continue /// Don't dequeue more messages if CPU usage is high
-		}
+		// TODO: If CPU Usage > 90%, continue
 		resp, err := pm.queueClient.DequeueMessages(ctx, o)
 		if err != nil {
 			pm.config.Logger.Error("DequeueMessages", slog.String("error", err.Error()))

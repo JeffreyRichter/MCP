@@ -3,6 +3,7 @@ package v20250808
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,7 +20,7 @@ func testServer(t *testing.T) *httptest.Server {
 	setupMockStore(t)
 
 	policies := []si.Policy{
-		policies.NewGracefulShutdownPolicy(policies.NewShutdownMgr(time.Second*3, time.Second*2)),
+		policies.NewGracefulShutdownPolicy(policies.NewShutdownCtx(policies.ShutdownConfig{Logger: slog.Default(), HealthProbeDelay: time.Second * 3, CancelDelay: time.Second * 2})),
 		policies.NewLoggingPolicy(os.Stderr),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),

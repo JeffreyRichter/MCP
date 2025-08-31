@@ -3,7 +3,7 @@ package policies
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,65 +15,61 @@ import (
 	"github.com/JeffreyRichter/serviceinfra"
 )
 
-type ShutdownMgr struct {
-	shutdownRequested              atomic.Bool
-	inflightRequests               sync.WaitGroup
-	CtxImmediate                   context.Context // Canceled as soon as the app is requested to shut down
-	ctxImmediateCancel             context.CancelCauseFunc
-	CtxAfterInflightRequests       context.Context // Canceled right after all inflight requests are complete
-	ctxAfterInflightRequestsCancel context.CancelCauseFunc
+type ShutdownCtx struct {
+	context.Context  // Canceled some time after health probe notifies load balancer to remove node
+	shuttingDown     atomic.Bool
+	inflightRequests sync.WaitGroup // We could Wait() to block until no more inflight requests but we can't hang forever if a request is in a infinite loop
+	ctxCancel        context.CancelCauseFunc
 }
 
-// NewShutdownMgr creates a new ShutdownMgr. healthProbeDelay indicates how long to accept more incoming requests until
-// the load balancer (hopefully) stops sending traffic, and delayAfterInflightRequests indicates how long to wait
-// after all inflight requests are complete before terminateing the process.
-func NewShutdownMgr(healthProbeDelay, delayAfterInflightRequests time.Duration) *ShutdownMgr {
-	s := &ShutdownMgr{
-		shutdownRequested: atomic.Bool{},
-		inflightRequests:  sync.WaitGroup{},
+type ShutdownConfig struct {
+	Logger           *slog.Logger
+	HealthProbeDelay time.Duration
+	CancelDelay      time.Duration
+}
+
+// NewShutdownCtx creates a new ShutdownCtx. healthProbeDelay indicates how long to accept more incoming requests
+// until the load balancer (hopefully) stops sending traffic. cancelDelay indicates how long to wait
+// after attempting graceful shutdown before forceably terminating the process.
+func NewShutdownCtx(c ShutdownConfig) *ShutdownCtx {
+	s := &ShutdownCtx{
+		shuttingDown:     atomic.Bool{},
+		inflightRequests: sync.WaitGroup{},
 	}
-	s.CtxImmediate, s.ctxImmediateCancel = context.WithCancelCause(context.Background())
-	s.CtxAfterInflightRequests, s.ctxAfterInflightRequestsCancel = context.WithCancelCause(context.Background())
+	s.Context, s.ctxCancel = context.WithCancelCause(context.Background())
 
 	go func() {
 		// Listen for shutdown signals (e.g., SIGINT, SIGTERM)
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM) // Register the signals we want the channel to receive
-		sig := <-sigs                                        // Block until signal is received
+		switch sig := <-sigs; sig {                          // Block until signal is received
+		case syscall.SIGINT, syscall.SIGTERM: // SIGINT is Ctrl-C, SIGTERM is default termination signal
+			c.Logger.Info("Signal " + sig.String() + ": Service instance shutting down")
+			// 1. Set flag indicating that shutdown has been requested (health probe uses this to notify load balancer to take node out of rotation)
+			s.shuttingDown.Store(true) // All future requests immedidately return http.StatusServiceUnavailable via this policy
 
-		s.shutdownRequested.Store(true)                                                           // All future requests immedidately return http.StatusServiceUnavailable via this policy
-		s.ctxImmediateCancel(errors.New("shutdown requested (in-flight requests still running)")) // Cancel the immediate shutdown context
-		fmt.Println("Signal " + sig.String() + ": Service instance shutting down")
-		// Graceful shutdown logic here
-		// TODO: Return non-200 from health probe URL endpoint
-		time.Sleep(healthProbeDelay)                                                                    // Give load balancers a chance to stop new traffic from coming in
-		s.inflightRequests.Wait()                                                                       // Block until there are no more inflight requests
-		s.ctxAfterInflightRequestsCancel(errors.New("shutdown requested (inflight requests complete)")) // Cancel the after-inflight-requests context
-		time.Sleep(delayAfterInflightRequests)                                                          // Give any final requests a chance to finish
-		fmt.Println("All inflight requests complete: Service instance shutting down")
-		os.Exit(1) // Kill this service instance
+			// 2. Give some time for health probe/load balancer to stop sending traffic to this node
+			time.Sleep(c.HealthProbeDelay)
+
+			// 3. Give some time to cancel any remaining in-flight requests
+			s.ctxCancel(errors.New("shutdown requested")) // Cancel the after-inflight-requests context
+			time.Sleep(c.CancelDelay)
+
+			// 4. No more time given, force node shutdown
+			c.Logger.Info("All inflight requests complete: Service instance shutting down")
+			os.Exit(1) // Kill this service instance
+		}
 	}()
 	return s
 }
 
-func (s *ShutdownMgr) ShutdownRequested() bool { return s.shutdownRequested.Load() }
-
-func (s *ShutdownMgr) IncrementInflightRequests() {
-	s.inflightRequests.Add(1) // Add 1 to wait group whenever a new request comes into the service
-}
-
-func (s *ShutdownMgr) DecrementInflightRequests() {
-	s.inflightRequests.Done() // Subtract 1 from wait group whenever a request is done processing
-}
-
-func NewGracefulShutdownPolicy(s *ShutdownMgr) serviceinfra.Policy {
+func NewGracefulShutdownPolicy(s *ShutdownCtx) serviceinfra.Policy {
 	return func(ctx context.Context, r *serviceinfra.ReqRes) error {
-		if !s.ShutdownRequested() {
-			s.IncrementInflightRequests()
-			err := r.Next(ctx)
-			s.DecrementInflightRequests()
-			return err
+		if s.shuttingDown.Load() {
+			return r.Error(http.StatusServiceUnavailable, "Service instance shutting down", "This service instance is shutting down. Please try again.")
 		}
-		return r.Error(http.StatusServiceUnavailable, "Service instance shutting down", "This service instance is shutting down. Please try again.")
+		s.inflightRequests.Add(1) // Add 1 to wait group whenever a new request comes into the service
+		defer s.inflightRequests.Done()
+		return r.Next(ctx)
 	}
 }
