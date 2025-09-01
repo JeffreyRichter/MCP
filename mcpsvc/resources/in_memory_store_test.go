@@ -7,18 +7,18 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 )
 
 var ctx = context.Background()
 
 func TestInMemoryToolCallStore_Get_NotFound(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 
 	toolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
 	}
 
 	result, err := store.Get(ctx, toolCall, nil)
@@ -27,7 +27,7 @@ func TestInMemoryToolCallStore_Get_NotFound(t *testing.T) {
 		t.Errorf("Expected nil result, got %v", result)
 	}
 
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -42,16 +42,15 @@ func TestInMemoryToolCallStore_Get_NotFound(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:       si.Ptr("test-tenant"),
-		ToolName:     si.Ptr("test-tool"),
-		ToolCallId:   si.Ptr("test-id"),
-		Expiration:   si.Ptr(time.Now().Add(24 * time.Hour)),
-		AdvanceQueue: si.Ptr("test-queue"),
-		Status:       si.Ptr(toolcalls.ToolCallStatusRunning),
-		Request:      jsontext.Value(`{"param":"value"}`),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Expiration: serviceinfra.Ptr(time.Now().Add(24 * time.Hour)),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		Request:    jsontext.Value(`{"param":"value"}`),
 	}
 
 	putResult, err := store.Put(ctx, originalToolCall, nil)
@@ -72,9 +71,9 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 	}
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
 	}
 
 	getResult, err := store.Get(ctx, getToolCall, nil)
@@ -98,14 +97,14 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	putResult1, err := store.Put(ctx, originalToolCall, nil)
@@ -114,10 +113,10 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	}
 
 	updatedToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusSuccess),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess),
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
@@ -133,11 +132,11 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		t.Errorf("Expected status to be updated to success, got %s", *putResult2.Status)
 	}
 
-	wrongETag := si.ETag("wrong-etag")
+	wrongETag := serviceinfra.ETag("wrong-etag")
 	accessConditions.IfMatch = &wrongETag
 
 	_, err = store.Put(ctx, updatedToolCall, accessConditions)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -148,14 +147,14 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	_, err := store.Put(ctx, originalToolCall, nil)
@@ -164,11 +163,11 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
-		IfNoneMatch: si.Ptr(si.ETag("*")),
+		IfNoneMatch: serviceinfra.Ptr(serviceinfra.ETag("*")),
 	}
 
 	_, err = store.Put(ctx, originalToolCall, accessConditions)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -179,14 +178,14 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	putResult, err := store.Put(ctx, originalToolCall, nil)
@@ -195,9 +194,9 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	}
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
@@ -213,11 +212,11 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 		t.Errorf("Expected tool call to be returned")
 	}
 
-	wrongETag := si.ETag("wrong-etag")
+	wrongETag := serviceinfra.ETag("wrong-etag")
 	accessConditions.IfMatch = &wrongETag
 
 	_, err = store.Get(ctx, getToolCall, accessConditions)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -228,14 +227,14 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	putResult, err := store.Put(ctx, originalToolCall, nil)
@@ -244,9 +243,9 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 	}
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
@@ -254,7 +253,7 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 	}
 
 	_, err = store.Get(ctx, getToolCall, accessConditions)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -265,14 +264,14 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Delete(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	_, err := store.Put(ctx, originalToolCall, nil)
@@ -286,7 +285,7 @@ func TestInMemoryToolCallStore_Delete(t *testing.T) {
 	}
 
 	_, err = store.Get(ctx, originalToolCall, nil)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError after delete, got %T", err)
 	}
@@ -297,14 +296,14 @@ func TestInMemoryToolCallStore_Delete(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Delete_AccessConditions(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	putResult, err := store.Put(ctx, originalToolCall, nil)
@@ -312,13 +311,13 @@ func TestInMemoryToolCallStore_Delete_AccessConditions(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	wrongETag := si.ETag("wrong-etag")
+	wrongETag := serviceinfra.ETag("wrong-etag")
 	accessConditions := &toolcalls.AccessConditions{
 		IfMatch: &wrongETag,
 	}
 
 	err = store.Delete(ctx, originalToolCall, accessConditions)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -335,13 +334,13 @@ func TestInMemoryToolCallStore_Delete_AccessConditions(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_Delete_NonExistent(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	toolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
 	}
 
 	err := store.Delete(ctx, toolCall, nil)
@@ -351,7 +350,7 @@ func TestInMemoryToolCallStore_Delete_NonExistent(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	tenant1 := "test-tenant"
@@ -359,9 +358,9 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 
 	toolCall := &toolcalls.ToolCall{
 		Tenant:     &tenant1,
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
 	_, err := store.Put(ctx, toolCall, nil)
@@ -371,7 +370,7 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 
 	toolCall.Tenant = &tenant2
 	_, err = store.Get(ctx, toolCall, nil)
-	serviceError, ok := err.(*si.ServiceError)
+	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
 	}
@@ -388,14 +387,14 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 }
 
 func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
-	store := NewInMemoryToolCallStore()
+	store := NewInMemoryToolCallStore(ctx)
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
-		Status:     si.Ptr(toolcalls.ToolCallStatusRunning),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
+		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 		Request:    jsontext.Value(`{"param":"original"}`),
 	}
 
@@ -408,9 +407,9 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 	originalToolCall.Request = jsontext.Value(`{"param":"modified"}`)
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     si.Ptr("test-tenant"),
-		ToolName:   si.Ptr("test-tool"),
-		ToolCallId: si.Ptr("test-id"),
+		Tenant:     serviceinfra.Ptr("test-tenant"),
+		ToolName:   serviceinfra.Ptr("test-tool"),
+		ToolCallId: serviceinfra.Ptr("test-id"),
 	}
 
 	getResult, err := store.Get(ctx, getToolCall, nil)

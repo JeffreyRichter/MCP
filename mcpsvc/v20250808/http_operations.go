@@ -13,7 +13,7 @@ import (
 	"github.com/JeffreyRichter/mcpsvc/mcp"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	"github.com/JeffreyRichter/mcpsvc/resources"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 )
 
 const v20250808 = "v20250808"
@@ -40,19 +40,19 @@ func buildToolInfosMap() map[string]*ToolInfo {
 			Tool: &mcp.Tool{
 				BaseMetadata: mcp.BaseMetadata{
 					Name:  "add",
-					Title: si.Ptr("Add two numbers"),
+					Title: serviceinfra.Ptr("Add two numbers"),
 				},
-				Description: si.Ptr("Add two numbers"),
+				Description: serviceinfra.Ptr("Add two numbers"),
 				InputSchema: mcp.JSONSchema{
 					Type: "object",
 					Properties: &map[string]any{
 						"x": map[string]any{
 							"type":        "integer",
-							"Description": si.Ptr("The first number"),
+							"Description": serviceinfra.Ptr("The first number"),
 						},
 						"y": map[string]any{
 							"type":        "integer",
-							"Description": si.Ptr("The second number"),
+							"Description": serviceinfra.Ptr("The second number"),
 						},
 					},
 					Required: []string{"x", "y"},
@@ -62,17 +62,17 @@ func buildToolInfosMap() map[string]*ToolInfo {
 					Properties: &map[string]any{
 						"result": map[string]any{
 							"type":        "integer",
-							"Description": si.Ptr("The result of the addition"),
+							"Description": serviceinfra.Ptr("The result of the addition"),
 						},
 					},
 					Required: []string{"result"},
 				},
 				Annotations: &mcp.ToolAnnotations{
-					Title:           si.Ptr("Add two numbers"),
-					ReadOnlyHint:    si.Ptr(false),
-					DestructiveHint: si.Ptr(false),
-					IdempotentHint:  si.Ptr(true),
-					OpenWorldHint:   si.Ptr(true),
+					Title:           serviceinfra.Ptr("Add two numbers"),
+					ReadOnlyHint:    serviceinfra.Ptr(false),
+					DestructiveHint: serviceinfra.Ptr(false),
+					IdempotentHint:  serviceinfra.Ptr(true),
+					OpenWorldHint:   serviceinfra.Ptr(true),
 				},
 				Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
 			},
@@ -85,9 +85,9 @@ func buildToolInfosMap() map[string]*ToolInfo {
 			Tool: &mcp.Tool{
 				BaseMetadata: mcp.BaseMetadata{
 					Name:  "pii",
-					Title: si.Ptr("Get PII"),
+					Title: serviceinfra.Ptr("Get PII"),
 				},
-				Description: si.Ptr("Get PII data with client confirmation"),
+				Description: serviceinfra.Ptr("Get PII data with client confirmation"),
 				InputSchema: mcp.JSONSchema{
 					Type:       "object",
 					Properties: &map[string]any{},
@@ -98,17 +98,17 @@ func buildToolInfosMap() map[string]*ToolInfo {
 					Properties: &map[string]any{
 						"data": map[string]any{
 							"type":        "string",
-							"Description": si.Ptr("The PII data"),
+							"Description": serviceinfra.Ptr("The PII data"),
 						},
 					},
 					Required: []string{"data"},
 				},
 				Annotations: &mcp.ToolAnnotations{
-					Title:           si.Ptr("Get PII"),
-					ReadOnlyHint:    si.Ptr(true),
-					DestructiveHint: si.Ptr(false),
-					IdempotentHint:  si.Ptr(true),
-					OpenWorldHint:   si.Ptr(false),
+					Title:           serviceinfra.Ptr("Get PII"),
+					ReadOnlyHint:    serviceinfra.Ptr(true),
+					DestructiveHint: serviceinfra.Ptr(false),
+					IdempotentHint:  serviceinfra.Ptr(true),
+					OpenWorldHint:   serviceinfra.Ptr(false),
 				},
 				Meta: mcp.Meta{"sensitive": "true"},
 			},
@@ -116,7 +116,7 @@ func buildToolInfosMap() map[string]*ToolInfo {
 	}
 }
 
-type toolOpFunc func(ctx context.Context, toolCall *toolcalls.ToolCall, r *si.ReqRes) error
+type toolOpFunc func(ctx context.Context, toolCall *toolcalls.ToolCall, r *serviceinfra.ReqRes) error
 
 type ToolInfo struct {
 	Tool         *mcp.Tool
@@ -130,9 +130,13 @@ type ToolInfo struct {
 // httpOperations wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
 type httpOperations struct{ resources.ToolCallStore }
 
-func (ops *httpOperations) etag() *si.ETag { return si.Ptr(si.ETag("v20250808")) }
+// etag returns the ETag for this version's HTTP operations
+func (ops *httpOperations) etag() *serviceinfra.ETag {
+	return serviceinfra.Ptr(serviceinfra.ETag("v20250808"))
+}
 
-func (ops *httpOperations) lookupToolCall(r *si.ReqRes) (*ToolInfo, *toolcalls.ToolCall, error) {
+// lookupToolCall retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant).
+func (ops *httpOperations) lookupToolCall(r *serviceinfra.ReqRes) (*ToolInfo, *toolcalls.ToolCall, error) {
 	tenant := "sometenant"
 	toolName, toolCallId := r.R.PathValue("toolName"), r.R.PathValue("toolCallId")
 	if toolName == "" {
@@ -149,15 +153,13 @@ func (ops *httpOperations) lookupToolCall(r *si.ReqRes) (*ToolInfo, *toolcalls.T
 	return ti, toolcalls.NewToolCall(tenant, toolName, toolCallId), nil
 }
 
-/*
-	TODO: Fix for error below:
+/* TODO: Fix for error below:
+pm, err := resources.NewPhaseMgr(hutdownCtx, "", ops.toolNameToProcessPhaseFunc)
+if err != nil {
+	return nil, err
+}*/
 
-pm, err := resources.NewAzureQueueToolCallPhaseMgr(context.TODO(), "", ops.toolNameToProcessPhaseFunc)
-
-	if err != nil {
-		return nil, err
-	}
-*/
+// toolNameToProcessPhaseFunc converts a toolname to a function that knows how to advance the tool call's phase/state
 func (ops *httpOperations) toolNameToProcessPhaseFunc(toolName string) (toolcalls.ProcessPhaseFunc, error) {
 	ti, ok := GetToolInfos()[toolName]
 	if !ok {
@@ -166,18 +168,19 @@ func (ops *httpOperations) toolNameToProcessPhaseFunc(toolName string) (toolcall
 	return ti.ProcessPhase, nil
 }
 
-func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes) error {
-	calcIdempotencyKey := func(s string) []byte { ik := md5.Sum(([]byte)(s)); return ik[:] }
+// putToolCallResource creates a new tool call resource (idempotently if a retry occurs).
+func (ops *httpOperations) putToolCallResource(ctx context.Context, r *serviceinfra.ReqRes) error {
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return err
 	}
-	if r.H.IfMatch != nil || r.H.IfNoneMatch != nil {
-		return r.Error(http.StatusBadRequest, "BadRequest", "if-match and if-none-match headers are not allowed on PUT")
+	if err := r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsNone, ETag: tc.ETag}); err != nil {
+		return err
 	}
 
 	// Calculate idempotency key based on something in the request that should be stable across retries
 	// For example, the Date header (which must be present per RFC 7231)
+	calcIdempotencyKey := func(s string) []byte { ik := md5.Sum(([]byte)(s)); return ik[:] }
 	incomingIK := calcIdempotencyKey(r.H.Date.String()) // TODO: Maybe improve key value?
 	if tc.IdempotencyKey != nil {                       // PUT on an existing tool call ID
 		if tc.IdempotencyKey != nil && !bytes.Equal(*tc.IdempotencyKey, incomingIK) { // Not a retry
@@ -191,7 +194,8 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *si.ReqRes
 	return ti.Create(ctx, tc, r)
 }
 
-func (ops *httpOperations) getToolCallResource(ctx context.Context, r *si.ReqRes) error {
+// getToolCallResource retrieves the ToolCall resource from the request.
+func (ops *httpOperations) getToolCallResource(ctx context.Context, r *serviceinfra.ReqRes) error {
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return err
@@ -200,14 +204,14 @@ func (ops *httpOperations) getToolCallResource(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Get(ctx, tc, r)
 }
 
-// toolCallAdvance advances the state of a tool call. The last parameter is one of: CallToolRequestParams's arguments, CreateMessageResult, or ElicitResult
-func (ops *httpOperations) postToolCallAdvance(ctx context.Context, r *si.ReqRes) error {
+// postToolCallAdvance advances the state of a tool call using r's body (CreateMessageResult or ElicitResult)
+func (ops *httpOperations) postToolCallAdvance(ctx context.Context, r *serviceinfra.ReqRes) error {
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return err
@@ -216,13 +220,14 @@ func (ops *httpOperations) postToolCallAdvance(ctx context.Context, r *si.ReqRes
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Advance(ctx, tc, r)
 }
 
-func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si.ReqRes) error {
+// postToolCallCancelResource cancels a tool call.
+func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *serviceinfra.ReqRes) error {
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return err
@@ -231,7 +236,7 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 	if err != nil {
 		return r.Error(http.StatusNotFound, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	return ti.Cancel(ctx, tc, r)
@@ -239,8 +244,9 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *si
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (ops *httpOperations) getToolList(ctx context.Context, r *si.ReqRes) error {
-	if err := r.ValidatePreconditions(si.ResourceValues{AllowedConditionals: si.AllowedConditionalsMatch, ETag: si.Ptr(si.ETag(v20250808))}); err != nil {
+// getToolList retrieves the list of tools.
+func (ops *httpOperations) getToolList(ctx context.Context, r *serviceinfra.ReqRes) error {
+	if err := r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: serviceinfra.Ptr(serviceinfra.ETag(v20250808))}); err != nil {
 		return err
 	}
 	info := GetToolInfos()
@@ -250,44 +256,56 @@ func (ops *httpOperations) getToolList(ctx context.Context, r *si.ReqRes) error 
 	for _, ti := range info {
 		result.Tools = append(result.Tools, *ti.Tool)
 	}
-	return r.WriteResponse(&si.ResponseHeader{
-		ETag: si.Ptr(si.ETag(v20250808)),
+	return r.WriteResponse(&serviceinfra.ResponseHeader{
+		ETag: serviceinfra.Ptr(serviceinfra.ETag(v20250808)),
 	}, nil, http.StatusOK, result)
 }
 
-func (ops *httpOperations) listToolCalls(ctx context.Context, r *si.ReqRes) error {
+// listToolCalls retrieves the list of tool calls.
+func (ops *httpOperations) listToolCalls(ctx context.Context, r *serviceinfra.ReqRes) error {
 	body := any(nil)
-	return r.WriteResponse(&si.ResponseHeader{
+	return r.WriteResponse(&serviceinfra.ResponseHeader{
 		ETag: ops.etag(),
 	}, nil, http.StatusOK, body)
 }
 
-func (ops *httpOperations) getResources(ctx context.Context, r *si.ReqRes) error {
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
+// getResources retrieves the list of resources.
+func (ops *httpOperations) getResources(ctx context.Context, r *serviceinfra.ReqRes) error {
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
 }
-func (ops *httpOperations) getResourcesTemplates(ctx context.Context, r *si.ReqRes) error {
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
+
+// getResourcesTemplates retrieves the list of resource templates.
+func (ops *httpOperations) getResourcesTemplates(ctx context.Context, r *serviceinfra.ReqRes) error {
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
 }
-func (ops *httpOperations) getResource(ctx context.Context, r *si.ReqRes) error {
+
+// getResource retrieves a specific resource by name.
+func (ops *httpOperations) getResource(ctx context.Context, r *serviceinfra.ReqRes) error {
 	resourceName := r.R.PathValue("name")
 	if resourceName == "" {
 		return r.Error(http.StatusBadRequest, "BadRequest", "Resource name is required")
 	}
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
 }
 
-func (ops *httpOperations) getPrompts(ctx context.Context, r *si.ReqRes) error {
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
-}
-func (ops *httpOperations) getPrompt(ctx context.Context, r *si.ReqRes) error {
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
+// getPrompts retrieves the list of prompts.
+func (ops *httpOperations) getPrompts(ctx context.Context, r *serviceinfra.ReqRes) error {
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
 }
 
-func (ops *httpOperations) putRoots(ctx context.Context, r *si.ReqRes) error {
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
+// getPrompt retrieves a specific prompt by name.
+func (ops *httpOperations) getPrompt(ctx context.Context, r *serviceinfra.ReqRes) error {
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
 }
-func (ops *httpOperations) postCompletion(ctx context.Context, r *si.ReqRes) error {
-	return r.WriteResponse(&si.ResponseHeader{}, nil, http.StatusNoContent, nil)
+
+// putRoots updates the list of root resources.
+func (ops *httpOperations) putRoots(ctx context.Context, r *serviceinfra.ReqRes) error {
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
+}
+
+// postCompletion returns a text completion.
+func (ops *httpOperations) postCompletion(ctx context.Context, r *serviceinfra.ReqRes) error {
+	return r.WriteResponse(&serviceinfra.ResponseHeader{}, nil, http.StatusNoContent, nil)
 }
 
 /*

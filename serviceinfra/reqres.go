@@ -90,7 +90,7 @@ func (r *ReqRes) UnmarshalBody(s any) error {
 }
 
 // WriteResponse completes an HTTP response by setting HTTP ResponseHeader, any
-// customHeader (pass nil if none), HTTP status code, and body structure (pass nil if none).
+// customHeader (a struct with fields/values or nil if none), HTTP status code, and body structure (pass nil if none).
 // For more control over the response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
 func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode int, bodyStruct any) error { // customHeader must be *struct
 	body, err := []byte{}, error(nil)

@@ -16,11 +16,11 @@ import (
 
 	"github.com/JeffreyRichter/mcpsvc/config"
 	v20250808 "github.com/JeffreyRichter/mcpsvc/v20250808"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 	"github.com/JeffreyRichter/serviceinfra/policies"
 )
 
-var shutdownCtx = policies.NewShutdownCtx(policies.ShutdownConfig{Logger: slog.Default(), HealthProbeDelay: time.Second * 2, CancelDelay: time.Second * 3})
+var shutdownCtx = policies.NewShutdownCtx(policies.ShutdownConfig{Logger: slog.Default(), HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
 
 func main() {
 	key := ""
@@ -33,8 +33,8 @@ func main() {
 	}
 
 	logger := slog.Default()
-	policies := []si.Policy{
-		policies.NewGracefulShutdownPolicy(shutdownCtx),
+	policies := []serviceinfra.Policy{
+		policies.NewShutdownPolicy(shutdownCtx),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(key),
@@ -46,7 +46,7 @@ func main() {
 	// 1. New preview/GA version from scratch (fresh or override breaking url/methods)
 	// 2. New preview/GA version based on existing preview/GA version
 	// 3. Retire old preview/GA version
-	avis := []*si.ApiVersionInfo{
+	avis := []*serviceinfra.ApiVersionInfo{
 		// TODO: implement versioning; the below effectively makes versioning optional
 		// {ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
 		// {ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: v20250808.Routes},
@@ -54,7 +54,7 @@ func main() {
 	}
 
 	s := &http.Server{
-		Handler:        si.BuildHandler(policies, avis, time.Minute*4),
+		Handler:        serviceinfra.BuildHandler(policies, avis, time.Minute*4),
 		MaxHeaderBytes: http.DefaultMaxHeaderBytes,
 	}
 
@@ -79,28 +79,31 @@ func main() {
 	}
 }
 
-func noApiVersionRoutes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
+func noApiVersionRoutes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.ApiVersionRoutes {
 	// If no base api-version, baseRoutes == nil; build routes from scratch
 
 	// Use the patterns below to MODIFY the base's routes (or ignore baseRoutes to build routes from scratch):
 	// To existing URL, add/overwrite HTTP method: baseRoutes["<ExistinUrl>"]["<ExistingOrNewHttpMethod>"] = postFoo
 	// To existing URL, remove HTTP method:        delete(baseRoutes["<ExistingUrl>"], "<ExisitngHttpMethod>")
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
-	return si.ApiVersionRoutes{
-		"/debug/pprof": map[string]*si.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *si.ReqRes) error { pprof.Index(rr.RW, rr.R); return nil }},
+	return serviceinfra.ApiVersionRoutes{
+		"/health": map[string]*serviceinfra.MethodInfo{
+			"GET": {Policy: shutdownCtx.HealthProbe},
 		},
-		"/debug/cmdline": map[string]*si.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *si.ReqRes) error { pprof.Cmdline(rr.RW, rr.R); return nil }},
+		"/debug/pprof": map[string]*serviceinfra.MethodInfo{
+			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Index(rr.RW, rr.R); return nil }},
 		},
-		"/debug/profile": map[string]*si.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *si.ReqRes) error { pprof.Profile(rr.RW, rr.R); return nil }},
+		"/debug/cmdline": map[string]*serviceinfra.MethodInfo{
+			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Cmdline(rr.RW, rr.R); return nil }},
 		},
-		"/debug/symbol": map[string]*si.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *si.ReqRes) error { pprof.Symbol(rr.RW, rr.R); return nil }},
+		"/debug/profile": map[string]*serviceinfra.MethodInfo{
+			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Profile(rr.RW, rr.R); return nil }},
 		},
-		"/debug/trace": map[string]*si.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *si.ReqRes) error { pprof.Trace(rr.RW, rr.R); return nil }},
+		"/debug/symbol": map[string]*serviceinfra.MethodInfo{
+			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Symbol(rr.RW, rr.R); return nil }},
+		},
+		"/debug/trace": map[string]*serviceinfra.MethodInfo{
+			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Trace(rr.RW, rr.R); return nil }},
 		},
 	}
 }

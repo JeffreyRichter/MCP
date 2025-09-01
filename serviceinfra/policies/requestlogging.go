@@ -9,6 +9,7 @@ import (
 	"github.com/JeffreyRichter/serviceinfra"
 )
 
+// NewRequestLogPolicy creates a new request logging policy.
 func NewRequestLogPolicy(logger *slog.Logger) serviceinfra.Policy {
 	return func(ctx context.Context, r *serviceinfra.ReqRes) error {
 		lrw := &logResponseWriter{reqID: time.Now().Unix(), statusCode: http.StatusOK, ResponseWriter: r.RW}
@@ -20,12 +21,14 @@ func NewRequestLogPolicy(logger *slog.Logger) serviceinfra.Policy {
 	}
 }
 
+// logResponseWriter is a custom http.ResponseWriter that captures a unique request ID and status code.
 type logResponseWriter struct {
 	reqID int64 // Unique request ID (TODO: change to guid?)
 	http.ResponseWriter
 	statusCode int
 }
 
+// WriteHeader overwrites http.ResponseWriter's WriteHeader method in order to capture the status code (fror logging).
 func (lrw *logResponseWriter) WriteHeader(statusCode int) {
 	lrw.statusCode = statusCode
 	lrw.ResponseWriter.WriteHeader(statusCode)
