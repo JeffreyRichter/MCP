@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/JeffreyRichter/serviceinfra/httpjson"
 )
 
 func TestNewReqRes(t *testing.T) {
@@ -22,7 +20,7 @@ func TestNewReqRes(t *testing.T) {
 
 func TestUnmarshalRequestHeader(t *testing.T) {
 	rh := RequestHeader{}
-	err := httpjson.UnmarshalHeaderToStruct(http.Header{
+	err := UnmarshalHeaderToStruct(http.Header{
 		"Authorization": []string{"granted"},
 		"If-Match":      []string{"123"},
 	}, &rh)
@@ -74,7 +72,7 @@ func TestRequestHeaderVerifyStructFields(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := httpjson.VerifyStructFields(tt.rh)
+			err := VerifyStructFields(tt.rh)
 			if err != nil {
 				t.Fatal(err)
 			}

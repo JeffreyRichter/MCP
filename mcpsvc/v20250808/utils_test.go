@@ -20,7 +20,7 @@ func testServer(t *testing.T) *httptest.Server {
 	logger := slog.Default()
 
 	policies := []serviceinfra.Policy{
-		policies.NewShutdownPolicy(policies.NewShutdownCtx(policies.ShutdownConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2})),
+		policies.NewShutdownMgr(policies.ShutdownMgrConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewPolicy(),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),
@@ -28,7 +28,7 @@ func testServer(t *testing.T) *httptest.Server {
 		policies.NewDistributedTracing(),
 	}
 	avis := []*serviceinfra.ApiVersionInfo{{GetRoutes: Routes}}
-	handler := serviceinfra.BuildHandler(policies, avis, 5*time.Second)
+	handler := serviceinfra.BuildHandler(policies, avis, "api-version", serviceinfra.APIVersionKeyLocationQuery)
 
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)

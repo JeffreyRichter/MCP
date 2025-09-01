@@ -1,4 +1,4 @@
-package httpjson
+package serviceinfra
 
 import (
 	"errors"
@@ -112,7 +112,7 @@ func unmarshalMapOfSliceOfStrings(values map[string][]string, s any) error {
 	return VerifyStructFields(s) // Validate the struct's fields
 }
 
-// Unknown represents a list of unrecognized fields.
+// Unknown is the type used for unknown fields after unmarshaling to a struct.
 type Unknown []string
 
 ////////////////////////////////////////////////////////////////////////////////////

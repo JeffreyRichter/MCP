@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/JeffreyRichter/serviceinfra/httpjson"
 )
 
 // ReqRes encapsulates the incoming http.Requests and the outgoing http.ResponseWriter and is passed through the set of policies.
@@ -28,7 +26,7 @@ type ReqRes struct {
 // NewReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
 func NewReqRes(p []Policy, r *http.Request, rw http.ResponseWriter) *ReqRes {
 	var h RequestHeader
-	err := httpjson.UnmarshalHeaderToStruct(r.Header, &h) // Deserialize standard HTTP request header
+	err := UnmarshalHeaderToStruct(r.Header, &h) // Deserialize standard HTTP request header
 	if err != nil {
 		panic(err)
 	}
@@ -59,11 +57,11 @@ func (r *ReqRes) WriteError(se *ServiceError) error {
 // are unrecognized, it writes an appropriate ServiceError (BadRequest) to the HTTP response and returns non-nil.
 func (r *ReqRes) UnmarshalQuery(s any) error {
 	values := r.R.URL.Query() // Each call to Query re-parses so we CAN mutate values
-	err := httpjson.UnmarshalQueryToStruct(values, s)
+	err := UnmarshalQueryToStruct(values, s)
 	if err != nil {
 		return err
 	}
-	uf := reflect.ValueOf(s).FieldByName("Unknown").Interface().(httpjson.Unknown)
+	uf := reflect.ValueOf(s).FieldByName("Unknown").Interface().(Unknown)
 	if len(uf) > 0 { // if any unrecognized query parameters, 400-BadRequest
 		return r.Error(http.StatusBadRequest, "",
 			"Unrecognized query parameters: %s", strings.Join(uf, ", "))
@@ -158,10 +156,10 @@ func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode 
 // https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
 type RequestHeader struct { // 'json' tag value MUST be lowercase
-	Unknown       httpjson.Unknown `json:"-"` // Any unrecognized header names go here
-	Date          *time.Time       `json:"date" time:"RFC1123"`
-	Authorization *string          `json:"authorization"`
-	UserAgent     *string          `json:"user-agent"`
+	Unknown       Unknown    `json:"-"` // Any unrecognized header names go here
+	Date          *time.Time `json:"date" time:"RFC1123"`
+	Authorization *string    `json:"authorization"`
+	UserAgent     *string    `json:"user-agent"`
 	//CacheControl  *string          `json:"cache-control"`
 	//Expect        *string          `json:"expect"`
 

@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/JeffreyRichter/serviceinfra/httpjson"
 )
 
 // ApiVersionInfo represents information about an API version.
@@ -35,20 +33,25 @@ type MethodInfo struct {
 // Policy specifies the function signature for a policy.
 type Policy func(context.Context, *ReqRes) error
 
+type APIVersionKeyLocation int
+
+const (
+	APIVersionKeyLocationHeader APIVersionKeyLocation = iota
+	APIVersionKeyLocationQuery
+)
+
 // BuildHandler creates an HTTP handler that will be called for each request.
 // It takes in a slice of policies and a slice of ApiVersionInfo pointers.
 // The function returns an http.Handler usable with http.(ListenAnd)Serve(TLS).
-func BuildHandler(policies []Policy, avis []*ApiVersionInfo, maxOperationDuration time.Duration) http.Handler {
-	apiVersionToServeMuxPolicy := newApiVersionToServeMuxPolicy(avis)
+func BuildHandler(policies []Policy, avis []*ApiVersionInfo, apiVersionKey string, apiVersionKeyLocation APIVersionKeyLocation) http.Handler {
+	apiVersionToServeMuxPolicy := newApiVersionToServeMuxPolicy(avis, apiVersionKey, apiVersionKeyLocation)
 	policies = append(policies, apiVersionToServeMuxPolicy)
 
 	// Return the http.Handler that will be called for each request by http.(ListenAnd)Serve(TLS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This is the 1st function called when an HTTP request comes into the service
 		reqRes := NewReqRes(policies, r, w)
-		ctx, cancel := context.WithTimeout(reqRes.R.Context(), maxOperationDuration)
-		defer cancel()
-		if err := reqRes.Next(ctx); err != nil {
+		if err := reqRes.Next(reqRes.R.Context()); err != nil {
 			fmt.Printf("Error processing request: %v\n", err)
 			if err, ok := err.(*ServiceError); !ok { // A non-AzureError occured
 				reqRes.Error(http.StatusInternalServerError, "InternalServerError", "")
@@ -70,10 +73,12 @@ func (avi apiVersionInfos) find(apiVersion string) *ApiVersionInfo {
 }
 
 type apiVersionToServeMuxPolicy struct {
-	apiVersionInfos apiVersionInfos
+	apiVersionInfos       apiVersionInfos
+	apiVersionKey         string
+	apiVersionKeyLocation APIVersionKeyLocation
 }
 
-func newApiVersionToServeMuxPolicy(avis apiVersionInfos) Policy {
+func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKey string, apiVersionKeyLocation APIVersionKeyLocation) Policy {
 	// Sort the ApiVersionInfos by api-version in ascending order so we can use BinarySearch later
 	slices.SortFunc(avis, func(i, j *ApiVersionInfo) int { return strings.Compare(i.ApiVersion, j.ApiVersion) })
 
@@ -97,9 +102,9 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos) Policy {
 		avi.serveMux = http.NewServeMux() // Build the http.ServeMux for this api-version's routes
 		for url, methodAndPolicyInfo := range avi.routes {
 			for method, policyInfo := range methodAndPolicyInfo {
-				// Build return a handler that knows how to create a new ReqRes with w, r & policies & starts policies
+				// Build & return a handler that knows how to create a new ReqRes with w, r & policies & starts policies
 				// The last policy (apiversion) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
-				// Receiving handler unwraps RW to get ReqRes back and looks up httpHandlerToPolicy from ServeMux to invoke route policy
+				// The receiving handler unwraps RW to get ReqRes back and looks up httpHandlerToPolicy from ServeMux to invoke route policy
 				pattern := method + " "
 				if method == http.MethodPost {
 					// Convert "POST /foo/bar:action" to "POST /foo/bar/:action" so that ServeMux pattern matching works
@@ -112,7 +117,6 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos) Policy {
 					s := w.(*smuggler)
 					hackPostActionForServeHTTP(r, false)
 					s.r.R = r // Replace old R with new 'r' which has PathValues set
-
 					s.err = s.r.ValidateHeader(policyInfo.ValidHeader)
 					if s.err == nil {
 						s.err = policyInfo.Policy(s.ctx, s.r) // Smuggle any error back to our caller
@@ -121,30 +125,42 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos) Policy {
 			}
 		}
 	}
-	return (&apiVersionToServeMuxPolicy{apiVersionInfos: avis}).Next
+	return (&apiVersionToServeMuxPolicy{apiVersionInfos: avis, apiVersionKey: apiVersionKey, apiVersionKeyLocation: apiVersionKeyLocation}).next
 }
 
-// Next (last policy) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
-func (p *apiVersionToServeMuxPolicy) Next(ctx context.Context, r *ReqRes) error {
-	requestApiVersions := r.R.URL.Query()["api-version"]
-	if len(requestApiVersions) > 1 {
-		return r.Error(http.StatusBadRequest, "URL 'api-version' query parameter must specify a single value", "")
+// next (last policy) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
+func (p *apiVersionToServeMuxPolicy) next(ctx context.Context, r *ReqRes) error {
+	requestApiVersion := ""
+	if p.apiVersionKeyLocation == APIVersionKeyLocationHeader {
+		requestApiVersions := r.R.Header[p.apiVersionKey]
+		if len(requestApiVersions) > 1 {
+			return r.Error(http.StatusBadRequest, "Header 'api-version' must specify a single value", "")
+		}
+		if len(requestApiVersions) == 1 {
+			requestApiVersion = requestApiVersions[0]
+		}
+	} else {
+		requestApiVersions := r.R.URL.Query()["api-version"]
+		if len(requestApiVersions) > 1 {
+			return r.Error(http.StatusBadRequest, "URL 'api-version' query parameter must specify a single value", "")
+		}
+		if len(requestApiVersions) == 1 {
+			requestApiVersion = requestApiVersions[0]
+		}
 	}
 
 	var avi *ApiVersionInfo
-	switch len(requestApiVersions) {
-	case 0: // if no api-version query parameter specified and there exists an api-version of "", then use it
+	switch requestApiVersion {
+	case "": // if no api-version query parameter specified and there exists an api-version of "", then use it
 		avi = p.apiVersionInfos.find("")
 		if avi == nil {
-			return r.Error(http.StatusBadRequest, "MissingApiVersionParameter", "URL requires the 'api-version' query parameter")
+			return r.Error(http.StatusBadRequest, "MissingApiVersionParameter", "Missing %s value", p.apiVersionKey)
 		}
-	case 1: // We have an api-version query parameter
-		avi = p.apiVersionInfos.find(requestApiVersions[0])
+	default: // We have an api-version query parameter
+		avi = p.apiVersionInfos.find(requestApiVersion)
 	}
 
-	isApiVersionRetired := func(avi *ApiVersionInfo) bool {
-		return !avi.RetireAt.IsZero() && time.Now().After(avi.RetireAt)
-	}
+	isApiVersionRetired := func(avi *ApiVersionInfo) bool { return !avi.RetireAt.IsZero() && time.Now().After(avi.RetireAt) }
 
 	if avi == nil || isApiVersionRetired(avi) || avi.serveMux == nil { // api-version not supported
 		supportedApiVersions := "" // Build in reverse order; only show latest preview if after latest version
@@ -162,7 +178,7 @@ func (p *apiVersionToServeMuxPolicy) Next(ctx context.Context, r *ReqRes) error 
 			}
 		}
 		return r.Error(http.StatusBadRequest, "UnsupportedApiVersionValue",
-			"Unsupported api-version '%s'. The supported api-versions are '%s'", requestApiVersions[0], supportedApiVersions)
+			"Unsupported api-version '%s'. The supported api-versions are '%s'", requestApiVersion, supportedApiVersions)
 	}
 
 	hackPostActionForServeHTTP(r.R, true)
@@ -200,8 +216,3 @@ type smuggler struct {
 
 // Ptr converts a value to a pointer-to-value typically used when setting structure fields to be marshaled.
 func Ptr[T any](t T) *T { return &t }
-
-// NOTE: The following types/functions are exported from tostruct so that most packages don't need to import it
-
-// Unknown is the type used for unknown fields after unmarshaling to a struct.
-type Unknown = httpjson.Unknown

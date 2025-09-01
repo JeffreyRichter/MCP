@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
-	"os"
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/config"
@@ -20,7 +19,14 @@ import (
 	"github.com/JeffreyRichter/serviceinfra/policies"
 )
 
-var shutdownCtx = policies.NewShutdownCtx(policies.ShutdownConfig{Logger: slog.Default(), HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
+var (
+	logger      = slog.Default()
+	shutdownMgr = policies.NewShutdownMgr(policies.ShutdownMgrConfig{
+		Logger:            logger,
+		HealthProbeDelay:  time.Second * 2,
+		CancellationDelay: time.Second * 3,
+	})
+)
 
 func main() {
 	key := ""
@@ -32,9 +38,8 @@ func main() {
 		port = "0" // let the OS choose a port
 	}
 
-	logger := slog.Default()
 	policies := []serviceinfra.Policy{
-		policies.NewShutdownPolicy(shutdownCtx),
+		shutdownMgr.NewPolicy(),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(key),
@@ -54,28 +59,28 @@ func main() {
 	}
 
 	s := &http.Server{
-		Handler:        serviceinfra.BuildHandler(policies, avis, time.Minute*4),
-		MaxHeaderBytes: http.DefaultMaxHeaderBytes,
+		Handler:                      serviceinfra.BuildHandler(policies, avis, "api-version", serviceinfra.APIVersionKeyLocationQuery),
+		DisableGeneralOptionsHandler: true,
+		MaxHeaderBytes:               http.DefaultMaxHeaderBytes,
+		BaseContext:                  func(_ net.Listener) context.Context { return shutdownMgr.Context },
+		ReadHeaderTimeout:            5 * time.Second,
+		ReadTimeout:                  30 * time.Second,
+		WriteTimeout:                 30 * time.Second,
 	}
 
-	ln, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		fmt.Println("Error starting listener:", err)
-		os.Exit(1)
-	}
+	ln := must(net.Listen("tcp", ":"+port))
+	var err error
 	if _, port, err = net.SplitHostPort(ln.Addr().String()); err != nil {
-		fmt.Println("Error getting port:", err)
-		os.Exit(1)
+		panic(err)
 	}
-	startMsg := fmt.Sprintf("Listening on :%s", port)
+	startMsg := fmt.Sprintf("Listening on port: %s", port)
 	if config.Get().Local {
 		startMsg = fmt.Sprintf(`{"key":%q,"port":%s}`, key, port)
 	}
 	fmt.Println(startMsg)
 
 	if err := s.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		fmt.Println("Error starting server:", err)
-		os.Exit(1)
+		panic(err)
 	}
 }
 
@@ -88,7 +93,7 @@ func noApiVersionRoutes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.A
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
 	return serviceinfra.ApiVersionRoutes{
 		"/health": map[string]*serviceinfra.MethodInfo{
-			"GET": {Policy: shutdownCtx.HealthProbe},
+			"GET": {Policy: shutdownMgr.HealthProbe},
 		},
 		"/debug/pprof": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Index(rr.RW, rr.R); return nil }},
@@ -106,4 +111,11 @@ func noApiVersionRoutes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.A
 			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Trace(rr.RW, rr.R); return nil }},
 		},
 	}
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
