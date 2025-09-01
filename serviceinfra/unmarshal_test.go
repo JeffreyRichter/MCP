@@ -1,4 +1,4 @@
-package httpjson
+package serviceinfra
 
 import (
 	"encoding/json/v2"
