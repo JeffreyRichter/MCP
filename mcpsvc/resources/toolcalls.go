@@ -13,7 +13,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 )
 
 // Resource type & operations pattern:
@@ -78,7 +78,7 @@ func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, 
 	if err := json.Unmarshal(buffer, tc); err != nil {
 		return nil, err // panic?
 	}
-	tc.ETag = (*si.ETag)(response.ETag) // Set the ETag from the response
+	tc.ETag = (*serviceinfra.ETag)(response.ETag) // Set the ETag from the response
 	return tc, nil
 }
 
@@ -89,7 +89,7 @@ func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, 
 		// Attempt to upload the Tool Call blob
 		response, err := tco.client.UploadBuffer(ctx, containerName, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: tco.accessConditions(accessConditions)})
 		if err == nil { // Successfully uploaded the Tool Call blob
-			tc.ETag = (*si.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
+			tc.ETag = (*serviceinfra.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			return tc, nil
 		}
 

@@ -19,10 +19,10 @@ POST /mcp/complete
 */
 
 import (
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 )
 
-func Routes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
+func Routes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.ApiVersionRoutes {
 	// If no base api-version, baseRoutes == nil; build routes from scratch
 
 	// Use the patterns below to MODIFY the base's routes (or ignore baseRoutes to build routes from scratch):
@@ -30,18 +30,18 @@ func Routes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
 	// To existing URL, remove HTTP method:        delete(baseRoutes["<ExistingUrl>"], "<ExisitngHttpMethod>")
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
 	ops := GetOps()
-	return si.ApiVersionRoutes{
+	return serviceinfra.ApiVersionRoutes{
 		// ***** TOOLS *****
-		"/mcp/tools": map[string]*si.MethodInfo{
+		"/mcp/tools": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.getToolList},
 		},
-		"/mcp/tools/{toolName}/calls": map[string]*si.MethodInfo{
+		"/mcp/tools/{toolName}/calls": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.listToolCalls},
 		},
-		"/mcp/tools/{toolName}/calls/{toolCallId}": map[string]*si.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallId}": map[string]*serviceinfra.MethodInfo{
 			"PUT": {
 				Policy: ops.putToolCallResource,
-				ValidHeader: &si.ValidHeader{
+				ValidHeader: &serviceinfra.ValidHeader{
 					ContentTypes:     []string{"application/json"},
 					MaxContentLength: int64(1024),
 				},
@@ -49,49 +49,49 @@ func Routes(baseRoutes si.ApiVersionRoutes) si.ApiVersionRoutes {
 			"GET": {Policy: ops.getToolCallResource},
 		},
 
-		"/mcp/tools/{toolName}/calls/{toolCallId}/advance": map[string]*si.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallId}/advance": map[string]*serviceinfra.MethodInfo{
 			"POST": {
 				Policy: ops.postToolCallAdvance,
-				ValidHeader: &si.ValidHeader{
+				ValidHeader: &serviceinfra.ValidHeader{
 					ContentTypes:     []string{"application/json"},
 					MaxContentLength: int64(1024),
 				},
 			},
 		},
 
-		"/mcp/tools/{toolName}/calls/{toolCallId}/cancel": map[string]*si.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallId}/cancel": map[string]*serviceinfra.MethodInfo{
 			"POST": {
 				Policy: ops.postToolCallCancelResource,
-				ValidHeader: &si.ValidHeader{
+				ValidHeader: &serviceinfra.ValidHeader{
 					MaxContentLength: int64(0), // No content expected for cancel
 				},
 			},
 		},
 
 		// ***** RESOURCES *****
-		"/mcp/resources": map[string]*si.MethodInfo{
+		"/mcp/resources": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.getResources},
 		},
-		"/mcp/resources-templates": map[string]*si.MethodInfo{
+		"/mcp/resources-templates": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.getResourcesTemplates},
 		},
-		"/mcp/resources/{name}": map[string]*si.MethodInfo{
+		"/mcp/resources/{name}": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.getResource},
 		},
 
 		// ***** PROMPTS *****
-		"/mcp/prompts": map[string]*si.MethodInfo{
+		"/mcp/prompts": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.getPrompts},
 		},
-		"/mcp/prompts/{name}": map[string]*si.MethodInfo{
+		"/mcp/prompts/{name}": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: ops.getPrompt},
 		},
 
 		// ***** ROOTS & COMPLETIONS *****
-		"/mcp/roots": map[string]*si.MethodInfo{
+		"/mcp/roots": map[string]*serviceinfra.MethodInfo{
 			"PUT": {Policy: ops.putRoots},
 		},
-		"/mcp/complete": map[string]*si.MethodInfo{
+		"/mcp/complete": map[string]*serviceinfra.MethodInfo{
 			"POST": {Policy: ops.postCompletion},
 		},
 	}

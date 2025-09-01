@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/resources"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 	"github.com/JeffreyRichter/serviceinfra/policies"
 )
 
@@ -19,16 +19,16 @@ func testServer(t *testing.T) *httptest.Server {
 	setupMockStore(t)
 	logger := slog.Default()
 
-	policies := []si.Policy{
-		policies.NewGracefulShutdownPolicy(policies.NewShutdownCtx(policies.ShutdownConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancelDelay: time.Second * 2})),
+	policies := []serviceinfra.Policy{
+		policies.NewShutdownPolicy(policies.NewShutdownCtx(policies.ShutdownConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2})),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),
 		policies.NewMetricsPolicy(logger),
 		policies.NewDistributedTracing(),
 	}
-	avis := []*si.ApiVersionInfo{{GetRoutes: Routes}}
-	handler := si.BuildHandler(policies, avis, 5*time.Second)
+	avis := []*serviceinfra.ApiVersionInfo{{GetRoutes: Routes}}
+	handler := serviceinfra.BuildHandler(policies, avis, 5*time.Second)
 
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
@@ -84,7 +84,7 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 // setupMockStore replaces the default Azure Storage persistence implementation with an in-memory one for the duration of a test.
 // This won't work for parallel tests because the store is a singleton.
 func setupMockStore(t *testing.T) {
-	mock := resources.NewInMemoryToolCallStore()
+	mock := resources.NewInMemoryToolCallStore(context.TODO() /*shutdownCtx*/)
 
 	before := resources.GetToolCallStore
 	resources.GetToolCallStore = sync.OnceValue(func() resources.ToolCallStore {

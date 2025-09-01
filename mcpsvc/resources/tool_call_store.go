@@ -28,7 +28,7 @@ type ToolCallStore interface {
 // GetToolCallStore returns a singleton ToolCallStore. It's an exported variable so offline tests can replace the production default with a mock.
 var GetToolCallStore = sync.OnceValue(func() ToolCallStore {
 	if config.Get().Local {
-		return NewInMemoryToolCallStore()
+		return NewInMemoryToolCallStore(context.TODO() /*shutdownCtx*/)
 	}
 	return &AzureBlobToolCallStore{
 		client: func() *azblob.Client {

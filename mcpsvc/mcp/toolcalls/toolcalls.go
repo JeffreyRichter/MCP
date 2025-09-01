@@ -21,10 +21,6 @@ type ToolCall struct {
 	IdempotencyKey     *[]byte             `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
 	ETag               *si.ETag            `json:"etag"`
 	Phase              *string             `json:"phase,omitempty"`
-	AdvanceQueue       *string             `json:"advanceQueue,omitempty"` // Name of the queue to use for advancing the tool call's phase
-	Attempt            *int32              `json:"attempt,omitempty"`      // Number of times this tool call has been attempted
-	Created            *time.Time          `json:"created,omitempty"`
-	Modified           *time.Time          `json:"modified,omitempty"`
 	Status             *ToolCallStatus     `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
 	Request            jsontext.Value      `json:"request,omitempty"`
 	SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`

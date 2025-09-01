@@ -12,7 +12,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/serviceinfra"
 )
 
 // AzureBlobToolCallStore maintains the state required to manage all operations for the users resource type.
@@ -26,7 +26,10 @@ func (*AzureBlobToolCallStore) blobName(toolName, toolCallId string) string {
 
 func (*AzureBlobToolCallStore) accessConditions(ac *toolcalls.AccessConditions) *azblob.AccessConditions {
 	return &azblob.AccessConditions{
-		ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfMatch: (*azcore.ETag)(ac.IfMatch), IfNoneMatch: (*azcore.ETag)(ac.IfNoneMatch)},
+		ModifiedAccessConditions: &blob.ModifiedAccessConditions{
+			IfMatch:     (*azcore.ETag)(ac.IfMatch),
+			IfNoneMatch: (*azcore.ETag)(ac.IfNoneMatch),
+		},
 	}
 }
 
@@ -48,7 +51,7 @@ func (ab *AzureBlobToolCallStore) Get(ctx context.Context, toolCall *toolcalls.T
 	if err := json.Unmarshal(buffer, &toolCall); err != nil {
 		return nil, err // panic?
 	}
-	toolCall.ETag = (*si.ETag)(response.ETag) // Set the ETag from the response
+	toolCall.ETag = (*serviceinfra.ETag)(response.ETag) // Set the ETag from the response
 	return toolCall, nil
 }
 
@@ -60,7 +63,7 @@ func (ab *AzureBlobToolCallStore) Put(ctx context.Context, toolCall *toolcalls.T
 		// Attempt to upload the Tool Call blob
 		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(accessConditions)})
 		if err == nil { // Successfully uploaded the Tool Call blob
-			toolCall.ETag = (*si.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
+			toolCall.ETag = (*serviceinfra.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			blockClient := ab.client.ServiceClient().NewContainerClient(tenant).NewBlockBlobClient(blobName)
 			// TODO: this error should be logged but isn't cause for panic and shouldn't be sent to the client
 			_, _ = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)
