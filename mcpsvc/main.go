@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"strings"
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/config"
@@ -40,6 +41,7 @@ func main() {
 
 	policies := []serviceinfra.Policy{
 		shutdownMgr.NewPolicy(),
+		newApiVersionSimulatorPolicy("api-version"),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(key),
@@ -52,14 +54,12 @@ func main() {
 	// 2. New preview/GA version based on existing preview/GA version
 	// 3. Retire old preview/GA version
 	avis := []*serviceinfra.ApiVersionInfo{
-		// TODO: implement versioning; the below effectively makes versioning optional
-		// {ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
-		// {ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: v20250808.Routes},
-		{ApiVersion: "", BaseApiVersion: "", GetRoutes: v20250808.Routes},
+		{ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
+		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: v20250808.Routes},
 	}
 
 	s := &http.Server{
-		Handler:                      serviceinfra.BuildHandler(policies, avis, "api-version", serviceinfra.APIVersionKeyLocationQuery),
+		Handler:                      serviceinfra.BuildHandler(policies, avis, "api-version", serviceinfra.APIVersionKeyLocationHeader),
 		DisableGeneralOptionsHandler: true,
 		MaxHeaderBytes:               http.DefaultMaxHeaderBytes,
 		BaseContext:                  func(_ net.Listener) context.Context { return shutdownMgr.Context },
@@ -92,7 +92,7 @@ func noApiVersionRoutes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.A
 	// To existing URL, remove HTTP method:        delete(baseRoutes["<ExistingUrl>"], "<ExisitngHttpMethod>")
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
 	return serviceinfra.ApiVersionRoutes{
-		"/health": map[string]*serviceinfra.MethodInfo{
+		"/debug/health": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: shutdownMgr.HealthProbe},
 		},
 		"/debug/pprof": map[string]*serviceinfra.MethodInfo{
@@ -110,6 +110,15 @@ func noApiVersionRoutes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.A
 		"/debug/trace": map[string]*serviceinfra.MethodInfo{
 			"GET": {Policy: func(ctx context.Context, rr *serviceinfra.ReqRes) error { pprof.Trace(rr.RW, rr.R); return nil }},
 		},
+	}
+}
+
+func newApiVersionSimulatorPolicy(key string) serviceinfra.Policy {
+	return func(ctx context.Context, r *serviceinfra.ReqRes) error {
+		if !strings.HasPrefix(r.R.URL.Path, "/debug/") {
+			r.R.Header.Set(key, "2025-08-08")
+		}
+		return r.Next(ctx)
 	}
 }
 
