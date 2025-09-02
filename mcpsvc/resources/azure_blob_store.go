@@ -33,12 +33,12 @@ func (*AzureBlobToolCallStore) accessConditions(ac *toolcalls.AccessConditions) 
 	}
 }
 
-func (ab *AzureBlobToolCallStore) Get(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
 	// Get the tool call by tenant, tool name and tool call id
-	response, err := ab.client.DownloadStream(ctx, *toolCall.Tenant, ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId),
+	response, err := ab.client.DownloadStream(ctx, *tc.Tenant, ab.blobName(*tc.ToolName, *tc.ToolCallId),
 		&azblob.DownloadStreamOptions{AccessConditions: ab.accessConditions(accessConditions)})
 	if err != nil {
-		return toolCall, err // Blob not found; return a brand new one
+		return err // Blob not found; return a brand new one
 	}
 
 	// Read the blob contents into a buffer and then deserialize it into a ToolCall struct
@@ -46,42 +46,42 @@ func (ab *AzureBlobToolCallStore) Get(ctx context.Context, toolCall *toolcalls.T
 	const MaxToolCallResourceSizeInBytes = 4 * 1024 * 1024 // 4MB
 	buffer, err := io.ReadAll(io.LimitReader(response.Body, MaxToolCallResourceSizeInBytes))
 	if err != nil {
-		return nil, err // panic?
+		return err // panic?
 	}
-	if err := json.Unmarshal(buffer, &toolCall); err != nil {
-		return nil, err // panic?
+	if err := json.Unmarshal(buffer, &tc); err != nil {
+		return err // panic?
 	}
-	toolCall.ETag = (*serviceinfra.ETag)(response.ETag) // Set the ETag from the response
-	return toolCall, nil
+	tc.ETag = (*serviceinfra.ETag)(response.ETag) // Set the ETag from the response
+	return nil
 }
 
-func (ab *AzureBlobToolCallStore) Put(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
-	blobName := ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId)
-	buffer := must(json.Marshal(toolCall))
-	tenant := *toolCall.Tenant
+func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+	blobName := ab.blobName(*tc.ToolName, *tc.ToolCallId)
+	buffer := must(json.Marshal(tc))
+	tenant := *tc.Tenant
 	for {
 		// Attempt to upload the Tool Call blob
 		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(accessConditions)})
 		if err == nil { // Successfully uploaded the Tool Call blob
-			toolCall.ETag = (*serviceinfra.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
+			tc.ETag = (*serviceinfra.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			blockClient := ab.client.ServiceClient().NewContainerClient(tenant).NewBlockBlobClient(blobName)
 			// TODO: this error should be logged but isn't cause for panic and shouldn't be sent to the client
 			_, _ = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)
-			return toolCall, nil
+			return nil
 		}
 
 		// An error occured; if not related to missing container, return the error
 		if !bloberror.HasCode(err, bloberror.ContainerNotFound) {
-			return nil, err
+			return err
 		}
 		if _, err := ab.client.CreateContainer(ctx, tenant, nil); err != nil { // Attempt to create the missing tenant container
-			return nil, err // Failed to create container, return
+			return err // Failed to create container, return
 		}
 		// Successfully created the container, retry uploading the Tool Call blob
 	}
 }
 
-func (ab *AzureBlobToolCallStore) Delete(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
-	_, err := ab.client.DeleteBlob(ctx, *toolCall.Tenant, ab.blobName(*toolCall.ToolName, *toolCall.ToolCallId), &azblob.DeleteBlobOptions{AccessConditions: ab.accessConditions(accessConditions)})
+func (ab *AzureBlobToolCallStore) Delete(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+	_, err := ab.client.DeleteBlob(ctx, *tc.Tenant, ab.blobName(*tc.ToolName, *tc.ToolCallId), &azblob.DeleteBlobOptions{AccessConditions: ab.accessConditions(accessConditions)})
 	return err // panic?
 }

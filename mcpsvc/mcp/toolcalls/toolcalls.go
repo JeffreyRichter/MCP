@@ -12,11 +12,15 @@ import (
 	si "github.com/JeffreyRichter/serviceinfra"
 )
 
+type ToolCallIdentity struct {
+	Tenant     *string `json:"tenant"`
+	ToolName   *string `json:"name"`
+	ToolCallId *string `json:"toolCallId"`
+}
+
 // ToolCall is the data model for the version-agnostic tool calls resource type.
 type ToolCall struct {
-	Tenant             *string             `json:"tenant"`
-	ToolName           *string             `json:"name,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
-	ToolCallId         *string             `json:"toolCallId,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
+	ToolCallIdentity   `json:",inline"`
 	Expiration         *time.Time          `json:"expiration,omitempty"`
 	IdempotencyKey     *[]byte             `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
 	ETag               *si.ETag            `json:"etag"`
@@ -39,11 +43,9 @@ type ToolCall struct {
 
 func NewToolCall(tenant, toolName, toolCallId string) *ToolCall {
 	return &ToolCall{
-		Tenant:     si.Ptr(tenant),
-		ToolName:   si.Ptr(toolName),
-		ToolCallId: si.Ptr(toolCallId),
-		Expiration: si.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
-		Status:     si.Ptr(ToolCallStatusSubmitted),
+		ToolCallIdentity: ToolCallIdentity{Tenant: si.Ptr(tenant), ToolName: si.Ptr(toolName), ToolCallId: si.Ptr(toolCallId)},
+		Expiration:       si.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
+		Status:           si.Ptr(ToolCallStatusSubmitted),
 	}
 }
 
@@ -247,7 +249,7 @@ func must[T any](val T, err error) T {
 
 /********************* Types for Phase Processing ***************/
 
-type ProcessPhaseFunc func(context.Context, *ToolCall, PhaseProcessor) (*ToolCall, error)
+type ProcessPhaseFunc func(context.Context, *ToolCall, PhaseProcessor) error
 
 type ToolNameToProcessPhaseFunc func(toolName string) (ProcessPhaseFunc, error)
 

@@ -20,9 +20,9 @@ import (
 
 // ToolCallStore manages persistent storage of ToolCalls
 type ToolCallStore interface {
-	Get(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error)
-	Put(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error)
-	Delete(ctx context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
+	Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
+	Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
+	Delete(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
 }
 
 // GetToolCallStore returns a singleton ToolCallStore. It's an exported variable so offline tests can replace the production default with a mock.

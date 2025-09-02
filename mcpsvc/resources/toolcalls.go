@@ -5,7 +5,6 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -41,7 +40,7 @@ func (tco *ToolCallOperations) toBlobInfo(tc *toolcalls.ToolCall) (containerName
 	return *tc.Tenant, *tc.ToolName + "/" + *tc.ToolCallId
 }
 
-func (tco *ToolCallOperations) fromBlobUrl(blobUrl string) (tenant, toolName, toolCallID string) {
+/*func (tco *ToolCallOperations) fromBlobUrl(blobUrl string) (tenant, toolName, toolCallID string) {
 	parts, err := azblob.ParseURL(blobUrl)
 	if err != nil {
 		return "", "", ""
@@ -51,7 +50,7 @@ func (tco *ToolCallOperations) fromBlobUrl(blobUrl string) (tenant, toolName, to
 		return "", "", ""
 	}
 	return parts.ContainerName, segments[0], segments[1]
-}
+}*/
 
 func (tco *ToolCallOperations) accessConditions(ac *toolcalls.AccessConditions) *azblob.AccessConditions {
 	return &azblob.AccessConditions{
@@ -59,13 +58,13 @@ func (tco *ToolCallOperations) accessConditions(ac *toolcalls.AccessConditions) 
 	}
 }
 
-func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
 	// Get the tool call by tenant, tool name and tool call id
 	containerName, blobName := tco.toBlobInfo(tc)
 	response, err := tco.client.DownloadStream(ctx, containerName, blobName,
 		&azblob.DownloadStreamOptions{AccessConditions: tco.accessConditions(accessConditions)})
 	if err != nil {
-		return tc, err // Blob not found; return a brand new one
+		return err // Blob not found; return a brand new one
 	}
 
 	// Read the blob contents into a buffer and then deserialize it into a ToolCall struct
@@ -73,16 +72,16 @@ func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, 
 	const MaxToolCallResourceSizeInBytes = 4 * 1024 * 1024 // 4MB
 	buffer, err := io.ReadAll(io.LimitReader(response.Body, MaxToolCallResourceSizeInBytes))
 	if err != nil {
-		return nil, err // panic?
+		return err // panic?
 	}
 	if err := json.Unmarshal(buffer, tc); err != nil {
-		return nil, err // panic?
+		return err // panic?
 	}
 	tc.ETag = (*serviceinfra.ETag)(response.ETag) // Set the ETag from the response
-	return tc, nil
+	return nil
 }
 
-func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
 	buffer := must(json.Marshal(tc))
 	containerName, blobName := tco.toBlobInfo(tc)
 	for {
@@ -90,15 +89,15 @@ func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, 
 		response, err := tco.client.UploadBuffer(ctx, containerName, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: tco.accessConditions(accessConditions)})
 		if err == nil { // Successfully uploaded the Tool Call blob
 			tc.ETag = (*serviceinfra.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
-			return tc, nil
+			return nil
 		}
 
 		// An error occured; if not related to missing container, return the error
 		if !bloberror.HasCode(err, bloberror.ContainerNotFound) {
-			return nil, err
+			return err
 		}
 		if _, err := tco.client.CreateContainer(ctx, containerName, nil); err != nil { // Attempt to create the missing tenant container
-			return nil, err // Failed to create container, return
+			return err // Failed to create container, return
 		}
 		// Successfully created the container, retry uploading the Tool Call blob
 	}

@@ -15,17 +15,15 @@ var ctx = context.Background()
 func TestInMemoryToolCallStore_Get_NotFound(t *testing.T) {
 	store := NewInMemoryToolCallStore(ctx)
 
-	toolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+	tc := &toolcalls.ToolCall{
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 	}
 
-	result, err := store.Get(ctx, toolCall, nil)
-
-	if result != nil {
-		t.Errorf("Expected nil result, got %v", result)
-	}
+	err := store.Get(ctx, tc, nil)
 
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
@@ -45,15 +43,18 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 	store := NewInMemoryToolCallStore(ctx)
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 		Expiration: serviceinfra.Ptr(time.Now().Add(24 * time.Hour)),
 		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 		Request:    jsontext.Value(`{"param":"value"}`),
 	}
 
-	putResult, err := store.Put(ctx, originalToolCall, nil)
+	putResult := originalToolCall.Copy()
+	err := store.Put(ctx, putResult, nil)
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -71,12 +72,15 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 	}
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 	}
 
-	getResult, err := store.Get(ctx, getToolCall, nil)
+	getResult := getToolCall.Copy()
+	err = store.Get(ctx, getResult, nil)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -101,29 +105,35 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	putResult1, err := store.Put(ctx, originalToolCall, nil)
+	putResult1 := originalToolCall.Copy()
+	err := store.Put(ctx, putResult1, nil)
 	if err != nil {
 		t.Fatalf("First put failed: %v", err)
 	}
 
 	updatedToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess),
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
 		IfMatch: putResult1.ETag,
 	}
 
-	putResult2, err := store.Put(ctx, updatedToolCall, accessConditions)
+	putResult2 := updatedToolCall.Copy()
+	err = store.Put(ctx, putResult2, accessConditions)
 	if err != nil {
 		t.Fatalf("Second put with correct ETag failed: %v", err)
 	}
@@ -135,7 +145,7 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	wrongETag := serviceinfra.ETag("wrong-etag")
 	accessConditions.IfMatch = &wrongETag
 
-	_, err = store.Put(ctx, updatedToolCall, accessConditions)
+	err = store.Put(ctx, updatedToolCall, accessConditions)
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
@@ -151,13 +161,15 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	_, err := store.Put(ctx, originalToolCall, nil)
+	err := store.Put(ctx, originalToolCall, nil)
 	if err != nil {
 		t.Fatalf("First put failed: %v", err)
 	}
@@ -166,7 +178,7 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 		IfNoneMatch: serviceinfra.Ptr(serviceinfra.ETag("*")),
 	}
 
-	_, err = store.Put(ctx, originalToolCall, accessConditions)
+	err = store.Put(ctx, originalToolCall, accessConditions)
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
@@ -182,28 +194,33 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
-
-	putResult, err := store.Put(ctx, originalToolCall, nil)
+	putResult := originalToolCall.Copy()
+	err := store.Put(ctx, putResult, nil)
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
 		IfMatch: putResult.ETag,
 	}
 
-	getResult, err := store.Get(ctx, getToolCall, accessConditions)
+	getResult := getToolCall.Copy()
+	err = store.Get(ctx, getToolCall, accessConditions)
 	if err != nil {
 		t.Fatalf("Get with correct ETag failed: %v", err)
 	}
@@ -215,7 +232,7 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	wrongETag := serviceinfra.ETag("wrong-etag")
 	accessConditions.IfMatch = &wrongETag
 
-	_, err = store.Get(ctx, getToolCall, accessConditions)
+	err = store.Get(ctx, getToolCall, accessConditions)
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
@@ -231,28 +248,33 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	putResult, err := store.Put(ctx, originalToolCall, nil)
+	putResult := originalToolCall.Copy()
+	err := store.Put(ctx, putResult, nil)
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 	}
 
 	accessConditions := &toolcalls.AccessConditions{
 		IfNoneMatch: putResult.ETag,
 	}
 
-	_, err = store.Get(ctx, getToolCall, accessConditions)
+	err = store.Get(ctx, getToolCall, accessConditions)
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
@@ -268,13 +290,15 @@ func TestInMemoryToolCallStore_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	_, err := store.Put(ctx, originalToolCall, nil)
+	err := store.Put(ctx, originalToolCall, nil)
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -284,7 +308,7 @@ func TestInMemoryToolCallStore_Delete(t *testing.T) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	_, err = store.Get(ctx, originalToolCall, nil)
+	err = store.Get(ctx, originalToolCall, nil)
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError after delete, got %T", err)
@@ -300,13 +324,15 @@ func TestInMemoryToolCallStore_Delete_AccessConditions(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
-
-	putResult, err := store.Put(ctx, originalToolCall, nil)
+	putResult := originalToolCall.Copy()
+	err := store.Put(ctx, putResult, nil)
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -338,9 +364,11 @@ func TestInMemoryToolCallStore_Delete_NonExistent(t *testing.T) {
 	ctx := context.Background()
 
 	toolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 	}
 
 	err := store.Delete(ctx, toolCall, nil)
@@ -357,19 +385,21 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 	tenant2 := "different-tenant"
 
 	toolCall := &toolcalls.ToolCall{
-		Tenant:     &tenant1,
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status: serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	_, err := store.Put(ctx, toolCall, nil)
+	err := store.Put(ctx, toolCall, nil)
 	if err != nil {
 		t.Fatalf("Put to tenant1 failed: %v", err)
 	}
 
 	toolCall.Tenant = &tenant2
-	_, err = store.Get(ctx, toolCall, nil)
+	err = store.Get(ctx, toolCall, nil)
 	serviceError, ok := err.(*serviceinfra.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
@@ -380,7 +410,7 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 	}
 
 	toolCall.Tenant = &tenant1
-	_, err = store.Get(ctx, toolCall, nil)
+	err = store.Get(ctx, toolCall, nil)
 	if err != nil {
 		t.Fatalf("Get from tenant1 should still work: %v", err)
 	}
@@ -391,14 +421,16 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 	ctx := context.Background()
 
 	originalToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
-		Status:     serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
-		Request:    jsontext.Value(`{"param":"original"}`),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
+		Status:  serviceinfra.Ptr(toolcalls.ToolCallStatusRunning),
+		Request: jsontext.Value(`{"param":"original"}`),
 	}
-
-	putResult, err := store.Put(ctx, originalToolCall, nil)
+	putResult := originalToolCall.Copy()
+	err := store.Put(ctx, putResult, nil)
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -407,12 +439,15 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 	originalToolCall.Request = jsontext.Value(`{"param":"modified"}`)
 
 	getToolCall := &toolcalls.ToolCall{
-		Tenant:     serviceinfra.Ptr("test-tenant"),
-		ToolName:   serviceinfra.Ptr("test-tool"),
-		ToolCallId: serviceinfra.Ptr("test-id"),
+		ToolCallIdentity: toolcalls.ToolCallIdentity{
+			Tenant:     serviceinfra.Ptr("test-tenant"),
+			ToolName:   serviceinfra.Ptr("test-tool"),
+			ToolCallId: serviceinfra.Ptr("test-id"),
+		},
 	}
 
-	getResult, err := store.Get(ctx, getToolCall, nil)
+	getResult := getToolCall.Copy()
+	err = store.Get(ctx, getResult, nil)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -428,7 +463,8 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 	*getResult.Status = toolcalls.ToolCallStatusFailed
 	getResult.Request = jsontext.Value(`{"param":"get-modified"}`)
 
-	getResult2, err := store.Get(ctx, getToolCall, nil)
+	getResult2 := getToolCall.Copy()
+	err = store.Get(ctx, getResult2, nil)
 	if err != nil {
 		t.Fatalf("Second get failed: %v", err)
 	}

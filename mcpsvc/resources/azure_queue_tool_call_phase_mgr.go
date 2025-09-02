@@ -10,7 +10,6 @@ a specific day/time, the completion of a task from another service, a stock pric
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -78,14 +77,13 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 				continue
 			}
 			go func() {
-				var aqm queueMsg
-				if err := json.Unmarshal(([]byte)(*m.MessageText), &aqm); err != nil {
+				var tc toolcalls.ToolCall
+				if err := json.Unmarshal(([]byte)(*m.MessageText), &tc); err != nil {
 					pm.config.Logger.Error("UnexpectedMessageFormat", slog.String("messageID", *m.MessageID), slog.String("error", err.Error()))
 					return
 				}
-				tc := toolcalls.NewToolCall(aqm.parse())
 				// TODO: use the ToolCallStore singleton (it's a sync.OnceValue)
-				tc, err := ToolCallOps.Get(ctx, tc, nil)
+				err := ToolCallOps.Get(ctx, &tc, nil)
 				if err != nil { // ToolCallID not expired/not found
 					// No more phases to execute; delete the queue message (or let it become a poison message)
 					// continuePhaseProcessing will delete the message if Status != toolcalls.ToolCallStatusRunning
@@ -93,27 +91,24 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 					return
 				}
 				pp := pm.newPhaseProcessor(*m.MessageID, *m.PopReceipt)
-				pm.continuePhaseProcessing(ctx, tc, pp)
+				pm.continuePhaseProcessing(ctx, &tc, pp)
 			}()
 		}
 	}
 }
 
-type queueMsg struct {
+/*type queueMsg struct {
 	ToolCallIDUrl string `json:"toolCallIDUrl"`
 }
 
 func (m *queueMsg) parse() (tenant, toolName, toolCallID string) {
 	return ToolCallOps.fromBlobUrl(m.ToolCallIDUrl)
-}
+}*/
 
 // StartPhaseProcessing: enqueues a new tool call phase with tool name & tool call id.
 // Calls continuePhaseProcessing (passing time extender in PhaseProcessor interface) while status is in progress. Updates tc resource after continue returns. Deletes queue message when status is not in progress.
 func (pm *PhaseMgr) StartPhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall) error {
-	containerName, blobName := ToolCallOps.toBlobInfo(tc)
-	data := must(json.Marshal(queueMsg{
-		ToolCallIDUrl: fmt.Sprintf("https://%s.blob.core.windows.net/%s", containerName, blobName),
-	}))
+	data := must(json.Marshal(tc.ToolCallIdentity))
 	resp, err := pm.queueClient.EnqueueMessage(ctx, string(data),
 		&azqueue.EnqueueMessageOptions{VisibilityTimeout: serviceinfra.Ptr(int32(pm.config.PhaseExecutionTime.Seconds()))})
 	if err != nil {
@@ -130,12 +125,12 @@ func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, tc *toolcalls.T
 		return err // unrecognized tool name; log?
 	}
 	for *tc.Status == toolcalls.ToolCallStatusRunning { // Loop while tool call is running
-		tc, err := tnpp(ctx, tc, pp) // Transition tool call from current phase to next phase
+		err := tnpp(ctx, tc, pp) // Transition tool call from current phase to next phase
 		if err != nil {
 			return err
 		}
 		// Persists new state of tool call resource (etag must match)
-		_, err = ToolCallOps.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: tc.ETag})
+		err = ToolCallOps.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: tc.ETag})
 		if err != nil {
 			return err // log?
 		}

@@ -44,14 +44,14 @@ func (s *InMemoryToolCallStore) reaper(ctx context.Context) {
 	}
 }
 
-func (s *InMemoryToolCallStore) Get(_ context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (s *InMemoryToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	key := key(*toolCall.Tenant, *toolCall.ToolName, *toolCall.ToolCallId)
+	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
 	stored, ok := s.data[key]
 	if !ok {
-		return nil, &serviceinfra.ServiceError{
+		return &serviceinfra.ServiceError{
 			StatusCode: 404,
 			ErrorCode:  "NotFound",
 			Message:    "Tool call not found",
@@ -61,48 +61,47 @@ func (s *InMemoryToolCallStore) Get(_ context.Context, toolCall *toolcalls.ToolC
 	// TODO: clean up and consolidate AccessConditions handling
 	if accessConditions != nil {
 		if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-			return nil, &serviceinfra.ServiceError{
+			return &serviceinfra.ServiceError{
 				StatusCode: 412,
 				ErrorCode:  "PreconditionFailed",
 				Message:    "The condition specified using HTTP conditional header(s) is not met",
 			}
 		}
 		if accessConditions.IfNoneMatch != nil && stored.ETag != nil && accessConditions.IfNoneMatch.Equals(*stored.ETag) {
-			return nil, &serviceinfra.ServiceError{
+			return &serviceinfra.ServiceError{
 				StatusCode: 304,
 				ErrorCode:  "NotModified",
 				Message:    "The resource has not been modified",
 			}
 		}
 	}
-
-	// copying prevents the caller mutating stored data
-	return stored.Copy(), nil
+	*tc = *stored.Copy() // copying prevents the caller mutating stored data
+	return nil
 }
 
-func (s *InMemoryToolCallStore) Put(_ context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) (*toolcalls.ToolCall, error) {
+func (s *InMemoryToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := key(*toolCall.Tenant, *toolCall.ToolName, *toolCall.ToolCallId)
+	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
 	if accessConditions != nil {
 		if stored, ok := s.data[key]; ok {
 			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-				return nil, &serviceinfra.ServiceError{
+				return &serviceinfra.ServiceError{
 					StatusCode: 412,
 					ErrorCode:  "PreconditionFailed",
 					Message:    "The condition specified using HTTP conditional header(s) is not met",
 				}
 			}
 			if accessConditions.IfNoneMatch != nil {
-				return nil, &serviceinfra.ServiceError{
+				return &serviceinfra.ServiceError{
 					StatusCode: 412,
 					ErrorCode:  "PreconditionFailed",
 					Message:    "The condition specified using HTTP conditional header(s) is not met",
 				}
 			}
 		} else if accessConditions.IfMatch != nil {
-			return nil, &serviceinfra.ServiceError{
+			return &serviceinfra.ServiceError{
 				StatusCode: 412,
 				ErrorCode:  "PreconditionFailed",
 				Message:    "The condition specified using HTTP conditional header(s) is not met",
@@ -111,21 +110,20 @@ func (s *InMemoryToolCallStore) Put(_ context.Context, toolCall *toolcalls.ToolC
 	}
 
 	// storing a copy prevents mutating the caller's data
-	cp := toolCall.Copy()
+	cp := tc.Copy()
 	cp.ETag = serviceinfra.Ptr(serviceinfra.ETag(time.Now().Format("20060102150405.000000")))
 	s.data[key] = cp
 
 	// except we want the caller to have the actual ETag
-	toolCall.ETag = cp.ETag
-
-	return toolCall, nil
+	tc.ETag = cp.ETag
+	return nil
 }
 
-func (s *InMemoryToolCallStore) Delete(_ context.Context, toolCall *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (s *InMemoryToolCallStore) Delete(_ context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := key(*toolCall.Tenant, *toolCall.ToolName, *toolCall.ToolCallId)
+	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
 	if accessConditions != nil {
 		if stored, ok := s.data[key]; ok {
 			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
