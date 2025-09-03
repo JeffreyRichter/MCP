@@ -72,7 +72,7 @@ func (s *InMemoryToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, a
 
 	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
 	if stored, ok := s.data[key]; ok {
-		err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodDelete, ac)
+		err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodPut, ac)
 		if err != nil {
 			return err
 		}
