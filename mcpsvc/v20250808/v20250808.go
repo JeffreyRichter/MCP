@@ -19,10 +19,10 @@ POST /mcp/complete
 */
 
 import (
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
-func Routes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.ApiVersionRoutes {
+func Routes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 	// If no base api-version, baseRoutes == nil; build routes from scratch
 
 	// Use the patterns below to MODIFY the base's routes (or ignore baseRoutes to build routes from scratch):
@@ -30,18 +30,18 @@ func Routes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.ApiVersionRou
 	// To existing URL, remove HTTP method:        delete(baseRoutes["<ExistingUrl>"], "<ExisitngHttpMethod>")
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
 	ops := GetOps()
-	return serviceinfra.ApiVersionRoutes{
+	return svrcore.ApiVersionRoutes{
 		// ***** TOOLS *****
-		"/mcp/tools": map[string]*serviceinfra.MethodInfo{
+		"/mcp/tools": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.getToolList},
 		},
-		"/mcp/tools/{toolName}/calls": map[string]*serviceinfra.MethodInfo{
+		"/mcp/tools/{toolName}/calls": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.listToolCalls},
 		},
-		"/mcp/tools/{toolName}/calls/{toolCallId}": map[string]*serviceinfra.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallId}": map[string]*svrcore.MethodInfo{
 			"PUT": {
 				Policy: ops.putToolCallResource,
-				ValidHeader: &serviceinfra.ValidHeader{
+				ValidHeader: &svrcore.ValidHeader{
 					ContentTypes:     []string{"application/json"},
 					MaxContentLength: int64(1024),
 				},
@@ -49,49 +49,49 @@ func Routes(baseRoutes serviceinfra.ApiVersionRoutes) serviceinfra.ApiVersionRou
 			"GET": {Policy: ops.getToolCallResource},
 		},
 
-		"/mcp/tools/{toolName}/calls/{toolCallId}/advance": map[string]*serviceinfra.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallId}/advance": map[string]*svrcore.MethodInfo{
 			"POST": {
 				Policy: ops.postToolCallAdvance,
-				ValidHeader: &serviceinfra.ValidHeader{
+				ValidHeader: &svrcore.ValidHeader{
 					ContentTypes:     []string{"application/json"},
 					MaxContentLength: int64(1024),
 				},
 			},
 		},
 
-		"/mcp/tools/{toolName}/calls/{toolCallId}/cancel": map[string]*serviceinfra.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallId}/cancel": map[string]*svrcore.MethodInfo{
 			"POST": {
 				Policy: ops.postToolCallCancelResource,
-				ValidHeader: &serviceinfra.ValidHeader{
+				ValidHeader: &svrcore.ValidHeader{
 					MaxContentLength: int64(0), // No content expected for cancel
 				},
 			},
 		},
 
 		// ***** RESOURCES *****
-		"/mcp/resources": map[string]*serviceinfra.MethodInfo{
+		"/mcp/resources": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.getResources},
 		},
-		"/mcp/resources-templates": map[string]*serviceinfra.MethodInfo{
+		"/mcp/resources-templates": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.getResourcesTemplates},
 		},
-		"/mcp/resources/{name}": map[string]*serviceinfra.MethodInfo{
+		"/mcp/resources/{name}": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.getResource},
 		},
 
 		// ***** PROMPTS *****
-		"/mcp/prompts": map[string]*serviceinfra.MethodInfo{
+		"/mcp/prompts": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.getPrompts},
 		},
-		"/mcp/prompts/{name}": map[string]*serviceinfra.MethodInfo{
+		"/mcp/prompts/{name}": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.getPrompt},
 		},
 
 		// ***** ROOTS & COMPLETIONS *****
-		"/mcp/roots": map[string]*serviceinfra.MethodInfo{
+		"/mcp/roots": map[string]*svrcore.MethodInfo{
 			"PUT": {Policy: ops.putRoots},
 		},
-		"/mcp/complete": map[string]*serviceinfra.MethodInfo{
+		"/mcp/complete": map[string]*svrcore.MethodInfo{
 			"POST": {Policy: ops.postCompletion},
 		},
 	}

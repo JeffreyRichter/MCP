@@ -11,15 +11,15 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/resources"
-	"github.com/JeffreyRichter/serviceinfra"
-	"github.com/JeffreyRichter/serviceinfra/policies"
+	"github.com/JeffreyRichter/svrcore"
+	"github.com/JeffreyRichter/svrcore/policies"
 )
 
 func testServer(t *testing.T) *httptest.Server {
 	setupMockStore(t)
 	logger := slog.Default()
 
-	policies := []serviceinfra.Policy{
+	policies := []svrcore.Policy{
 		policies.NewShutdownMgr(policies.ShutdownMgrConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewPolicy(),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
@@ -27,8 +27,8 @@ func testServer(t *testing.T) *httptest.Server {
 		policies.NewMetricsPolicy(logger),
 		policies.NewDistributedTracing(),
 	}
-	avis := []*serviceinfra.ApiVersionInfo{{GetRoutes: Routes}}
-	handler := serviceinfra.BuildHandler(policies, avis, "api-version", serviceinfra.APIVersionKeyLocationQuery)
+	avis := []*svrcore.ApiVersionInfo{{GetRoutes: Routes}}
+	handler := svrcore.BuildHandler(policies, avis, "api-version", svrcore.APIVersionKeyLocationQuery)
 
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)

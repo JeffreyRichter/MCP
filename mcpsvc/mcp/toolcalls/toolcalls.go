@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type ToolCallIdentity struct {
@@ -23,7 +23,7 @@ type ToolCall struct {
 	ToolCallIdentity   `json:",inline"`
 	Expiration         *time.Time          `json:"expiration,omitempty"`
 	IdempotencyKey     *[]byte             `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
-	ETag               *si.ETag            `json:"etag"`
+	ETag               *svrcore.ETag       `json:"etag"`
 	Phase              *string             `json:"phase,omitempty"`
 	Status             *ToolCallStatus     `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
 	Request            jsontext.Value      `json:"request,omitempty"`
@@ -43,9 +43,9 @@ type ToolCall struct {
 
 func NewToolCall(tenant, toolName, toolCallId string) *ToolCall {
 	return &ToolCall{
-		ToolCallIdentity: ToolCallIdentity{Tenant: si.Ptr(tenant), ToolName: si.Ptr(toolName), ToolCallId: si.Ptr(toolCallId)},
-		Expiration:       si.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
-		Status:           si.Ptr(ToolCallStatusSubmitted),
+		ToolCallIdentity: ToolCallIdentity{Tenant: svrcore.Ptr(tenant), ToolName: svrcore.Ptr(toolName), ToolCallId: svrcore.Ptr(toolCallId)},
+		Expiration:       svrcore.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
+		Status:           svrcore.Ptr(ToolCallStatusSubmitted),
 	}
 }
 
@@ -73,8 +73,8 @@ const (
 )
 
 type AccessConditions struct {
-	IfMatch     *si.ETag
-	IfNoneMatch *si.ETag
+	IfMatch     *svrcore.ETag
+	IfNoneMatch *svrcore.ETag
 }
 
 type SamplingRequest struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L986

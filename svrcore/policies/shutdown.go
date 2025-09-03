@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type ShutdownMgr struct {
@@ -28,7 +28,7 @@ func (sm *ShutdownMgr) ShuttingDown() bool { return sm.shuttingDown.Load() }
 
 // HealthProbe can be called in response to an HTTP GET. It returns 503-ServiceUnavailable if
 // the service is shutting down; else 200-OK.
-func (sm *ShutdownMgr) HealthProbe(ctx context.Context, r *serviceinfra.ReqRes) error {
+func (sm *ShutdownMgr) HealthProbe(ctx context.Context, r *svrcore.ReqRes) error {
 	// https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-custom-probe-overview
 	if sm.ShuttingDown() {
 		return r.Error(http.StatusServiceUnavailable, "Service instance shutting down", "This service instance is shutting down. Please try again.")
@@ -82,8 +82,8 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 
 // NewPolicy creates a new shutdown policy using ShutdownMgr.
 // This policy returns a 503-ServiceUnavailable if the service is shutting down; else the request is processed normally.
-func (sm *ShutdownMgr) NewPolicy() serviceinfra.Policy {
-	return func(ctx context.Context, r *serviceinfra.ReqRes) error {
+func (sm *ShutdownMgr) NewPolicy() svrcore.Policy {
+	return func(ctx context.Context, r *svrcore.ReqRes) error {
 		if sm.ShuttingDown() {
 			return r.Error(http.StatusServiceUnavailable, "Service instance shutting down", "This service instance is shutting down. Please try again.")
 		}

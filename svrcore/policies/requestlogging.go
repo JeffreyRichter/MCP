@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 // NewRequestLogPolicy creates a new request logging policy.
-func NewRequestLogPolicy(logger *slog.Logger) serviceinfra.Policy {
-	return func(ctx context.Context, r *serviceinfra.ReqRes) error {
+func NewRequestLogPolicy(logger *slog.Logger) svrcore.Policy {
+	return func(ctx context.Context, r *svrcore.ReqRes) error {
 		lrw := &logResponseWriter{reqID: time.Now().Unix(), statusCode: http.StatusOK, ResponseWriter: r.RW}
 		r.RW = lrw // Replace the ReqRes' ResponseWriter with this wrapped one
 		logger.Info("-> ", slog.Int64("id", lrw.reqID), slog.String("method", r.R.Method), slog.String("url", r.R.URL.String()))

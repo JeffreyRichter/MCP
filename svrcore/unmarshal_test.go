@@ -1,4 +1,4 @@
-package serviceinfra
+package svrcore
 
 import (
 	"encoding/json/v2"

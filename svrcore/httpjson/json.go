@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/JeffreyRichter/serviceinfra/syncmap"
+	"github.com/JeffreyRichter/svrcore/syncmap"
 )
 
 // Holds sentinel values used to send nulls

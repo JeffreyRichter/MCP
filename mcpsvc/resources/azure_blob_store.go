@@ -12,7 +12,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 // AzureBlobToolCallStore maintains the state required to manage all operations for the users resource type.
@@ -51,7 +51,7 @@ func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCal
 	if err := json.Unmarshal(buffer, &tc); err != nil {
 		return err // panic?
 	}
-	tc.ETag = (*serviceinfra.ETag)(response.ETag) // Set the ETag from the response
+	tc.ETag = (*svrcore.ETag)(response.ETag) // Set the ETag from the response
 	return nil
 }
 
@@ -63,7 +63,7 @@ func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCal
 		// Attempt to upload the Tool Call blob
 		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(accessConditions)})
 		if err == nil { // Successfully uploaded the Tool Call blob
-			tc.ETag = (*serviceinfra.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
+			tc.ETag = (*svrcore.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			blockClient := ab.client.ServiceClient().NewContainerClient(tenant).NewBlockBlobClient(blobName)
 			// TODO: this error should be logged but isn't cause for panic and shouldn't be sent to the client
 			_, _ = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)

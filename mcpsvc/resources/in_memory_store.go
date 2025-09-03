@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 // InMemoryToolCallStore is an in-memory [ToolCallStore] having the same semantics as [AzureBlobToolCallStore]
@@ -51,7 +51,7 @@ func (s *InMemoryToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, a
 	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
 	stored, ok := s.data[key]
 	if !ok {
-		return &serviceinfra.ServiceError{
+		return &svrcore.ServiceError{
 			StatusCode: 404,
 			ErrorCode:  "NotFound",
 			Message:    "Tool call not found",
@@ -61,14 +61,14 @@ func (s *InMemoryToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, a
 	// TODO: clean up and consolidate AccessConditions handling
 	if accessConditions != nil {
 		if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-			return &serviceinfra.ServiceError{
+			return &svrcore.ServiceError{
 				StatusCode: 412,
 				ErrorCode:  "PreconditionFailed",
 				Message:    "The condition specified using HTTP conditional header(s) is not met",
 			}
 		}
 		if accessConditions.IfNoneMatch != nil && stored.ETag != nil && accessConditions.IfNoneMatch.Equals(*stored.ETag) {
-			return &serviceinfra.ServiceError{
+			return &svrcore.ServiceError{
 				StatusCode: 304,
 				ErrorCode:  "NotModified",
 				Message:    "The resource has not been modified",
@@ -87,21 +87,21 @@ func (s *InMemoryToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, a
 	if accessConditions != nil {
 		if stored, ok := s.data[key]; ok {
 			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-				return &serviceinfra.ServiceError{
+				return &svrcore.ServiceError{
 					StatusCode: 412,
 					ErrorCode:  "PreconditionFailed",
 					Message:    "The condition specified using HTTP conditional header(s) is not met",
 				}
 			}
 			if accessConditions.IfNoneMatch != nil {
-				return &serviceinfra.ServiceError{
+				return &svrcore.ServiceError{
 					StatusCode: 412,
 					ErrorCode:  "PreconditionFailed",
 					Message:    "The condition specified using HTTP conditional header(s) is not met",
 				}
 			}
 		} else if accessConditions.IfMatch != nil {
-			return &serviceinfra.ServiceError{
+			return &svrcore.ServiceError{
 				StatusCode: 412,
 				ErrorCode:  "PreconditionFailed",
 				Message:    "The condition specified using HTTP conditional header(s) is not met",
@@ -111,7 +111,7 @@ func (s *InMemoryToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, a
 
 	// storing a copy prevents mutating the caller's data
 	cp := tc.Copy()
-	cp.ETag = serviceinfra.Ptr(serviceinfra.ETag(time.Now().Format("20060102150405.000000")))
+	cp.ETag = svrcore.Ptr(svrcore.ETag(time.Now().Format("20060102150405.000000")))
 	s.data[key] = cp
 
 	// except we want the caller to have the actual ETag
@@ -127,14 +127,14 @@ func (s *InMemoryToolCallStore) Delete(_ context.Context, tc *toolcalls.ToolCall
 	if accessConditions != nil {
 		if stored, ok := s.data[key]; ok {
 			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-				return &serviceinfra.ServiceError{
+				return &svrcore.ServiceError{
 					StatusCode: 412,
 					ErrorCode:  "PreconditionFailed",
 					Message:    "The condition specified using HTTP conditional header(s) is not met",
 				}
 			}
 			if accessConditions.IfNoneMatch != nil && stored.ETag != nil && accessConditions.IfNoneMatch.Equals(*stored.ETag) {
-				return &serviceinfra.ServiceError{
+				return &svrcore.ServiceError{
 					StatusCode: 412,
 					ErrorCode:  "PreconditionFailed",
 					Message:    "The condition specified using HTTP conditional header(s) is not met",

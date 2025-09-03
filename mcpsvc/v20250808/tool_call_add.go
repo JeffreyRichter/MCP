@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type AddToolCallRequest struct {
@@ -31,14 +31,14 @@ type AddToolCallError struct {
 	Overflow bool `json:"overflowcode,omitempty"`
 }
 
-func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	var trequest AddToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
 		return err
 	}
 	tc.Request = must(json.Marshal(trequest))
 
-	tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess)
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
 	tresult := &AddToolCallResult{Sum: trequest.X + trequest.Y}
 	tc.Result = must(json.Marshal(tresult))
 
@@ -51,24 +51,24 @@ func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.
 	if err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) getToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) getToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
 	if err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err := r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err := r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	switch *tc.Status {
@@ -79,7 +79,7 @@ func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls
 			return err
 		}
 		// TODO: Process the er, update progress?, update status, update result/error
-		tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
 
 	case toolcalls.ToolCallStatusAwaitingSamplingResult:
 		var sr toolcalls.SamplingResult
@@ -96,10 +96,10 @@ func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls
 	if err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) cancelToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) cancelToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	/*
 		1.	GET ToolCall resource/etag from client-passed ID
 		2.	If status==terminal, return
@@ -110,7 +110,7 @@ func (ops *httpOperations) cancelToolCallAdd(ctx context.Context, tc *toolcalls.
 
 	*/
 	body := any(nil)
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: ops.etag()}, nil, http.StatusOK, body)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: ops.etag()}, nil, http.StatusOK, body)
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -119,14 +119,14 @@ func (ops *httpOperations) processPhaseToolCallAdd(ctx context.Context, tc *tool
 	switch *tc.Phase {
 	case "submitted":
 		// Do work
-		tc.Phase = serviceinfra.Ptr("one")
-		tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusRunning)
+		tc.Phase = svrcore.Ptr("one")
+		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusRunning)
 		return nil
 
 	case "one":
 		// Do work
 		pp.ExtendProcessingTime(ctx, time.Millisecond*300)
-		tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
 		tc.Phase = (*string)(tc.Status) // No more phases
 		return nil
 	}

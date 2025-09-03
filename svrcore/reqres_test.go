@@ -1,4 +1,4 @@
-package serviceinfra
+package svrcore
 
 import (
 	"context"

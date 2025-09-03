@@ -7,7 +7,7 @@ import (
 
 	"github.com/JeffreyRichter/mcpsvc/mcp"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type PIIToolCallRequest struct {
@@ -19,7 +19,7 @@ type PIIToolCallResult struct {
 }
 
 // TODO: client must specify elicitation capability
-func (ops *httpOperations) createToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) createToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	var trequest PIIToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
 		return err
@@ -40,36 +40,36 @@ func (ops *httpOperations) createToolCallPII(ctx context.Context, tc *toolcalls.
 			Properties: map[string]mcp.PrimitiveSchemaDefinition{
 				"approved": mcp.BooleanSchema{
 					Type:        "boolean",
-					Title:       serviceinfra.Ptr("Approval"),
-					Description: serviceinfra.Ptr("Whether to approve PII access"),
+					Title:       svrcore.Ptr("Approval"),
+					Description: svrcore.Ptr("Whether to approve PII access"),
 				},
 			},
 			Required: []string{"approved"},
 		},
 	}
-	tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusAwaitingElicitationResult)
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusAwaitingElicitationResult)
 
 	err := ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) getToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) getToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
@@ -98,9 +98,9 @@ func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls
 			return r.Error(http.StatusBadRequest, "BadRequest", `missing "approved" boolean in elicitation result content`)
 		}
 	}
-	tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusCanceled)
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
 	if approved {
-		tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
 		tresult := &PIIToolCallResult{Data: "here's your PII"}
 		tc.Result = must(json.Marshal(tresult))
 	}
@@ -110,15 +110,15 @@ func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls
 	if err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) cancelToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *serviceinfra.ReqRes) error {
+func (ops *httpOperations) cancelToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(serviceinfra.ResourceValues{AllowedConditionals: serviceinfra.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
@@ -126,15 +126,15 @@ func (ops *httpOperations) cancelToolCallPII(ctx context.Context, tc *toolcalls.
 	}
 	switch *tc.Status {
 	case toolcalls.ToolCallStatusSuccess, toolcalls.ToolCallStatusFailed, toolcalls.ToolCallStatusCanceled:
-		return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+		return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 	}
 
 	tc.ElicitationRequest = nil
 	tc.Error = nil
 	tc.Result = nil
-	tc.Status = serviceinfra.Ptr(toolcalls.ToolCallStatusCanceled)
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
 	if err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
-	return r.WriteResponse(&serviceinfra.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }

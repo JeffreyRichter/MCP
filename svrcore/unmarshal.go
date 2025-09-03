@@ -1,4 +1,4 @@
-package serviceinfra
+package svrcore
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JeffreyRichter/serviceinfra/syncmap"
+	"github.com/JeffreyRichter/svrcore/syncmap"
 )
 
 // QueryTo "deserializes" a URL's query parameter names/values to an instance of T.

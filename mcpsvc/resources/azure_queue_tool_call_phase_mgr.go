@@ -15,7 +15,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	"github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type PhaseMgrConfig struct {
@@ -60,8 +60,8 @@ func (pm *PhaseMgr) DeleteQueue(ctx context.Context) error {
 // Poison messages & other failures are logged.
 func (pm *PhaseMgr) processor(ctx context.Context) {
 	o := &azqueue.DequeueMessagesOptions{
-		NumberOfMessages:  serviceinfra.Ptr(int32(10)),
-		VisibilityTimeout: serviceinfra.Ptr(int32(pm.config.PhaseExecutionTime.Seconds())),
+		NumberOfMessages:  svrcore.Ptr(int32(10)),
+		VisibilityTimeout: svrcore.Ptr(int32(pm.config.PhaseExecutionTime.Seconds())),
 	}
 	for {
 		time.Sleep(time.Millisecond * 200)
@@ -110,7 +110,7 @@ func (m *queueMsg) parse() (tenant, toolName, toolCallID string) {
 func (pm *PhaseMgr) StartPhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall) error {
 	data := must(json.Marshal(tc.ToolCallIdentity))
 	resp, err := pm.queueClient.EnqueueMessage(ctx, string(data),
-		&azqueue.EnqueueMessageOptions{VisibilityTimeout: serviceinfra.Ptr(int32(pm.config.PhaseExecutionTime.Seconds()))})
+		&azqueue.EnqueueMessageOptions{VisibilityTimeout: svrcore.Ptr(int32(pm.config.PhaseExecutionTime.Seconds()))})
 	if err != nil {
 		return nil
 	}
@@ -153,7 +153,7 @@ type phaseProcessor struct {
 
 func (pp *phaseProcessor) ExtendProcessingTime(ctx context.Context, phaseExecutionTime time.Duration) error {
 	resp, err := pp.mgr.queueClient.UpdateMessage(ctx, pp.messageID, pp.popReceipt, "",
-		&azqueue.UpdateMessageOptions{VisibilityTimeout: serviceinfra.Ptr(int32(phaseExecutionTime.Seconds()))})
+		&azqueue.UpdateMessageOptions{VisibilityTimeout: svrcore.Ptr(int32(phaseExecutionTime.Seconds()))})
 	if err != nil {
 		return nil
 	}
