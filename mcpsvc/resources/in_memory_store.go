@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 
@@ -44,7 +45,7 @@ func (s *InMemoryToolCallStore) reaper(ctx context.Context) {
 	}
 }
 
-func (s *InMemoryToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (s *InMemoryToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -57,94 +58,43 @@ func (s *InMemoryToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, a
 			Message:    "Tool call not found",
 		}
 	}
-
-	// TODO: clean up and consolidate AccessConditions handling
-	if accessConditions != nil {
-		if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-			return &svrcore.ServiceError{
-				StatusCode: 412,
-				ErrorCode:  "PreconditionFailed",
-				Message:    "The condition specified using HTTP conditional header(s) is not met",
-			}
-		}
-		if accessConditions.IfNoneMatch != nil && stored.ETag != nil && accessConditions.IfNoneMatch.Equals(*stored.ETag) {
-			return &svrcore.ServiceError{
-				StatusCode: 304,
-				ErrorCode:  "NotModified",
-				Message:    "The resource has not been modified",
-			}
-		}
+	*tc = stored.Copy() // copying prevents the caller mutating stored data
+	err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodGet, ac)
+	if err != nil {
+		return err
 	}
-	*tc = *stored.Copy() // copying prevents the caller mutating stored data
 	return nil
 }
 
-func (s *InMemoryToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (s *InMemoryToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
-	if accessConditions != nil {
-		if stored, ok := s.data[key]; ok {
-			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-				return &svrcore.ServiceError{
-					StatusCode: 412,
-					ErrorCode:  "PreconditionFailed",
-					Message:    "The condition specified using HTTP conditional header(s) is not met",
-				}
-			}
-			if accessConditions.IfNoneMatch != nil {
-				return &svrcore.ServiceError{
-					StatusCode: 412,
-					ErrorCode:  "PreconditionFailed",
-					Message:    "The condition specified using HTTP conditional header(s) is not met",
-				}
-			}
-		} else if accessConditions.IfMatch != nil {
-			return &svrcore.ServiceError{
-				StatusCode: 412,
-				ErrorCode:  "PreconditionFailed",
-				Message:    "The condition specified using HTTP conditional header(s) is not met",
-			}
+	if stored, ok := s.data[key]; ok {
+		err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodDelete, ac)
+		if err != nil {
+			return err
 		}
 	}
-
-	// storing a copy prevents mutating the caller's data
-	cp := tc.Copy()
+	cp := tc.Copy() // storing a copy prevents mutating the caller's data
 	cp.ETag = svrcore.Ptr(svrcore.ETag(time.Now().Format("20060102150405.000000")))
-	s.data[key] = cp
-
-	// except we want the caller to have the actual ETag
-	tc.ETag = cp.ETag
+	s.data[key] = &cp
+	*tc = cp // except we want the caller to have the actual ETag
 	return nil
 }
 
-func (s *InMemoryToolCallStore) Delete(_ context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (s *InMemoryToolCallStore) Delete(_ context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
-	if accessConditions != nil {
-		if stored, ok := s.data[key]; ok {
-			if accessConditions.IfMatch != nil && stored.ETag != nil && !accessConditions.IfMatch.Equals(*stored.ETag) {
-				return &svrcore.ServiceError{
-					StatusCode: 412,
-					ErrorCode:  "PreconditionFailed",
-					Message:    "The condition specified using HTTP conditional header(s) is not met",
-				}
-			}
-			if accessConditions.IfNoneMatch != nil && stored.ETag != nil && accessConditions.IfNoneMatch.Equals(*stored.ETag) {
-				return &svrcore.ServiceError{
-					StatusCode: 412,
-					ErrorCode:  "PreconditionFailed",
-					Message:    "The condition specified using HTTP conditional header(s) is not met",
-				}
-			}
-		} else {
-			return nil
+	if stored, ok := s.data[key]; ok {
+		err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodDelete, ac)
+		if err != nil {
+			return err
 		}
 	}
-
 	delete(s.data, key)
 	return nil
 }

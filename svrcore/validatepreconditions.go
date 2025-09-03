@@ -25,9 +25,9 @@ type ResourceValues struct {
 	LastModified        *time.Time
 }
 
-// Conditionals represents the conditional request headers from a client.
+// AccessConditions represents the conditional request headers from a client.
 // An empty string indicates the header was not present.
-type Conditionals struct {
+type AccessConditions struct {
 	IfMatch           *ETag
 	IfNoneMatch       *ETag
 	IfModifiedSince   *time.Time
@@ -38,7 +38,7 @@ type Conditionals struct {
 // If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, ValidatePreconditions returns nil; else,
 // it returns an appropriate ServiceError (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]).
-func ValidatePreconditions(rv ResourceValues, method string, c Conditionals) error {
+func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions) error {
 	if !rv.AllowedConditionals.Check(AllowedConditionalsMatch) && (c.IfMatch != nil || c.IfNoneMatch != nil) {
 		return NewServiceError(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
 	}

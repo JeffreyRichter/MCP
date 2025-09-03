@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/JeffreyRichter/mcpsvc/config"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 // Resource type & operations pattern:
@@ -20,9 +21,9 @@ import (
 
 // ToolCallStore manages persistent storage of ToolCalls
 type ToolCallStore interface {
-	Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
-	Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
-	Delete(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error
+	Get(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error
+	Put(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error
+	Delete(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error
 }
 
 // GetToolCallStore returns a singleton ToolCallStore. It's an exported variable so offline tests can replace the production default with a mock.

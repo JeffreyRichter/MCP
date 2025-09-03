@@ -24,7 +24,7 @@ func (*AzureBlobToolCallStore) blobName(toolName, toolCallId string) string {
 	return toolName + "/" + toolCallId
 }
 
-func (*AzureBlobToolCallStore) accessConditions(ac *toolcalls.AccessConditions) *azblob.AccessConditions {
+func (*AzureBlobToolCallStore) accessConditions(ac svrcore.AccessConditions) *azblob.AccessConditions {
 	return &azblob.AccessConditions{
 		ModifiedAccessConditions: &blob.ModifiedAccessConditions{
 			IfMatch:     (*azcore.ETag)(ac.IfMatch),
@@ -33,10 +33,10 @@ func (*AzureBlobToolCallStore) accessConditions(ac *toolcalls.AccessConditions) 
 	}
 }
 
-func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	// Get the tool call by tenant, tool name and tool call id
 	response, err := ab.client.DownloadStream(ctx, *tc.Tenant, ab.blobName(*tc.ToolName, *tc.ToolCallId),
-		&azblob.DownloadStreamOptions{AccessConditions: ab.accessConditions(accessConditions)})
+		&azblob.DownloadStreamOptions{AccessConditions: ab.accessConditions(ac)})
 	if err != nil {
 		return err // Blob not found; return a brand new one
 	}
@@ -55,13 +55,13 @@ func (ab *AzureBlobToolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCal
 	return nil
 }
 
-func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	blobName := ab.blobName(*tc.ToolName, *tc.ToolCallId)
 	buffer := must(json.Marshal(tc))
 	tenant := *tc.Tenant
 	for {
 		// Attempt to upload the Tool Call blob
-		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(accessConditions)})
+		response, err := ab.client.UploadBuffer(ctx, tenant, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: ab.accessConditions(ac)})
 		if err == nil { // Successfully uploaded the Tool Call blob
 			tc.ETag = (*svrcore.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			blockClient := ab.client.ServiceClient().NewContainerClient(tenant).NewBlockBlobClient(blobName)
@@ -81,7 +81,7 @@ func (ab *AzureBlobToolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCal
 	}
 }
 
-func (ab *AzureBlobToolCallStore) Delete(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
-	_, err := ab.client.DeleteBlob(ctx, *tc.Tenant, ab.blobName(*tc.ToolName, *tc.ToolCallId), &azblob.DeleteBlobOptions{AccessConditions: ab.accessConditions(accessConditions)})
+func (ab *AzureBlobToolCallStore) Delete(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+	_, err := ab.client.DeleteBlob(ctx, *tc.Tenant, ab.blobName(*tc.ToolName, *tc.ToolCallId), &azblob.DeleteBlobOptions{AccessConditions: ab.accessConditions(ac)})
 	return err // panic?
 }

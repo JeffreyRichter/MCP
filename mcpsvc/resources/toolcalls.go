@@ -52,17 +52,17 @@ func (tco *ToolCallOperations) toBlobInfo(tc *toolcalls.ToolCall) (containerName
 	return parts.ContainerName, segments[0], segments[1]
 }*/
 
-func (tco *ToolCallOperations) accessConditions(ac *toolcalls.AccessConditions) *azblob.AccessConditions {
+func (tco *ToolCallOperations) accessConditions(ac svrcore.AccessConditions) *azblob.AccessConditions {
 	return &azblob.AccessConditions{
 		ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfMatch: (*azcore.ETag)(ac.IfMatch), IfNoneMatch: (*azcore.ETag)(ac.IfNoneMatch)},
 	}
 }
 
-func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	// Get the tool call by tenant, tool name and tool call id
 	containerName, blobName := tco.toBlobInfo(tc)
 	response, err := tco.client.DownloadStream(ctx, containerName, blobName,
-		&azblob.DownloadStreamOptions{AccessConditions: tco.accessConditions(accessConditions)})
+		&azblob.DownloadStreamOptions{AccessConditions: tco.accessConditions(ac)})
 	if err != nil {
 		return err // Blob not found; return a brand new one
 	}
@@ -81,12 +81,12 @@ func (tco *ToolCallOperations) Get(ctx context.Context, tc *toolcalls.ToolCall, 
 	return nil
 }
 
-func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	buffer := must(json.Marshal(tc))
 	containerName, blobName := tco.toBlobInfo(tc)
 	for {
 		// Attempt to upload the Tool Call blob
-		response, err := tco.client.UploadBuffer(ctx, containerName, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: tco.accessConditions(accessConditions)})
+		response, err := tco.client.UploadBuffer(ctx, containerName, blobName, buffer, &azblob.UploadBufferOptions{AccessConditions: tco.accessConditions(ac)})
 		if err == nil { // Successfully uploaded the Tool Call blob
 			tc.ETag = (*svrcore.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			return nil
@@ -103,9 +103,9 @@ func (tco *ToolCallOperations) Put(ctx context.Context, tc *toolcalls.ToolCall, 
 	}
 }
 
-func (tco *ToolCallOperations) Delete(ctx context.Context, tc *toolcalls.ToolCall, accessConditions *toolcalls.AccessConditions) error {
+func (tco *ToolCallOperations) Delete(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
 	containerName, blobName := tco.toBlobInfo(tc)
-	_, err := tco.client.DeleteBlob(ctx, containerName, blobName, &azblob.DeleteBlobOptions{AccessConditions: tco.accessConditions(accessConditions)})
+	_, err := tco.client.DeleteBlob(ctx, containerName, blobName, &azblob.DeleteBlobOptions{AccessConditions: tco.accessConditions(ac)})
 	return err // panic?
 }
 

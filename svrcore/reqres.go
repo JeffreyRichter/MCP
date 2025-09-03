@@ -286,7 +286,7 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 // writes an appropriate ServiceError to the HTTP response (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]) and return non-nil.
 func (r *ReqRes) ValidatePreconditions(rv ResourceValues) error {
-	se := ValidatePreconditions(rv, r.R.Method, Conditionals{
+	se := ValidatePreconditions(rv, r.R.Method, AccessConditions{
 		IfMatch:           r.H.IfMatch,
 		IfNoneMatch:       r.H.IfNoneMatch,
 		IfModifiedSince:   r.H.IfModifiedSince,

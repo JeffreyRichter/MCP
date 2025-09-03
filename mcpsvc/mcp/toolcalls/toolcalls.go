@@ -50,14 +50,14 @@ func NewToolCall(tenant, toolName, toolCallId string) *ToolCall {
 }
 
 // Copy (deeply) the ToolCall
-func (tc *ToolCall) Copy() *ToolCall {
+func (tc *ToolCall) Copy() ToolCall {
 	if tc == nil {
-		return nil
+		panic("tc can't be nil")
 	}
-	buffer := must(json.Marshal(tc))
 	cp := ToolCall{}
+	buffer := must(json.Marshal(tc))
 	must(0, json.Unmarshal(buffer, &cp))
-	return &cp
+	return cp
 }
 
 type ToolCallStatus string
@@ -71,11 +71,6 @@ const (
 	ToolCallStatusFailed                    ToolCallStatus = "failed"
 	ToolCallStatusCanceled                  ToolCallStatus = "canceled"
 )
-
-type AccessConditions struct {
-	IfMatch     *svrcore.ETag
-	IfNoneMatch *svrcore.ETag
-}
 
 type SamplingRequest struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L986
 	Messages []mcp.SamplingMessage `json:"messages"`

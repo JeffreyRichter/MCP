@@ -47,7 +47,7 @@ func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.
 	fmt.Fprintf(os.Stderr, "[%s] blocking for %dms\n", *tc.ToolCallId, d)
 	time.Sleep(d * time.Millisecond)
 
-	err := ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
+	err := ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (ops *httpOperations) createToolCallAdd(ctx context.Context, tc *toolcalls.
 }
 
 func (ops *httpOperations) getToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (ops *httpOperations) getToolCallAdd(ctx context.Context, tc *toolcalls.Too
 }
 
 func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func (ops *httpOperations) advanceToolCallAdd(ctx context.Context, tc *toolcalls
 		return r.Error(http.StatusBadRequest, "BadRequest", "tool call status is '%s'; not expecting a result", *tc.Status)
 	}
 
-	err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
+	err = ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
 	if err != nil {
 		return err
 	}

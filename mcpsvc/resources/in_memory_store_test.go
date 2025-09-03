@@ -23,7 +23,7 @@ func TestInMemoryToolCallStore_Get_NotFound(t *testing.T) {
 		},
 	}
 
-	err := store.Get(ctx, tc, nil)
+	err := store.Get(ctx, tc, svrcore.AccessConditions{})
 
 	serviceError, ok := err.(*svrcore.ServiceError)
 	if !ok {
@@ -54,7 +54,7 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 	}
 
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, putResult, nil)
+	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 	}
 
 	getResult := getToolCall.Copy()
-	err = store.Get(ctx, getResult, nil)
+	err = store.Get(ctx, &getResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	}
 
 	putResult1 := originalToolCall.Copy()
-	err := store.Put(ctx, putResult1, nil)
+	err := store.Put(ctx, &putResult1, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("First put failed: %v", err)
 	}
@@ -128,12 +128,10 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusSuccess),
 	}
 
-	accessConditions := &toolcalls.AccessConditions{
-		IfMatch: putResult1.ETag,
-	}
+	accessConditions := svrcore.AccessConditions{IfMatch: putResult1.ETag}
 
 	putResult2 := updatedToolCall.Copy()
-	err = store.Put(ctx, putResult2, accessConditions)
+	err = store.Put(ctx, &putResult2, accessConditions)
 	if err != nil {
 		t.Fatalf("Second put with correct ETag failed: %v", err)
 	}
@@ -169,14 +167,12 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	err := store.Put(ctx, originalToolCall, nil)
+	err := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("First put failed: %v", err)
 	}
 
-	accessConditions := &toolcalls.AccessConditions{
-		IfNoneMatch: svrcore.Ptr(svrcore.ETag("*")),
-	}
+	accessConditions := svrcore.AccessConditions{IfNoneMatch: svrcore.Ptr(svrcore.ETagAny)}
 
 	err = store.Put(ctx, originalToolCall, accessConditions)
 	serviceError, ok := err.(*svrcore.ServiceError)
@@ -202,7 +198,7 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, putResult, nil)
+	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -215,9 +211,7 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 		},
 	}
 
-	accessConditions := &toolcalls.AccessConditions{
-		IfMatch: putResult.ETag,
-	}
+	accessConditions := svrcore.AccessConditions{IfMatch: putResult.ETag}
 
 	getResult := getToolCall.Copy()
 	err = store.Get(ctx, getToolCall, accessConditions)
@@ -257,7 +251,7 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 	}
 
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, putResult, nil)
+	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -270,9 +264,7 @@ func TestInMemoryToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 		},
 	}
 
-	accessConditions := &toolcalls.AccessConditions{
-		IfNoneMatch: putResult.ETag,
-	}
+	accessConditions := svrcore.AccessConditions{IfNoneMatch: putResult.ETag}
 
 	err = store.Get(ctx, getToolCall, accessConditions)
 	serviceError, ok := err.(*svrcore.ServiceError)
@@ -298,17 +290,17 @@ func TestInMemoryToolCallStore_Delete(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	err := store.Put(ctx, originalToolCall, nil)
+	err := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	err = store.Delete(ctx, originalToolCall, nil)
+	err = store.Delete(ctx, originalToolCall, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	err = store.Get(ctx, originalToolCall, nil)
+	err = store.Get(ctx, originalToolCall, svrcore.AccessConditions{})
 	serviceError, ok := err.(*svrcore.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError after delete, got %T", err)
@@ -332,16 +324,13 @@ func TestInMemoryToolCallStore_Delete_AccessConditions(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, putResult, nil)
+	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
 	wrongETag := svrcore.ETag("wrong-etag")
-	accessConditions := &toolcalls.AccessConditions{
-		IfMatch: &wrongETag,
-	}
-
+	accessConditions := svrcore.AccessConditions{IfMatch: &wrongETag}
 	err = store.Delete(ctx, originalToolCall, accessConditions)
 	serviceError, ok := err.(*svrcore.ServiceError)
 	if !ok {
@@ -371,7 +360,7 @@ func TestInMemoryToolCallStore_Delete_NonExistent(t *testing.T) {
 		},
 	}
 
-	err := store.Delete(ctx, toolCall, nil)
+	err := store.Delete(ctx, toolCall, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Delete of non-existent item should not fail, got: %v", err)
 	}
@@ -393,13 +382,13 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	err := store.Put(ctx, toolCall, nil)
+	err := store.Put(ctx, toolCall, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put to tenant1 failed: %v", err)
 	}
 
 	toolCall.Tenant = &tenant2
-	err = store.Get(ctx, toolCall, nil)
+	err = store.Get(ctx, toolCall, svrcore.AccessConditions{})
 	serviceError, ok := err.(*svrcore.ServiceError)
 	if !ok {
 		t.Fatalf("Expected ServiceError, got %T", err)
@@ -410,7 +399,7 @@ func TestInMemoryToolCallStore_TenantIsolation(t *testing.T) {
 	}
 
 	toolCall.Tenant = &tenant1
-	err = store.Get(ctx, toolCall, nil)
+	err = store.Get(ctx, toolCall, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Get from tenant1 should still work: %v", err)
 	}
@@ -430,7 +419,7 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 		Request: jsontext.Value(`{"param":"original"}`),
 	}
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, putResult, nil)
+	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -447,7 +436,7 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 	}
 
 	getResult := getToolCall.Copy()
-	err = store.Get(ctx, getResult, nil)
+	err = store.Get(ctx, &getResult, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -464,7 +453,7 @@ func TestInMemoryToolCallStore_DataIsolation(t *testing.T) {
 	getResult.Request = jsontext.Value(`{"param":"get-modified"}`)
 
 	getResult2 := getToolCall.Copy()
-	err = store.Get(ctx, getResult2, nil)
+	err = store.Get(ctx, &getResult2, svrcore.AccessConditions{})
 	if err != nil {
 		t.Fatalf("Second get failed: %v", err)
 	}

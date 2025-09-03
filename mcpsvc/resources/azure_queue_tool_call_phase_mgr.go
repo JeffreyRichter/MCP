@@ -83,7 +83,7 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 					return
 				}
 				// TODO: use the ToolCallStore singleton (it's a sync.OnceValue)
-				err := ToolCallOps.Get(ctx, &tc, nil)
+				err := ToolCallOps.Get(ctx, &tc, svrcore.AccessConditions{})
 				if err != nil { // ToolCallID not expired/not found
 					// No more phases to execute; delete the queue message (or let it become a poison message)
 					// continuePhaseProcessing will delete the message if Status != toolcalls.ToolCallStatusRunning
@@ -130,7 +130,7 @@ func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, tc *toolcalls.T
 			return err
 		}
 		// Persists new state of tool call resource (etag must match)
-		err = ToolCallOps.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: tc.ETag})
+		err = ToolCallOps.Put(ctx, tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 		if err != nil {
 			return err // log?
 		}

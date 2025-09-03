@@ -49,7 +49,7 @@ func (ops *httpOperations) createToolCallPII(ctx context.Context, tc *toolcalls.
 	}
 	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusAwaitingElicitationResult)
 
-	err := ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (ops *httpOperations) createToolCallPII(ctx context.Context, tc *toolcalls.
 }
 
 func (ops *httpOperations) getToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (ops *httpOperations) getToolCallPII(ctx context.Context, tc *toolcalls.Too
 }
 
 func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
@@ -107,14 +107,14 @@ func (ops *httpOperations) advanceToolCallPII(ctx context.Context, tc *toolcalls
 	// drop the elicitation request because it's been processed
 	tc.ElicitationRequest = nil
 
-	if err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	if err = ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
 	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
 func (ops *httpOperations) cancelToolCallPII(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (ops *httpOperations) cancelToolCallPII(ctx context.Context, tc *toolcalls.
 	tc.Error = nil
 	tc.Result = nil
 	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
-	if err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	if err = ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
 	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
