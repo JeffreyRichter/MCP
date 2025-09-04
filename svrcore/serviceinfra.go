@@ -52,7 +52,6 @@ func BuildHandler(policies []Policy, avis []*ApiVersionInfo, apiVersionKey strin
 		// This is the 1st function called when an HTTP request comes into the service
 		reqRes := NewReqRes(policies, r, w)
 		if err := reqRes.Next(reqRes.R.Context()); err != nil {
-			fmt.Printf("Error processing request: %v\n", err)
 			if err, ok := err.(*ServiceError); !ok { // A non-AzureError occured
 				reqRes.Error(http.StatusInternalServerError, "InternalServerError", "")
 				panic(err)

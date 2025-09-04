@@ -21,9 +21,6 @@ type ToolCallIdentity struct {
 // ToolCall is the data model for the version-agnostic tool calls resource type.
 type ToolCall struct {
 	ToolCallIdentity `json:",inline"`
-	Tenant           *string       `json:"tenant"`
-	ToolName         *string       `json:"name,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
-	ToolCallId       *string       `json:"toolCallId,omitempty" minlen:"3" maxlen:"64" regx:"^[a-zA-Z0-9_]+$"`
 	Expiration       *time.Time    `json:"expiration,omitempty"`
 	IdempotencyKey   *[]byte       `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
 	ETag             *svrcore.ETag `json:"etag"`

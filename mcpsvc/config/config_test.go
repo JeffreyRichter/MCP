@@ -14,21 +14,23 @@ func TestConfig_validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "URL only",
+			name: "URLs only",
 			config: Config{
-				AzureStorageBlobURL: "https://example.blob.core.windows.net",
+				AzureStorageBlobURL:  "https://example.blob.core.windows.net",
+				AzureStorageQueueURL: "https://example.queue.core.windows.net",
 			},
 		},
 		{
-			name: "URL and Azurite config",
+			name: "URLs and Azurite config",
 			config: Config{
-				AzureStorageBlobURL: "http://azurite:10000/devstoreaccount1",
-				AzuriteAccount:      "devstoreaccount1",
-				AzuriteKey:          "some-key",
+				AzureStorageBlobURL:  "http://azurite:10000/devstoreaccount1",
+				AzureStorageQueueURL: "https://example.queue.core.windows.net",
+				AzuriteAccount:       "devstoreaccount1",
+				AzuriteKey:           "some-key",
 			},
 		},
 		{
-			name: "Azurite config without URL",
+			name: "Azurite config without URLs",
 			config: Config{
 				AzuriteAccount: "devstoreaccount1",
 				AzuriteKey:     "some-key",
@@ -54,9 +56,10 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "empty strings considered unspecified",
 			config: Config{
-				AzureStorageBlobURL: "http://azurite:10000/devstoreaccount1",
-				AzuriteAccount:      "",
-				AzuriteKey:          "",
+				AzureStorageBlobURL:  "http://azurite:10000/devstoreaccount1",
+				AzureStorageQueueURL: "https://example.queue.core.windows.net",
+				AzuriteAccount:       "",
+				AzuriteKey:           "",
 			},
 		},
 	}

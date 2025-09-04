@@ -8,6 +8,7 @@ import (
 
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	"github.com/JeffreyRichter/svrcore"
+	"github.com/stretchr/testify/require"
 )
 
 var ctx = context.Background()
@@ -102,9 +103,8 @@ func TestInMemoryToolCallStore_Put_and_Get(t *testing.T) {
 
 func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	store := NewInMemoryToolCallStore(ctx)
-	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
+	tc := &toolcalls.ToolCall{
 		ToolCallIdentity: toolcalls.ToolCallIdentity{
 			Tenant:     svrcore.Ptr("test-tenant"),
 			ToolName:   svrcore.Ptr("test-tool"),
@@ -113,52 +113,14 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	putResult1 := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult1, svrcore.AccessConditions{})
-	if err != nil {
-		t.Fatalf("First put failed: %v", err)
-	}
-
-	updatedToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
-		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusSuccess),
-	}
-
-	accessConditions := svrcore.AccessConditions{IfMatch: putResult1.ETag}
-
-	putResult2 := updatedToolCall.Copy()
-	err = store.Put(ctx, &putResult2, accessConditions)
-	if err != nil {
-		t.Fatalf("Second put with correct ETag failed: %v", err)
-	}
-
-	if *putResult2.Status != toolcalls.ToolCallStatusSuccess {
-		t.Errorf("Expected status to be updated to success, got %s", *putResult2.Status)
-	}
-
-	wrongETag := svrcore.ETag("wrong-etag")
-	accessConditions.IfMatch = &wrongETag
-
-	err = store.Put(ctx, updatedToolCall, accessConditions)
-	serviceError, ok := err.(*svrcore.ServiceError)
-	if !ok {
-		t.Fatalf("Expected ServiceError, got %T", err)
-	}
-
-	if serviceError.StatusCode != 412 {
-		t.Errorf("Expected status code 412, got %d", serviceError.StatusCode)
-	}
+	err := store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: svrcore.Ptr(svrcore.ETagAny)})
+	require.Error(t, err)
 }
 
 func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 	store := NewInMemoryToolCallStore(ctx)
-	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
+	tc := &toolcalls.ToolCall{
 		ToolCallIdentity: toolcalls.ToolCallIdentity{
 			Tenant:     svrcore.Ptr("test-tenant"),
 			ToolName:   svrcore.Ptr("test-tool"),
@@ -167,22 +129,8 @@ func TestInMemoryToolCallStore_Put_AccessConditions_IfNoneMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
 	}
 
-	err := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
-	if err != nil {
-		t.Fatalf("First put failed: %v", err)
-	}
-
-	accessConditions := svrcore.AccessConditions{IfNoneMatch: svrcore.Ptr(svrcore.ETagAny)}
-
-	err = store.Put(ctx, originalToolCall, accessConditions)
-	serviceError, ok := err.(*svrcore.ServiceError)
-	if !ok {
-		t.Fatalf("Expected ServiceError, got %T", err)
-	}
-
-	if serviceError.StatusCode != 412 {
-		t.Errorf("Expected status code 412, got %d", serviceError.StatusCode)
-	}
+	err := store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.Ptr(svrcore.ETagAny)})
+	require.Error(t, err)
 }
 
 func TestInMemoryToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {

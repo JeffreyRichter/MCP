@@ -84,19 +84,19 @@ func buildToolInfosMap() map[string]*ToolInfo {
 			Tool: &mcp.Tool{
 				BaseMetadata: mcp.BaseMetadata{
 					Name:  "count",
-					Title: si.Ptr("Count up from an integer"),
+					Title: svrcore.Ptr("Count up from an integer"),
 				},
-				Description: si.Ptr("Count from a starting value, adding 1 to it for the specified number of increments"),
+				Description: svrcore.Ptr("Count from a starting value, adding 1 to it for the specified number of increments"),
 				InputSchema: mcp.JSONSchema{
 					Type: "object",
 					Properties: &map[string]any{
 						"start": map[string]any{
 							"type":        "integer",
-							"Description": si.Ptr("The starting value"),
+							"Description": svrcore.Ptr("The starting value"),
 						},
 						"increments": map[string]any{
 							"type":        "integer",
-							"Description": si.Ptr("The number of increments to perform"),
+							"Description": svrcore.Ptr("The number of increments to perform"),
 						},
 					},
 					Required: []string{},
@@ -106,17 +106,17 @@ func buildToolInfosMap() map[string]*ToolInfo {
 					Properties: &map[string]any{
 						"n": map[string]any{
 							"type":        "integer",
-							"Description": si.Ptr("The final count"),
+							"Description": svrcore.Ptr("The final count"),
 						},
 					},
 					Required: []string{"n"},
 				},
 				Annotations: &mcp.ToolAnnotations{
-					Title:           si.Ptr("Count a specified number of increments"),
-					ReadOnlyHint:    si.Ptr(false),
-					DestructiveHint: si.Ptr(false),
-					IdempotentHint:  si.Ptr(true),
-					OpenWorldHint:   si.Ptr(true),
+					Title:           svrcore.Ptr("Count a specified number of increments"),
+					ReadOnlyHint:    svrcore.Ptr(false),
+					DestructiveHint: svrcore.Ptr(false),
+					IdempotentHint:  svrcore.Ptr(true),
+					OpenWorldHint:   svrcore.Ptr(true),
 				},
 			},
 		},
@@ -224,7 +224,11 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *svrcore.R
 	// Calculate idempotency key based on something in the request that should be stable across retries
 	// For example, the Date header (which must be present per RFC 7231)
 	calcIdempotencyKey := func(s string) []byte { ik := md5.Sum(([]byte)(s)); return ik[:] }
-	incomingIK := calcIdempotencyKey(r.H.Date.String()) // TODO: Maybe improve key value?
+	k := "TODO: FIX ME"
+	if r.H.Date != nil {
+		k = r.H.Date.String()
+	}
+	incomingIK := calcIdempotencyKey(k) // TODO: Maybe improve key value?
 	if tc.IdempotencyKey != nil {                       // PUT on an existing tool call ID
 		if tc.IdempotencyKey != nil && !bytes.Equal(*tc.IdempotencyKey, incomingIK) { // Not a retry
 			return r.Error(http.StatusConflict, "Conflict", "Tool call ID already exists")

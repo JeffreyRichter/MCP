@@ -17,14 +17,14 @@ import (
 
 	"github.com/JeffreyRichter/mcpsvc/config"
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type PhaseManager interface {
 	StartPhaseProcessing(ctx context.Context, tc *toolcalls.ToolCall, phaseExecutionTime time.Duration) error
 }
 
-var GetPhaseManager = sync.OnceValue(func() PhaseManager {
+var GetPhaseManager = sync.OnceValue(func() *PhaseMgr {
 	tn2pp := func(tool string) (toolcalls.ProcessPhaseFunc, error) {
 		switch tool {
 		case "count":
@@ -34,28 +34,31 @@ var GetPhaseManager = sync.OnceValue(func() PhaseManager {
 		}
 	}
 	cfg := config.Get()
-	return must(NewAzureQueueToolCallPhaseMgr(context.Background(), GetToolCallStore(), cfg.AzureStorageQueueURL, tn2pp))
+	o := PhaseMgrConfig{
+		ToolNameToProcessPhaseFunc: tn2pp,
+	}
+	return must(NewPhaseMgr(context.Background(), cfg.AzureStorageQueueURL, o))
 })
 
 // TODO: this belongs on v20250808.httpOperations or at least in v20250808 but can't be there now because
 // the phase manager needs to reference this function at construction; see GetPhaseManager above. Overall
 // this arrangement is awkward because the phase manager is nominally version-independent but in practice
 // needs to know about specific tool calls
-func processPhaseToolCallCount(_ context.Context, tc *toolcalls.ToolCall, _ toolcalls.PhaseProcessor) (*toolcalls.ToolCall, error) {
+func processPhaseToolCallCount(_ context.Context, tc *toolcalls.ToolCall, _ toolcalls.PhaseProcessor) error {
 	phase, err := strconv.Atoi(*tc.Phase)
 	if err != nil {
-		return nil, fmt.Errorf("invalid phase %q", *tc.Phase)
+		return fmt.Errorf("invalid phase %q", *tc.Phase)
 	}
 
 	// simulate doing work
 	time.Sleep(17 * time.Millisecond)
 
 	phase--
-	tc.Phase = si.Ptr(strconv.Itoa(phase))
+	tc.Phase = svrcore.Ptr(strconv.Itoa(phase))
 	// TODO: if we needed data from the client request e.g. CountToolCallRequest here, we'd have to unmarshal it again
 	if phase <= 0 {
-		tc.Status = si.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
 		tc.Result = must(json.Marshal(struct{ N int }{N: 42}))
 	}
-	return tc, nil
+	return nil
 }

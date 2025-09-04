@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/JeffreyRichter/mcpsvc/mcp/toolcalls"
 	"github.com/JeffreyRichter/mcpsvc/resources"
-	si "github.com/JeffreyRichter/serviceinfra"
+	"github.com/JeffreyRichter/svrcore"
 )
 
 type CountToolCallRequest struct {
@@ -31,39 +30,39 @@ type CountToolCallError struct {
 	Overflow bool `json:"overflowcode,omitempty"`
 }
 
-func (ops *httpOperations) createToolCallCount(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
+func (ops *httpOperations) createToolCallCount(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
 	var trequest CountToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
 		return err
 	}
 	tc.Request = must(json.Marshal(trequest))
 
-	tc.Status = si.Ptr(toolcalls.ToolCallStatusRunning)
-	tc.Phase = si.Ptr(strconv.Itoa(trequest.Increments))
-	tc, err := ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusRunning)
+	tc.Phase = svrcore.Ptr(strconv.Itoa(trequest.Increments))
+	err := ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
 	pm := resources.GetPhaseManager()
-	go pm.StartPhaseProcessing(context.TODO(), tc, 5*time.Second)
-	return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	go pm.StartPhaseProcessing(context.TODO(), tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
-func (ops *httpOperations) getToolCallCount(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
-	tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (ops *httpOperations) getToolCallCount(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
 
 // TODO: could all tool calls use the same cancel method?
-func (ops *httpOperations) cancelToolCallCount(ctx context.Context, tc *toolcalls.ToolCall, r *si.ReqRes) error {
-	tc, err := ops.Get(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (ops *httpOperations) cancelToolCallCount(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+	err := ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(&si.PreconditionValues{ETag: tc.ETag}); err != nil {
+	if err = r.ValidatePreconditions(svrcore.ResourceValues{ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
@@ -71,15 +70,15 @@ func (ops *httpOperations) cancelToolCallCount(ctx context.Context, tc *toolcall
 	}
 	switch *tc.Status {
 	case toolcalls.ToolCallStatusSuccess, toolcalls.ToolCallStatusFailed, toolcalls.ToolCallStatusCanceled:
-		return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+		return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 	}
 
 	tc.ElicitationRequest = nil
 	tc.Error = nil
 	tc.Result = nil
-	tc.Status = si.Ptr(toolcalls.ToolCallStatusCanceled)
-	if tc, err = ops.Put(ctx, tc, &toolcalls.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
+	if err = ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
-	return r.WriteResponse(&si.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
+	return r.WriteResponse(&svrcore.ResponseHeader{ETag: tc.ETag}, nil, http.StatusOK, tc)
 }
