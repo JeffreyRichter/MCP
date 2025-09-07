@@ -14,6 +14,9 @@ import (
 	"github.com/JeffreyRichter/svrcore/syncmap"
 )
 
+// Unknown is the type used for unknown fields after unmarshaling to a struct.
+type Unknown []string
+
 // QueryTo "deserializes" a URL's query parameter names/values to an instance of T.
 func unmarshalQueryToStruct(values url.Values, s any) error {
 	return unmarshalMapOfSliceOfStrings(values, s)
@@ -93,35 +96,10 @@ func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]str
 		}
 	}
 
-	/*	structValue := reflect.ValueOf(s).Elem()
-		for jsonfieldName, jsonFieldValue := range jsonObj {
-			i := slices.IndexFunc(fis, func(fi fieldInfo) bool { return fi.jsonName == jsonfieldName })
-			if i == -1 {
-				panic("This shouldn't happen since we already checked above")
-			}
-
-			fieldValue := structValue.FieldByName(fis[i].fieldName)
-			if !fieldValue.CanSet() {
-				continue
-			}
-
-			if fieldValue.Type().Kind() == reflect.Pointer {
-				elemType := fieldValue.Type().Elem()
-				newValue := reflect.New(elemType)
-				newValue.Elem().Set(reflect.ValueOf(jsonFieldValue).Convert(elemType))
-				fieldValue.Set(newValue)
-			} else {
-				fieldValue.Set(reflect.ValueOf(jsonFieldValue).Convert(fieldValue.Type()))
-			}
-		}
-	*/
 	// If struct has an 'Unknown' field of type UnknownFields, set it to the unknown fields
 	reflect.ValueOf(s).Elem().FieldByName("Unknown").Set(reflect.ValueOf(unknownJsonFieldNames))
 	return verifyStructFields(s) // Validate the struct's fields
 }
-
-// Unknown is the type used for unknown fields after unmarshaling to a struct.
-type Unknown []string
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -135,12 +113,11 @@ type Unknown []string
 func verifyStructFields(s any) error {
 	if s == nil {
 		panic("should never get here")
-		//return errors.New("VerifyStructFields: s cannot be nil")
 	}
 	structValue := reflect.ValueOf(s)
 	if structValue.Kind() == reflect.Pointer {
 		if structValue.IsNil() {
-			return nil //errors.New("VerifyStructFields: s cannot be a nil pointer")
+			return nil
 		} else {
 			structValue = structValue.Elem() // Dereference pointer to get struct value
 		}
@@ -358,13 +335,6 @@ func (fi *fieldInfo) verifyStrings(name string, s []string) error {
 	return nil
 }
 
-func must[T any](val T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return val
-}
-
 func tagTo[T int64 | float64 | string | []string | *regexp.Regexp](tag reflect.StructTag, key string, convert func(val string) T) optional[T] {
 	if val, ok := tag.Lookup(key); !ok {
 		return optional[T]{}
@@ -374,6 +344,13 @@ func tagTo[T int64 | float64 | string | []string | *regexp.Regexp](tag reflect.S
 }
 
 func getFieldInfos(structType reflect.Type) []fieldInfo {
+	// dereference returns the underlying type if t is a pointer type, otherwise returns t itself
+	dereference := func(t reflect.Type) reflect.Type {
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		return t
+	}
 	structType = dereference(structType)
 	if structType.Kind() != reflect.Struct {
 		panic("getTypeInfo: structType must be a struct")
@@ -425,10 +402,9 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 
 var typeToFieldInfos = syncmap.Map[reflect.Type, []fieldInfo]{}
 
-// dereference returns the underlying type if t is a pointer type, otherwise returns t itself
-func dereference(t reflect.Type) reflect.Type {
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
+func must[T any](val T, err error) T {
+	if err != nil {
+		panic(err)
 	}
-	return t
+	return val
 }
