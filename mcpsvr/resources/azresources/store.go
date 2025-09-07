@@ -114,12 +114,5 @@ func (tcs *toolCallStore) Delete(ctx context.Context, tc *toolcalls.ToolCall, ac
 	return err
 }
 
-func must[T any](t T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return t
-}
-
 // Blobs are cheap, fast (below link), simple, and offer features we need (like expiry)
 // https://learn.microsoft.com/en-us/azure/architecture/best-practices/data-partitioning-strategies

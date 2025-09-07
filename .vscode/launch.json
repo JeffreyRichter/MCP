@@ -28,7 +28,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}/mcpsvr",
             "buildFlags": [
-                "-tags local goexperiment.jsonv2"
+                "-tags=local,goexperiment.jsonv2"
             ],
             "envFile": "${workspaceFolder}/mcpsvr/.env"
         },
@@ -39,7 +39,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}/mcpsvr",
             "buildFlags": [
-                "-tags=remote goexperiment.jsonv2"
+                "-tags=remote,goexperiment.jsonv2"
             ],
             "envFile": "${workspaceFolder}/mcpsvr/.env"
         },
@@ -50,7 +50,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}/mcpsvr",
             "buildFlags": [
-                "-tags=local remote goexperiment.jsonv2"
+                "-tags=local,remote,goexperiment.jsonv2"
             ],
             "envFile": "${workspaceFolder}/mcpsvr/.env"
         }
