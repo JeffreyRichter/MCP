@@ -16,7 +16,7 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/mcpsvc/integration_tests",
+            "program": "${workspaceFolder}/mcpsvr/integration_tests",
             "buildFlags": [
                 "-tags=goexperiment.jsonv2"
             ],
@@ -26,33 +26,33 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/mcpsvc",
+            "program": "${workspaceFolder}/mcpsvr",
             "buildFlags": [
                 "-tags local goexperiment.jsonv2"
             ],
-            "envFile": "${workspaceFolder}/mcpsvc/.env"
+            "envFile": "${workspaceFolder}/mcpsvr/.env"
         },
         {
             "name": "Remote MCP",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/mcpsvc",
+            "program": "${workspaceFolder}/mcpsvr",
             "buildFlags": [
                 "-tags=remote goexperiment.jsonv2"
             ],
-            "envFile": "${workspaceFolder}/mcpsvc/.env"
+            "envFile": "${workspaceFolder}/mcpsvr/.env"
         },
         {
             "name": "Local & Remote MCP",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/mcpsvc",
+            "program": "${workspaceFolder}/mcpsvr",
             "buildFlags": [
                 "-tags=local remote goexperiment.jsonv2"
             ],
-            "envFile": "${workspaceFolder}/mcpsvc/.env"
+            "envFile": "${workspaceFolder}/mcpsvr/.env"
         }
     ]
 }

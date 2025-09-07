@@ -124,8 +124,8 @@ func startServices(ctx context.Context) error {
 }
 
 func cleanup() {
-	fmt.Println("=========== mcpsvc log ===========")
-	logCmd := exec.Command("docker", "logs", "mcpsvc")
+	fmt.Println("=========== mcpsvr log ===========")
+	logCmd := exec.Command("docker", "logs", "mcpsvr")
 	logCmd.Stdout = os.Stdout
 	logCmd.Stderr = os.Stderr
 	logCmd.WaitDelay = time.Second

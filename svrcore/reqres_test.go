@@ -91,7 +91,7 @@ func TestValidatePreconditions(t *testing.T) {
 		expectedCode   int
 	}{
 		// Error cases: resource doesn't support headers
-		/*{
+		{
 			name:   "resource doesn't support if-match",
 			method: http.MethodGet,
 			headers: map[string]string{
@@ -116,7 +116,7 @@ func TestValidatePreconditions(t *testing.T) {
 				LastModified:        Ptr(baseTime),
 			},
 			expectedCode: http.StatusBadRequest,
-		},*/
+		},
 		{
 			name:   "resource doesn't support if-modified-since",
 			method: http.MethodGet,

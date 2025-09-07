@@ -354,7 +354,7 @@ func (m Model) startPathExec(path string) tea.Cmd {
 			return pathExecResultMsg{err: err}
 		}
 		cmd.Stderr = cmd.Stdout
-		cmd.Env = []string{"MCPSVC_LOCAL=true"}
+		cmd.Env = []string{"MCPSVR_LOCAL=true"}
 		if err := cmd.Start(); err != nil {
 			return pathExecResultMsg{err: err}
 		}

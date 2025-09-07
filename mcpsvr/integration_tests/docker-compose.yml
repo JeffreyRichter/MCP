@@ -8,7 +8,7 @@ services:
       - AZURITE_ACCOUNTS=testaccount:eyJ0
     command: "azurite --LocalPersistence --extentMemoryLimit 32 --blobHost 0.0.0.0 --blobPort 10000"
 
-  mcpsvc:
+  mcpsvr:
     build:
       context: ../../
       dockerfile: Dockerfile
@@ -16,9 +16,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - MCPSVC_AZURE_BLOB_URL=http://azurite:10000/testaccount
-      - MCPSVC_AZURE_QUEUE_URL=http://azurite:10000/testaccount
-      - MCPSVC_AZURITE_ACCOUNT=testaccount
-      - MCPSVC_AZURITE_KEY=eyJ0
+      - MCPSVR_AZURE_BLOB_URL=http://azurite:10000/testaccount
+      - MCPSVR_AZURE_QUEUE_URL=http://azurite:10000/testaccount
+      - MCPSVR_AZURITE_ACCOUNT=testaccount
+      - MCPSVR_AZURITE_KEY=eyJ0
     depends_on:
       - azurite

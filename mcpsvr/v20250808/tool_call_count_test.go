@@ -15,8 +15,8 @@ import (
 
 func TestToolCallCount(t *testing.T) {
 	t.Skip("finish the feature then write this test; need in-memory queue implementation")
-	os.Setenv("MCPSVC_AZURE_STORAGE_QUEUE_URL", "https://samfzqhbrdlxlsm.queue.core.windows.net/mcpsvc")
-	os.Setenv("MCPSVC_AZURE_STORAGE_BLOB_URL", "https://samfzqhbrdlxlsm.blob.core.windows.net/")
+	os.Setenv("MCPSVR_AZURE_QUEUE_URL", "https://samfzqhbrdlxlsm.queue.core.windows.net/mcpsvr")
+	os.Setenv("MCPSVR_AZURE_BLOB_URL", "https://samfzqhbrdlxlsm.blob.core.windows.net/")
 	client := newTestClient(t)
 	resp := client.Put("/mcp/tools/count/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"start":40,"increments":2}`))
 	require.Equal(t, http.StatusOK, resp.StatusCode)
