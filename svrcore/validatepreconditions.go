@@ -11,7 +11,7 @@ func (ac AllowedConditionals) Check(match AllowedConditionals) bool {
 	return ac&match != 0
 }
 
-// AllowedConditionals flags indicate which conditional headers are supported by a resource.
+// AllowedConditionals flags indicate which conditional headers are supported by a resource/operation.
 const (
 	AllowedConditionalsNone  AllowedConditionals = 0
 	AllowedConditionalsMatch AllowedConditionals = 1 << iota
@@ -36,15 +36,15 @@ type AccessConditions struct {
 
 // ValidatePreconditions checks a resource's current ETag/LastModified values against a request's
 // If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, ValidatePreconditions returns nil; else,
-// it returns an appropriate ServiceError (BadRequest, NotModified [for a safe method],
+// it returns an appropriate ServierError (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]).
 func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions) error {
 	if !rv.AllowedConditionals.Check(AllowedConditionalsMatch) && (c.IfMatch != nil || c.IfNoneMatch != nil) {
-		return NewServiceError(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
+		return NewServerError(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
 	}
 
 	if !rv.AllowedConditionals.Check(AllowedConditionalsModified) && (c.IfModifiedSince != nil || c.IfUnmodifiedSince != nil) {
-		return NewServiceError(http.StatusBadRequest, "", "if-modified-since and if-unmodified-since headers not supported by this resource")
+		return NewServerError(http.StatusBadRequest, "", "if-modified-since and if-unmodified-since headers not supported by this resource")
 	}
 
 	// Method doesn't alter resource: https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP
@@ -61,11 +61,11 @@ func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions)
 			// Assuming the resource exists since we have an ETag, so this is a match.
 			// The only way this would fail is if rv.ETag was empty.
 			if rv.ETag == nil {
-				return NewServiceError(http.StatusPreconditionFailed, "Resource does not exist", "")
+				return NewServerError(http.StatusPreconditionFailed, "Resource does not exist", "")
 			}
 		} else {
 			if rv.ETag == nil || !c.IfMatch.Equals(*rv.ETag) {
-				return NewServiceError(http.StatusPreconditionFailed, "Resource etag doesn't match", "")
+				return NewServerError(http.StatusPreconditionFailed, "Resource etag doesn't match", "")
 			}
 		}
 	}
@@ -74,7 +74,7 @@ func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions)
 	// If-match is a stronger comparison than if-unmodifed-since
 	if c.IfMatch == nil && c.IfUnmodifiedSince != nil && rv.LastModified != nil {
 		if rv.LastModified.After(*c.IfUnmodifiedSince) {
-			return NewServiceError(statusCode, "Resource was modified since", "")
+			return NewServerError(statusCode, "Resource was modified since", "")
 		}
 	}
 
@@ -84,11 +84,11 @@ func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions)
 		if *c.IfNoneMatch == ETagAny {
 			// If "*" is used, the request fails if the resource exists.
 			if rv.ETag != nil {
-				return NewServiceError(statusCode, "Resource exists", "")
+				return NewServerError(statusCode, "Resource exists", "")
 			}
 		} else {
 			if rv.ETag != nil && c.IfNoneMatch.Equals(*rv.ETag) {
-				return NewServiceError(statusCode, "Resource etag matches", "")
+				return NewServerError(statusCode, "Resource etag matches", "")
 			}
 		}
 	}
@@ -97,7 +97,7 @@ func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions)
 	// 200 if last-modified later than if-modified-since etag; else 304 & last-modified response header
 	if c.IfNoneMatch == nil && methodIsSafe && c.IfModifiedSince != nil && rv.LastModified != nil {
 		if !rv.LastModified.After(*c.IfModifiedSince) {
-			return NewServiceError(statusCode, "Resource not modified since", "")
+			return NewServerError(statusCode, "Resource not modified since", "")
 		}
 	}
 

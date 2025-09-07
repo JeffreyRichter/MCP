@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"errors"
+	"io"
 	"net/http"
 	"reflect"
 	"slices"
@@ -14,23 +15,39 @@ import (
 
 // ReqRes encapsulates the incoming http.Requests and the outgoing http.ResponseWriter and is passed through the set of policies.
 type ReqRes struct {
+	// ID is a unique ID for this ReqRes (useful for logging, etc.)
+	ID int64 // TODO: change to guid?
 	// R identifies the incoming HTTP request
 	R *http.Request
 	// H identifies the deserialized standard HTTP headers
 	H *RequestHeader
-	// RW is the http.ResponseWriter used to write the HTTP response; it implements io.Writer
+	// RW is the http.ResponseWriter used to write the HTTP response; it implements io.Writer.
+	// Prefer using [ReqRes.WriteError], [ReqRes.WriteServerError], or [ReqRes.WriteSuccess] instead of using RW directly.
 	RW http.ResponseWriter
 	p  []Policy // The slice of policies to execute for this request
 }
 
-// NewReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
-func NewReqRes(p []Policy, r *http.Request, rw http.ResponseWriter) *ReqRes {
-	var h RequestHeader
-	err := UnmarshalHeaderToStruct(r.Header, &h) // Deserialize standard HTTP request header
-	if err != nil {
-		panic(err)
+// responseWriterWrapper is a custom http.ResponseWriter that captures the status code.
+type responseWriterWrapper struct {
+	http.ResponseWriter
+	statusCode          int
+	numWriteHeaderCalls int // When done request processing, this must be 1 or an error occurred
+}
+
+// WriteHeader overwrites http.ResponseWriter's WriteHeader method in order to capture the status code.
+func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
+	rww.statusCode = statusCode
+	rww.numWriteHeaderCalls++
+	rww.ResponseWriter.WriteHeader(statusCode)
+}
+
+// newReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
+func newReqRes(p []Policy, r *http.Request, rw http.ResponseWriter) (*ReqRes, error) {
+	rr := &ReqRes{ID: time.Now().Unix(), p: p, R: r, H: &RequestHeader{}, RW: &responseWriterWrapper{ResponseWriter: rw}}
+	if err := unmarshalHeaderToStruct(r.Header, rr.H); err != nil { // Deserialize standard HTTP request headers into this struct
+		return nil, rr.WriteError(http.StatusBadRequest, nil, nil, "UnparsableHeaders", "The request has some invalid headers: %s", err.Error())
 	}
-	return &ReqRes{p: p, R: r, H: &h, RW: rw}
+	return rr, nil
 }
 
 // Next sends the ReqRes to the next policy.
@@ -40,128 +57,117 @@ func (r *ReqRes) Next(ctx context.Context) error {
 	return nextPolicy(ctx, r)
 }
 
-// Error sets the HTTP response to the specified HTTP status code and Service error.
-// The caller should ensure no further writes are done to the http.ResponseWriter.
-func (r *ReqRes) Error(statusCode int, errorCode, messageFmt string, a ...any) error {
-	return r.WriteError(NewServiceError(statusCode, errorCode, messageFmt, a...))
+// WriteError sets the HTTP response to the specified HTTP status code, response headers, custom headers
+// (a struct with fields/values or nil), errorCode, and message. rh and customHeader must be pointer-to-structures
+// which contain only the following field types:
+// *string, *int, *int8, *int16, *int32, *int64, *float32, *float64, *time.Time, *svrcore.ETag, []string
+// WriteError logs any write errors and returns a ServerError.
+// Callers should ensure no further writes are done to the ReqRes or its RW.
+// For more control over a response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
+func (r *ReqRes) WriteError(statusCode int, rh *ResponseHeader, customHeader any, errorCode, messageFmt string, a ...any) error {
+	return r.WriteServerError(NewServerError(statusCode, errorCode, messageFmt, a...), rh, customHeader)
 }
 
-func (r *ReqRes) WriteError(se *ServiceError) error {
-	return r.WriteResponse(&ResponseHeader{
-		XMSErrorCode: &se.ErrorCode,
-		ContentType:  Ptr("application/json"),
-	}, nil, se.StatusCode, se)
+// WriteServerError sets the HTTP response to the specified ServerError (with StatusCode), response headers, and custom headers
+// (a struct with fields/values or nil). rh and customHeader must be pointer-to-structures which contain only the
+// following field types:
+// *string, *int, *int8, *int16, *int32, *int64, *float32, *float64, *time.Time, *svrcore.ETag, []string
+// WriteServerError logs any write errors and returns the passed-in ServerError (for convenience).
+// Callers should ensure no further writes are done to the ReqRes or its RW.
+// For more control over a response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
+func (r *ReqRes) WriteServerError(se *ServerError, rh *ResponseHeader, customHeader any) error {
+	// Azure only: rh.XMSErrorCode = &se.ErrorCode
+	r.WriteSuccess(se.StatusCode, rh, customHeader, se.Error())
+	return se
 }
 
-// UnmarshalQuery unmarshals the request's URL query parameters into the specified struct. If any query parameters
-// are unrecognized, it writes an appropriate ServiceError (BadRequest) to the HTTP response and returns non-nil.
-func (r *ReqRes) UnmarshalQuery(s any) error {
-	values := r.R.URL.Query() // Each call to Query re-parses so we CAN mutate values
-	err := UnmarshalQueryToStruct(values, s)
-	if err != nil {
-		return err
-	}
-	uf := reflect.ValueOf(s).FieldByName("Unknown").Interface().(Unknown)
-	if len(uf) > 0 { // if any unrecognized query parameters, 400-BadRequest
-		return r.Error(http.StatusBadRequest, "",
-			"Unrecognized query parameters: %s", strings.Join(uf, ", "))
-	}
-	return nil
-}
-
-// UnmarshalBody unmarshals the request's body into the specified struct. If the JSON is illformed, it writes
-// an appropriate ServiceError (BadRequest) to the HTTP response and returns non-nil.
-func (r *ReqRes) UnmarshalBody(s any) error {
-	if err := json.UnmarshalRead(r.R.Body, &s); err != nil {
-		// Inability to unmarshal the input suggests a client-side problem.
-		return r.Error(http.StatusBadRequest, "Invalid JSON body", "%s", err.Error())
-	}
-	/*
-		if len(jsonObj) > 0 { // If unknown fields remain, set struct's Unknown field & 400-BadRequest
-			uf := reflect.ValueOf(s).FieldByName("Unknown").Interface().(unmarshaltostruct.Unknown)
-			err = r.Error(http.StatusBadRequest, "",
-				"JSON object has unknown fields: %s", strings.Join(uf, ", "))
-		}
-		return err
-	*/
-	return nil
-}
-
-// WriteResponse completes an HTTP response by setting HTTP ResponseHeader, any
-// customHeader (a struct with fields/values or nil if none), HTTP status code, and body structure (pass nil if none).
+// WriteSuccess completes an HTTP response using the passed-in statusCode, response headers, customer headers (a struct
+// with fields/values or nil), and bodyStruct marshaled to JSON (if not nil).
+// rh and customHeader must be pointer-to-structures which contain only the following field types:
+// *string, *int, *int8, *int16, *int32, *int64, *float32, *float64, *time.Time, *svrcore.ETag, []string
+// If an error occurs, WriteSuccess logs it and always returns nil (for convenience).
 // For more control over the response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
-func (r *ReqRes) WriteResponse(rh *ResponseHeader, customHeader any, statusCode int, bodyStruct any) error { // customHeader must be *struct
+func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader any, bodyStruct any) error { // customHeader must be *struct
+	if rh == nil {
+		rh = &ResponseHeader{}
+	}
 	body, err := []byte{}, error(nil)
 	if bodyStruct != nil {
 		body, err = json.Marshal(bodyStruct)
 		if err != nil {
-			return err
+			// TODO: Log error
+			return nil
 		}
 		// If bodyStruct passed, automatically set these response headers
 		rh.ContentLength, rh.ContentType = Ptr(len(body)), Ptr("application/json")
 	}
-	rwh := r.RW.Header()
-	fields2Header := func(h any) {
-		v := reflect.ValueOf(h).Elem()
-		for i := range v.NumField() {
+	fields2Header := func(rwh http.Header, ptrToStruct any) {
+		if ptrToStruct == nil {
+			return // Skip if nil
+		}
+		v := reflect.ValueOf(ptrToStruct).Elem() // Dereference *struct to get struct value
+		// Fields can be *string, *int, *int8, *int16, *int32, *int64, *float32, *float64, *time.Time, *svrcore.ETag, []string
+		for i := range v.NumField() { // Iterate over the struct's fields
 			f := v.Field(i)
-			jsonFieldName := strings.Split(reflect.TypeOf(h).Elem().Field(i).Tag.Get("json"), ",")[0]
-			switch f.Kind() {
+			jsonFieldName := strings.Split(reflect.TypeOf(ptrToStruct).Elem().Field(i).Tag.Get("json"), ",")[0]
+			switch f.Kind() { // Field type kind
 			case reflect.Pointer:
 				if f.IsNil() {
-					continue // skip any nil fields
+					continue // Skip *fields with nil values
 				}
-				switch f.Elem().Kind() {
+				switch f = f.Elem(); f.Kind() { // Dereference *value to get value
 				case reflect.String:
-					rwh[jsonFieldName] = []string{f.Elem().String()}
+					rwh.Set(jsonFieldName, f.String())
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					rwh[jsonFieldName] = []string{strconv.Itoa(int(f.Elem().Int()))}
+					rwh.Set(jsonFieldName, strconv.Itoa(int(f.Int())))
 				case reflect.Float32, reflect.Float64:
-					rwh[jsonFieldName] = []string{strconv.FormatFloat(f.Elem().Float(), 'b', 4, 64)} // TODO:fix
+					rwh.Set(jsonFieldName, strconv.FormatFloat(f.Float(), 'b', 4, 64)) // TODO:fix
 				case reflect.Struct:
 					switch v.Type() {
 					case reflect.TypeFor[time.Time]():
-						rwh[jsonFieldName] = []string{f.Elem().Interface().(time.Time).Format(http.TimeFormat)}
-						//case reflect.TypeFor[etag.ETag]():
-						//	rwh[jsonFieldName] = []string{f.Elem().Interface().(etag.ETag).String()}
+						rwh.Set(jsonFieldName, f.Interface().(time.Time).Format(http.TimeFormat))
+					case reflect.TypeFor[ETag]():
+						rwh.Set(jsonFieldName, f.Interface().(ETag).String())
 					}
 				default:
 					panic("unsupported field type")
 				}
 			case reflect.Slice:
-				if f.Interface().([]string) == nil {
-					continue // skip any nil slices
+				if f.Elem().Kind() != reflect.String {
+					panic("unsupported slice field type")
 				}
-				rwh[jsonFieldName] = v.Interface().([]string) // Assumes slice of "string"
+				for _, s := range f.Interface().([]string) {
+					rwh.Add(jsonFieldName, s)
+				}
 			default:
 				panic("unsupported field type")
 			}
 		}
-
 	}
-	if rh != nil {
-		fields2Header(rh)
-	}
-	if customHeader != nil {
-		fields2Header(customHeader)
-	}
+	fields2Header(r.RW.Header(), rh)
+	fields2Header(r.RW.Header(), customHeader)
 	r.RW.WriteHeader(statusCode)
 	if _, err = r.RW.Write(body); errors.Is(err, http.ErrBodyNotAllowed) {
-		// e.g. request failed a precondition so we're responding 304 and tried to add a JSON error message to the body
-		err = nil
+		// See RFC 7230, section 3.3. statusCodes 1xx/204/304 must not have a body
+		// TODO: Log error
 	}
-	return err
+	return nil
+}
+
+func (rr *ReqRes) StatusCode() int { return rr.RW.(*responseWriterWrapper).statusCode }
+
+func (rr *ReqRes) numWriteHeaderCalls() int {
+	return rr.RW.(*responseWriterWrapper).numWriteHeaderCalls
 }
 
 // https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
-type RequestHeader struct { // 'json' tag value MUST be lowercase
-	Unknown       Unknown    `json:"-"` // Any unrecognized header names go here
-	Date          *time.Time `json:"date" time:"RFC1123"`
-	Authorization *string    `json:"authorization"`
-	UserAgent     *string    `json:"user-agent"`
-	//CacheControl  *string          `json:"cache-control"`
-	//Expect        *string          `json:"expect"`
+type RequestHeader struct { // HTTP/2 requires 'json' field names be lowercase
+	Unknown        Unknown    `json:"-"` // Any unrecognized header names go here
+	Date           *time.Time `json:"date" time:"RFC1123"`
+	Authorization  *string    `json:"authorization"`
+	UserAgent      *string    `json:"user-agent"`
+	IdempotencyKey *string    `json:"idempotency-key"` // https://www.ietf.org/archive/id/draft-ietf-httpapi-idempotency-key-header-01.html
 
 	// Message Body Information
 	ContentLength   *int64  `json:"content-length"`
@@ -171,44 +177,36 @@ type RequestHeader struct { // 'json' tag value MUST be lowercase
 	// Conditionals
 	IfMatch           *ETag      `json:"if-match"`
 	IfNoneMatch       *ETag      `json:"if-none-match"`
-	IfModifiedSince   *time.Time `json:"if-modified-since" time:"RFC1123"`
-	IfUnmodifiedSince *time.Time `json:"if-unmodified-since" time:"RFC1123"`
-	//IfRange           *ETag      `json:"if-range"`
+	IfModifiedSince   *time.Time `json:"if-modified-since" format:"RFC1123"`
+	IfUnmodifiedSince *time.Time `json:"if-unmodified-since" format:"RFC1123"`
 
 	// Content Negotiation
-	Accept         *string `json:"accept"`          // TODO: slice
-	AcceptCharset  *string `json:"accept-charset"`  // TODO: slice
-	AcceptEncoding *string `json:"accept-encoding"` // TODO: slice
-	AcceptLanguage *string `json:"accept-language"` // TODO: slice
-
-	// Range Requests
-	//Range *string `json:"range"`
+	Accept         []string `json:"accept"`
+	AcceptCharset  []string `json:"accept-charset"`
+	AcceptEncoding []string `json:"accept-encoding"`
+	AcceptLanguage []string `json:"accept-language"`
+	AcceptRanges   *string  `json:"accept-ranges"`
 }
 
-type ResponseHeader struct { // 'json' tag value MUST be lowercase
-	XMSErrorCode     *string `json:"x-ms-error-code"`
-	AzureDeprecating *string `json:"azure-deprecating"` // https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md#deprecating-behavior-notification
-
-	// Message Body Information
-	// TODO: these are unused
-	ContentLength   *int    `json:"content-length"`
-	ContentType     *string `json:"content-type"`
-	ContentEncoding *string `json:"content-encoding"`
-	//ContentRange    *string `json:"content-range"`
-	//ContentDisposition *string `json:"content-disposition"`
-
+type ResponseHeader struct { // HTTP/2 requires 'json' field names be lowercase
 	// Versioning & Conditionals
 	ETag         *ETag      `json:"etag"`
-	LastModified *time.Time `json:"last-modified" time:"RFC1123"`
+	LastModified *time.Time `json:"last-modified" format:"RFC1123"`
+
+	// Message Body Information
+	ContentLength      *int    `json:"content-length"`
+	ContentType        *string `json:"content-type"`
+	ContentEncoding    *string `json:"content-encoding"`
+	ContentRange       *string `json:"content-range"`
+	ContentDisposition *string `json:"content-disposition"`
 
 	// Response Context
-	//Allow      *string `json:"allow"`       // TODO: slice
 	RetryAfter *int32 `json:"retry-after"` // Seconds
 
 	// Caching headers
-	//Expires *time.Time `json:"expires" time:"RFC1123"`
+	Expires *time.Time `json:"expires" time:"RFC1123"`
 
-	/* CORS
+	/* CORS:
 	AccessControlAllowCredentials *string `json:"access-control-allow-credentials"`
 	AccessControlAllowHeaders     *string `json:"access-control-allow-headers"`
 	AccessControlAllowMethods     *string `json:"access-control-allow-methods"`  // TODO: slice
@@ -220,6 +218,8 @@ type ResponseHeader struct { // 'json' tag value MUST be lowercase
 	//Origin                        *string `json:"origin"`
 	//TimingAllowOrigin             *string `json:"timing-allow-origin"` // TODO: slice
 	*/
+	// Azure-only: XMSErrorCode     *string `json:"x-ms-error-code"`
+	// Azure-only: AzureDeprecating *string `json:"azure-deprecating"` // https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md#deprecating-behavior-notification
 }
 
 // ValidHeader are static values indicating the header values
@@ -246,45 +246,55 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 	// **** CONTENT PROCESSING
 	// Content-Length CAN always be specified and, if so, must not be > MaxContentLength
 	if r.H.ContentLength != nil && *r.H.ContentLength > vh.MaxContentLength {
-		return r.Error(http.StatusRequestEntityTooLarge, "Content body too big", "content-length was %d but must be <= %d", *r.H.ContentLength, vh.MaxContentLength)
+		return r.WriteError(http.StatusRequestEntityTooLarge, nil, nil, "Content body too big", "content-length was %d but must be <= %d", *r.H.ContentLength, vh.MaxContentLength)
 	}
 
 	if vh.MaxContentLength == 0 { // No content expected
 		if r.H.ContentType != nil || r.H.ContentEncoding != nil {
-			return r.Error(http.StatusBadRequest, "No content headers allowed", "") // No content is allowed (except for Content-Length)
+			return r.WriteError(http.StatusBadRequest, nil, nil, "No content headers allowed", "") // No content is allowed (except for Content-Length)
 		}
 	} else { // Content required
 		if r.H.ContentLength == nil {
-			return r.Error(http.StatusLengthRequired, "content-length header required", "")
+			return r.WriteError(http.StatusLengthRequired, nil, nil, "content-length header required", "")
 		}
 		if r.H.ContentType == nil {
-			return r.Error(http.StatusUnsupportedMediaType, "content-type header required", "")
+			return r.WriteError(http.StatusUnsupportedMediaType, nil, nil, "content-type header required", "")
 		}
 		if !slices.Contains(vh.ContentTypes, *r.H.ContentType) {
-			return r.Error(http.StatusUnsupportedMediaType, "Unsupported content-type", "content-type must be one of: %s", strings.Join(vh.ContentTypes, ", "))
+			return r.WriteError(http.StatusUnsupportedMediaType, nil, nil, "Unsupported content-type", "content-type must be one of: %s", strings.Join(vh.ContentTypes, ", "))
 		}
 		if r.H.ContentEncoding != nil && !slices.Contains(vh.ContentEncodings, *r.H.ContentEncoding) {
-			return r.Error(http.StatusUnsupportedMediaType, "Unsupported content-encoding", "content-encoding must be one of: %s", strings.Join(vh.ContentEncodings, ", "))
+			return r.WriteError(http.StatusUnsupportedMediaType, nil, nil, "Unsupported content-encoding", "content-encoding must be one of: %s", strings.Join(vh.ContentEncodings, ", "))
 		}
-		r.R.Body = http.MaxBytesReader(r.RW, r.R.Body, vh.MaxContentLength) // Limit reading body to MaxContentLength
+		r.R.Body = http.MaxBytesReader(r.RW, r.R.Body, *r.H.ContentLength) // Limit reading body to Content-Length
 	}
 
 	if vh.PreconditionRequired && r.H.IfMatch == nil && r.H.IfNoneMatch == nil && r.H.IfModifiedSince == nil && r.H.IfUnmodifiedSince == nil {
-		return r.Error(http.StatusPreconditionRequired, "Conditional header required", "")
+		return r.WriteError(http.StatusPreconditionRequired, nil, nil, "Conditional header required", "")
 	}
 
 	// ***** ACCEPT PROCESSING
-	if vh.Accept != nil && (r.H == nil || r.H.Accept == nil || !slices.Contains(vh.Accept, *r.H.Accept)) {
+	containsAny := func(s1, s2 []string) bool {
+		for _, v1 := range s1 {
+			for _, v2 := range s2 {
+				if v1 == v2 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if vh.Accept != nil && (r.H == nil || r.H.Accept == nil || !containsAny(vh.Accept, r.H.Accept)) {
 		// Also check accept language, accept charset, accept encoding - in this order? If any fail, 406-Not Acceptable
-		return r.Error(http.StatusNotAcceptable, "Unsupported Accept", "accept must be one of: %s", strings.Join(vh.Accept, ", "))
+		return r.WriteError(http.StatusNotAcceptable, nil, nil, "Unsupported Accept", "accept must be one of: %s", strings.Join(vh.Accept, ", "))
 	}
 	return nil
 }
 
 // ValidatePreconditions checks the passed-in ETag & LastModified (for the current resource) against the request's
 // If(None)Match & Id(Un)ModifiedSince headers. If preconditions pass, ValidatePreconditions returns nil; else, it
-// writes an appropriate ServiceError to the HTTP response (BadRequest, NotModified [for a safe method],
-// PreconditionFailed [for an unsafe method]) and return non-nil.
+// writes an appropriate ServerError to the HTTP response (BadRequest, NotModified [for a safe method],
+// PreconditionFailed [for an unsafe method]) and returns the *ServerError.
 func (r *ReqRes) ValidatePreconditions(rv ResourceValues) error {
 	se := ValidatePreconditions(rv, r.R.Method, AccessConditions{
 		IfMatch:           r.H.IfMatch,
@@ -293,7 +303,35 @@ func (r *ReqRes) ValidatePreconditions(rv ResourceValues) error {
 		IfUnmodifiedSince: r.H.IfUnmodifiedSince,
 	})
 	if se != nil {
-		_ = r.WriteError(se.(*ServiceError)) // TODO: Log & swallow error
+		return r.WriteServerError(se.(*ServerError), nil, nil)
 	}
 	return se
+}
+
+// UnmarshalQuery unmarshals the request's URL query parameters into the specified struct. If any query parameters
+// are unrecognized, it writes an appropriate ServerError (BadRequest) to the HTTP response and returns the *ServerError.
+func (r *ReqRes) UnmarshalQuery(s any) error {
+	values := r.R.URL.Query() // Each call to Query re-parses so we CAN mutate values
+	if err := unmarshalQueryToStruct(values, s); err != nil {
+		return r.WriteError(http.StatusBadRequest, nil, nil, "Invalid query parameters", "%s", err.Error())
+	}
+	uf := reflect.ValueOf(s).FieldByName("Unknown").Interface().(Unknown)
+	if len(uf) > 0 { // if any unrecognized query parameters, 400-BadRequest
+		return r.WriteError(http.StatusBadRequest, nil, nil, "", "Unrecognized query parameters: %s", strings.Join(uf, ", "))
+	}
+	return nil
+}
+
+// UnmarshalBody unmarshals the request's body into the specified struct. If the JSON is ill-formed, it writes
+// an appropriate ServerError (BadRequest) to the HTTP response and returns the *ServerError.
+func (r *ReqRes) UnmarshalBody(s any) error {
+	body, err := io.ReadAll(r.R.Body) // Ensure body is fully read
+	defer r.R.Body.Close()
+	if err != nil {
+		return r.WriteError(http.StatusBadRequest, nil, nil, "Unable to read full body", "%s", err.Error())
+	}
+	if err := json.Unmarshal(body, &s); err != nil { // NOTE: jsonv2 errors if unrecognized fields are found
+		return r.WriteError(http.StatusBadRequest, nil, nil, "Invalid JSON body", "%s", err.Error())
+	}
+	return nil
 }

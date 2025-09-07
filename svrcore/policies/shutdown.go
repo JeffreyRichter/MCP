@@ -31,9 +31,9 @@ func (sm *ShutdownMgr) ShuttingDown() bool { return sm.shuttingDown.Load() }
 func (sm *ShutdownMgr) HealthProbe(ctx context.Context, r *svrcore.ReqRes) error {
 	// https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-custom-probe-overview
 	if sm.ShuttingDown() {
-		return r.Error(http.StatusServiceUnavailable, "Service instance shutting down", "This service instance is shutting down. Please try again.")
+		return r.WriteError(http.StatusServiceUnavailable, nil, nil, "Service instance shutting down", "This service instance is shutting down. Please try again.")
 	}
-	return r.WriteResponse(nil, nil, http.StatusOK, nil)
+	return r.WriteSuccess(http.StatusOK, nil, nil, nil)
 }
 
 // ShutdownMgrConfig holds the configuration for the shutdown policy.
@@ -49,10 +49,7 @@ type ShutdownMgrConfig struct {
 // NewShutdownMgr creates a new ShutdownMgr using the passed-in ShutdownConfig.
 // You can set http.Serve's BaseContext to `func(_ net.Listener) context.Context { return shutdownCtx }`.
 func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
-	sm := &ShutdownMgr{
-		shuttingDown:     atomic.Bool{},
-		inflightRequests: sync.WaitGroup{},
-	}
+	sm := &ShutdownMgr{shuttingDown: atomic.Bool{}, inflightRequests: sync.WaitGroup{}}
 	sm.Context, sm.ctxCancel = context.WithCancelCause(context.Background())
 
 	go func() {
@@ -85,7 +82,7 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 func (sm *ShutdownMgr) NewPolicy() svrcore.Policy {
 	return func(ctx context.Context, r *svrcore.ReqRes) error {
 		if sm.ShuttingDown() {
-			return r.Error(http.StatusServiceUnavailable, "Service instance shutting down", "This service instance is shutting down. Please try again.")
+			return r.WriteError(http.StatusServiceUnavailable, nil, nil, "Server unavailable", "This server instance is shutting down. Please try again.")
 		}
 		sm.inflightRequests.Add(1) // Add 1 to wait group whenever a new request comes into the service
 		defer sm.inflightRequests.Done()

@@ -1,9 +1,7 @@
 package svrcore
 
 import (
-	"errors"
 	"fmt"
-	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -17,12 +15,12 @@ import (
 )
 
 // QueryTo "deserializes" a URL's query parameter names/values to an instance of T.
-func UnmarshalQueryToStruct(values url.Values, s any) error {
+func unmarshalQueryToStruct(values url.Values, s any) error {
 	return unmarshalMapOfSliceOfStrings(values, s)
 }
 
-// UnmarshalHeaderToStruct "deserializes" a URL's header keys/values to an instance of T.
-func UnmarshalHeaderToStruct(header http.Header, s any) error {
+// unmarshalHeaderToStruct "deserializes" an http.Header's keys/values to an instance of s (passed-by-pointer).
+func unmarshalHeaderToStruct(header http.Header, s any) error {
 	// Copy header to h to avoid mutating header & lowercasing all header keys
 	h := map[string][]string{}
 	for k, val := range header {
@@ -31,85 +29,95 @@ func UnmarshalHeaderToStruct(header http.Header, s any) error {
 	return unmarshalMapOfSliceOfStrings(h, s)
 }
 
-// mapOfSliceOfStrings unmarshals Headers & QueryParameters. If T has an
-// "Unknown" field of type Unknown, this functions sets it
-func unmarshalMapOfSliceOfStrings(values map[string][]string, s any) error {
-	uf := Unknown{}
-	values = maps.Clone(values) // Don't modify passed-in values
-	o := map[string]any{}
+// mapOfSliceOfStrings "deserializes" a map[string][]string to an instance of s (a *struct).
+// If *s has an "Unknown" field of type Unknown ([]string), this function put unrecognized keys in it.
+func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]string, s any) error {
+	setStructField := func(s any, fi fieldInfo, jsonFieldValue any) {
+		structValue := reflect.ValueOf(s).Elem()            // Structure's *T --> T
+		fieldValue := structValue.FieldByName(fi.fieldName) // Field structure's fieldName's value
+		// if !fieldValue.CanSet() { return }
+		if fieldValue.Type().Kind() == reflect.Pointer {
+			elemType := fieldValue.Type().Elem() // Get field's type (without the pointer)
+			newValue := reflect.New(elemType)    // Createa a new instance of the field's type
+			newValue.Elem().Set(reflect.ValueOf(jsonFieldValue).Convert(elemType))
+			fieldValue.Set(newValue) // Set the field's new value
+		} else {
+			fieldValue.Set(reflect.ValueOf(jsonFieldValue).Convert(fieldValue.Type()))
+		}
+	}
+
+	unknownJsonFieldNames := Unknown{}
 	fis := getFieldInfos(reflect.TypeOf(s))
-	for k, val := range values {
-		i := slices.IndexFunc(fis, func(fi fieldInfo) bool { return fi.name == k })
-		if i == -1 { // Unknown field
-			uf = append(uf, k)
+	for inputJsonFieldName, inputJsonFieldSlice := range jsonFieldNameToJsonFieldSlice {
+		// Lookup the fieldInfo for this JSON field name
+		i := slices.IndexFunc(fis, func(fi fieldInfo) bool { return fi.jsonName == inputJsonFieldName })
+		if i == -1 { // Unknown JSON field name
+			unknownJsonFieldNames = append(unknownJsonFieldNames, inputJsonFieldName)
 			continue
 		}
 
-		if len(val) > 1 {
-			panic("length of value slice >1")
-		}
-		// Convert string value to JSON type corrsponding to struct's field type
-		switch fis[i].kind {
-		case reflect.Bool:
-			o[k] = val[0] == "true"
+		// Based on the structure's type for this JSON field name, convert inputJsonFieldSlice to an instance of the corresponding structure field type
+		switch fis[i].fieldType {
+		case reflect.TypeFor[*bool]():
+			setStructField(s, fis[i], inputJsonFieldSlice[0] == "true")
 
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Float32, reflect.Float64:
-			if n, err := strconv.ParseFloat(val[0], 64); err != nil {
-				return err
+		case reflect.TypeFor[*float64](), reflect.TypeFor[*float32](),
+			reflect.TypeFor[*int](), reflect.TypeFor[*int8](), reflect.TypeFor[*int16](), reflect.TypeFor[*int32](), reflect.TypeFor[*int64]():
+			// All JSON numbers are float64; JSON unmarshal() will convert the float64 to the right struct field number type
+			setStructField(s, fis[i], must(strconv.ParseFloat(inputJsonFieldSlice[0], 64)))
+
+		case reflect.TypeFor[*string]():
+			setStructField(s, fis[i], inputJsonFieldSlice[0])
+
+		case reflect.TypeFor[*[]string]():
+			setStructField(s, fis[i], inputJsonFieldSlice)
+
+		case reflect.TypeFor[[]string]():
+			setStructField(s, fis[i], inputJsonFieldSlice)
+
+		case reflect.TypeFor[*time.Time]():
+			if !fis[i].format.isSet {
+				panic(fmt.Sprintf("Struct time.Time field %q missing format tag", fis[i].fieldName))
+			}
+			if format := fis[i].format.value; format == "RFC1123" {
+				setStructField(s, fis[i], must(time.Parse(http.TimeFormat, inputJsonFieldSlice[0])))
 			} else {
-				o[k] = n
+				setStructField(s, fis[i], must(time.Parse(format, inputJsonFieldSlice[0])))
 			}
 
-		case reflect.String:
-			o[k] = val[0]
-
-		case reflect.Struct:
-			if !fis[i].timeFmt.isSet {
-				panic(fmt.Sprintf("Struct field kind %q not supported (missing time format tag)", fis[i].structField))
-			}
-			if format := fis[i].timeFmt.value; format != "RFC1123" {
-				panic(fmt.Sprintf("unsupported time format %q", format))
-			}
-			t, err := time.Parse(http.TimeFormat, val[0])
-			if err != nil {
-				return fmt.Errorf("failed to parse time field %q: %v", k, err)
-			}
-			o[k] = t
-
-		case reflect.Slice:
-			panic("slice not supported")
+		case reflect.TypeFor[*ETag]():
+			setStructField(s, fis[i], ETag(inputJsonFieldSlice[0]))
 
 		default:
-			panic(fmt.Sprintf("Field kind '%v' not supported", fis[i].kind))
+			panic(fmt.Sprintf("Field type '%v' not supported", fis[i].fieldType))
 		}
 	}
 
-	structValue := reflect.ValueOf(s).Elem()
-	for k, v := range o {
-		i := slices.IndexFunc(fis, func(fi fieldInfo) bool { return fi.name == k })
-		if i == -1 {
-			continue // This shouldn't happen since we already checked above
-		}
+	/*	structValue := reflect.ValueOf(s).Elem()
+		for jsonfieldName, jsonFieldValue := range jsonObj {
+			i := slices.IndexFunc(fis, func(fi fieldInfo) bool { return fi.jsonName == jsonfieldName })
+			if i == -1 {
+				panic("This shouldn't happen since we already checked above")
+			}
 
-		fieldValue := structValue.FieldByName(fis[i].structField)
-		if !fieldValue.CanSet() {
-			continue
-		}
+			fieldValue := structValue.FieldByName(fis[i].fieldName)
+			if !fieldValue.CanSet() {
+				continue
+			}
 
-		if fieldValue.Type().Kind() == reflect.Pointer {
-			elemType := fieldValue.Type().Elem()
-			newValue := reflect.New(elemType)
-			newValue.Elem().Set(reflect.ValueOf(v).Convert(elemType))
-			fieldValue.Set(newValue)
-		} else {
-			fieldValue.Set(reflect.ValueOf(v).Convert(fieldValue.Type()))
+			if fieldValue.Type().Kind() == reflect.Pointer {
+				elemType := fieldValue.Type().Elem()
+				newValue := reflect.New(elemType)
+				newValue.Elem().Set(reflect.ValueOf(jsonFieldValue).Convert(elemType))
+				fieldValue.Set(newValue)
+			} else {
+				fieldValue.Set(reflect.ValueOf(jsonFieldValue).Convert(fieldValue.Type()))
+			}
 		}
-	}
-
+	*/
 	// If struct has an 'Unknown' field of type UnknownFields, set it to the unknown fields
-	reflect.ValueOf(s).Elem().FieldByName("Unknown").Set(reflect.ValueOf(uf))
-	return VerifyStructFields(s) // Validate the struct's fields
+	reflect.ValueOf(s).Elem().FieldByName("Unknown").Set(reflect.ValueOf(unknownJsonFieldNames))
+	return verifyStructFields(s) // Validate the struct's fields
 }
 
 // Unknown is the type used for unknown fields after unmarshaling to a struct.
@@ -117,83 +125,149 @@ type Unknown []string
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-func VerifyStructFields(s any) error {
+// verifyStructFields verifies that the fields of struct s (passed-by-pointer) conform to
+// the constraints specified in the struct tags. The struct fields must be T or *T where T is:
+// bool, float32, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, string, []string, or another struct.
+// The supported struct tags are:
+// keys with # values: minval, maxval, minlen, maxlen, minitems, maxitems
+// keys with string values: enums (comma-separated), regx, format
+// If any field is invalid, an error is returned.
+func verifyStructFields(s any) error {
 	if s == nil {
-		return errors.New("VerifyStructFields: s cannot be nil")
+		panic("should never get here")
+		//return errors.New("VerifyStructFields: s cannot be nil")
 	}
-	if v := reflect.ValueOf(s); v.Kind() == reflect.Pointer && v.IsNil() {
-		return errors.New("VerifyStructFields: s cannot be a nil pointer")
+	structValue := reflect.ValueOf(s)
+	if structValue.Kind() == reflect.Pointer {
+		if structValue.IsNil() {
+			return nil //errors.New("VerifyStructFields: s cannot be a nil pointer")
+		} else {
+			structValue = structValue.Elem() // Dereference pointer to get struct value
+		}
 	}
 
-	structType := dereference(reflect.TypeOf(s))
+	structType := structValue.Type()
 	if structType.Kind() != reflect.Struct {
 		return fmt.Errorf("VerifyStructFields: s must be a struct, got %s", structType.Kind())
 	}
 
-	fieldInfos := getFieldInfos(structType)
-	for fieldIndex := range fieldInfos {
-		fi := fieldInfos[fieldIndex]
-		fieldValue := reflect.ValueOf(s).Elem().FieldByName(fi.structField)
-		if fieldValue.Kind() == reflect.Pointer {
-			if fieldValue.IsNil() {
-				// nil is a valid value for any pointer type
-				continue
-			}
-			// dereference the pointer
-			fieldValue = fieldValue.Elem()
+	isNumPtrNil := func(v any) bool {
+		switch pv := v.(type) {
+		case *float32:
+			return pv == nil
+		case *float64:
+			return pv == nil
+		case *int:
+			return pv == nil
+		case *int8:
+			return pv == nil
+		case *int16:
+			return pv == nil
+		case *int32:
+			return pv == nil
+		case *int64:
+			return pv == nil
+		case *uint:
+			return pv == nil
+		case *uint8:
+			return pv == nil
+		case *uint16:
+			return pv == nil
+		case *uint32:
+			return pv == nil
+		case *uint64:
+			return pv == nil
+		default:
+			panic(fmt.Sprintf("isPtrNil: type %T not supported", v))
 		}
+	}
 
-		switch fi.kind {
-		case reflect.Bool:
-			if !fieldValue.IsValid() || fieldValue.Kind() != reflect.Bool {
-				return fmt.Errorf("field '%s' is not a bool", fi.name)
-			}
+	fieldInfos := getFieldInfos(structType)
+	for _, fi := range fieldInfos {
+		fieldValue := structValue.FieldByName(fi.fieldName) // Find structure's field value (should be a *T)
+		switch v := fieldValue.Interface().(type) {
+		case *bool, bool:
+			break // No validation for bool
 
-		case reflect.Float32, reflect.Float64:
-			if !fieldValue.IsValid() || !fieldValue.CanFloat() {
-				return fmt.Errorf("field '%s' is not a number", fi.name)
+		case *float32, *float64:
+			if !isNumPtrNil(v) {
+				if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Elem().Float()); err != nil {
+					return err
+				}
 			}
-			if err := fi.verifyFloat(fieldValue.Float()); err != nil {
-				return fmt.Errorf("field '%s' has invalid value: %v", fi.name, err)
-			}
-
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if !fieldValue.IsValid() || !fieldValue.CanInt() {
-				return fmt.Errorf("field '%s' is not a number", fi.name)
-			}
-			if err := fi.verifyInt(fieldValue.Int()); err != nil {
-				return fmt.Errorf("field '%s' has invalid value: %v", fi.name, err)
+		case float32, float64:
+			if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Float()); err != nil {
+				return err
 			}
 
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if !fieldValue.IsValid() || !fieldValue.CanUint() {
-				return fmt.Errorf("field '%s' is not a number", fi.name)
-			}
-			if err := fi.verifyUint(fieldValue.Uint()); err != nil {
-				return fmt.Errorf("field '%s' has invalid value: %v", fi.name, err)
-			}
-
-		case reflect.String:
-			if !fieldValue.IsValid() || fieldValue.Kind() != reflect.String {
-				return fmt.Errorf("field '%s' is not a string", fi.name)
-			}
-			if err := fi.verifyLength(len(fieldValue.String())); err != nil {
-				return fmt.Errorf("field '%s' has invalid length: %v", fi.name, err)
-			}
-			if fi.regx.isSet && !fi.regx.value.MatchString(fieldValue.String()) {
-				return fmt.Errorf("field '%s' does not match regex: %s", fi.name, fi.regx.value.String())
+		case *int, *int8, *int16, *int32, *int64:
+			if !isNumPtrNil(v) {
+				if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Elem().Int()); err != nil {
+					return err
+				}
 			}
 
-		case reflect.Struct:
-			if err := VerifyStructFields(fieldValue.Addr().Interface()); err != nil {
-				return fmt.Errorf("field %q: %v", fi.name, err)
+		case int, int8, int16, int32, int64:
+			if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Int()); err != nil {
+				return err
 			}
 
-		case reflect.Slice:
-			panic("slice not supported")
+		case *uint, *uint8, *uint16, *uint32, *uint64:
+			if !isNumPtrNil(v) {
+				if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Elem().Uint()); err != nil {
+					return err
+				}
+			}
+
+		case uint, uint8, uint16, uint32, uint64:
+			if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Uint()); err != nil {
+				return err
+			}
+
+		case *string:
+			if v != nil {
+				if err := fi.verifyString(fi.fieldName, *v); err != nil {
+					return err
+				}
+			}
+
+		case string:
+			if err := fi.verifyString(fi.fieldName, v); err != nil {
+				return err
+			}
+
+		case *[]string:
+			if v != nil {
+				if err := fi.verifyStrings(fi.fieldName, *v); err != nil {
+					return err
+				}
+			}
+
+		case []string:
+			if err := fi.verifyStrings(fi.fieldName, v); err != nil {
+				return err
+			}
 
 		default:
-			panic(fmt.Sprintf("Field Kind '%s' not supported", fi.kind))
+			switch {
+			case slices.Contains([]reflect.Type{reflect.TypeFor[*ETag](), reflect.TypeFor[ETag](), reflect.TypeFor[*time.Time](), reflect.TypeFor[time.Time]()}, fieldValue.Type()):
+				break // Etag & time.Time always pass validation
+
+			case fieldValue.Type().Kind() == reflect.Pointer && fieldValue.Type().Elem().Kind() == reflect.Struct:
+				// Recursively validate struct fields
+				if err := verifyStructFields(fieldValue.Interface()); err != nil {
+					return fmt.Errorf("field %q: %v", fi.jsonName, err)
+				}
+
+			case fieldValue.Type().Kind() == reflect.Struct:
+				// Recursively validate struct fields
+				if err := verifyStructFields(fieldValue.Interface()); err != nil {
+					return fmt.Errorf("field %q: %v", fi.jsonName, err)
+				}
+
+			default:
+				panic(fmt.Sprintf("Field type '%v' not supported", fi.fieldType))
+			}
 		}
 	}
 	return nil
@@ -204,57 +278,82 @@ type optional[T any] struct {
 	value T // only use if isSet == true
 }
 
-func newOptional[T any](value T) optional[T] {
-	return optional[T]{isSet: true, value: value}
-}
-
 type fieldInfo struct {
-	name           string                   // JSON field name (for all fields)
-	structField    string                   // Struct field name (for validation)
-	kind           reflect.Kind             // For all fields
-	minval, maxval optional[float64]        // For all ints, uints, & floats
-	minlen, maxlen optional[int64]          // For string, slice
-	enums          optional[[]string]       // For string, []string
-	regx           optional[*regexp.Regexp] // For string
-	timeFmt        optional[string]         // For time.Time
+	jsonName           string                   // JSON field name (for all fields)
+	fieldName          string                   // Struct field name (for validation)
+	fieldType          reflect.Type             // Struct field type
+	minval, maxval     optional[float64]        // For all ints, uints, & floats
+	minlen, maxlen     optional[int64]          // For string
+	minitems, maxitems optional[int64]          // For []string
+	enumValues         optional[[]string]       // For string, []string
+	regx               optional[*regexp.Regexp] // For string, []string
+	format             optional[string]         // For time.Time
 }
 
-func (fi *fieldInfo) verifyFloat(val float64) error {
-	if fi.minval.isSet && (val < fi.minval.value) {
-		return fmt.Errorf("%f <  %f", val, fi.minval.value)
+func (fi *fieldInfo) verifyFloat(name string, mapValue float64) error {
+	if fi.minval.isSet && (mapValue < fi.minval.value) {
+		return fmt.Errorf("field '%s' violation: value=%f < minval=%f", name, mapValue, fi.minval.value)
 	}
-	if fi.maxval.isSet && (val > fi.maxval.value) {
-		return fmt.Errorf("%f > %f", val, fi.maxval.value)
+	if fi.maxval.isSet && (mapValue > fi.maxval.value) {
+		return fmt.Errorf("field '%s' violation: value=%f > maxval=%f", name, mapValue, fi.maxval.value)
 	}
 	return nil
 }
 
-func (fi *fieldInfo) verifyInt(val int64) error {
+func (fi *fieldInfo) verifyInt(name string, val int64) error {
 	if fi.minval.isSet && (val < int64(fi.minval.value)) {
-		return fmt.Errorf("%d < %d", val, int64(fi.minval.value))
+		return fmt.Errorf("field '%s' violation: value=%d < minval=%d", name, val, int64(fi.minval.value))
 	}
 	if fi.maxval.isSet && (val > int64(fi.maxval.value)) {
-		return fmt.Errorf("%d > %d", val, int64(fi.maxval.value))
+		return fmt.Errorf("field '%s' violation: value=%d > maxval=%d", name, val, int64(fi.maxval.value))
 	}
 	return nil
 }
 
-func (fi *fieldInfo) verifyUint(val uint64) error {
+func (fi *fieldInfo) verifyUint(name string, val uint64) error {
 	if fi.minval.isSet && (val < uint64(fi.minval.value)) {
-		return fmt.Errorf("%d < %d", val, uint64(fi.minval.value))
+		return fmt.Errorf("field '%s' violation: value=%d < minval=%d", name, val, uint64(fi.minval.value))
 	}
 	if fi.maxval.isSet && (val > uint64(fi.maxval.value)) {
-		return fmt.Errorf("%d > %d", val, uint64(fi.maxval.value))
+		return fmt.Errorf("field '%s' violation: value=%d > maxval=%d", name, val, uint64(fi.maxval.value))
 	}
 	return nil
 }
 
-func (fi *fieldInfo) verifyLength(length int) error {
+func (fi *fieldInfo) verifyLength(name string, length int) error {
 	if fi.minlen.isSet && (length < int(fi.minlen.value)) {
-		return fmt.Errorf("%d < %d", length, fi.minlen.value)
+		return fmt.Errorf("field '%s' violation: value=%d < minlen=%d", name, length, int(fi.minlen.value))
 	}
 	if fi.maxlen.isSet && (length > int(fi.maxlen.value)) {
-		return fmt.Errorf("%d > %d", length, fi.maxlen.value)
+		return fmt.Errorf("field '%s' violation: value=%d < maxlen=%d", name, length, int(fi.maxlen.value))
+	}
+	return nil
+}
+
+func (fi *fieldInfo) verifyString(name string, s string) error {
+	if err := fi.verifyLength(name, len(s)); err != nil {
+		return err
+	}
+	if fi.enumValues.isSet && !slices.Contains(fi.enumValues.value, s) {
+		return fmt.Errorf("field '%s' violation: value=%s != enums=%s", name, s, strings.Join(fi.enumValues.value, ","))
+	}
+	if fi.regx.isSet && !fi.regx.value.MatchString(s) {
+		return fmt.Errorf("field '%s' violation: value=%s != regex=%s", name, s, fi.regx.value.String())
+	}
+	return nil
+}
+
+func (fi *fieldInfo) verifyStrings(name string, s []string) error {
+	if fi.minitems.isSet && (len(s) < int(fi.minitems.value)) {
+		return fmt.Errorf("field '%s' violation: value=%d != minitems=%d", name, len(s), int(fi.minitems.value))
+	}
+	if fi.maxitems.isSet && (len(s) > int(fi.maxitems.value)) {
+		return fmt.Errorf("field '%s' violation: value=%d != maxitems=%d", name, len(s), int(fi.maxitems.value))
+	}
+	for _, eachString := range s {
+		if err := fi.verifyString(fmt.Sprintf("%s[%s]", name, eachString), eachString); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -266,11 +365,11 @@ func must[T any](val T, err error) T {
 	return val
 }
 
-func tagTo[T any](tag reflect.StructTag, key string, convert func(val string) optional[T]) optional[T] {
+func tagTo[T int64 | float64 | string | []string | *regexp.Regexp](tag reflect.StructTag, key string, convert func(val string) T) optional[T] {
 	if val, ok := tag.Lookup(key); !ok {
 		return optional[T]{}
 	} else {
-		return convert(val)
+		return optional[T]{isSet: true, value: convert(val)}
 	}
 }
 
@@ -284,19 +383,8 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 		return fieldInfos
 	}
 
-	tagToInt64 := func(tag reflect.StructTag, key string) optional[int64] {
-		return tagTo(tag, key,
-			func(val string) optional[int64] {
-				return newOptional(int64(must(strconv.ParseInt(val, 10, 64))))
-			})
-	}
-
-	tagToFloat64 := func(tag reflect.StructTag, key string) optional[float64] {
-		return tagTo(tag, key,
-			func(val string) optional[float64] {
-				return newOptional(float64(must(strconv.ParseFloat(val, 64))))
-			})
-	}
+	parseInt64 := func(val string) int64 { return must(strconv.ParseInt(val, 10, 64)) }
+	parseFloat64 := func(val string) float64 { return must(strconv.ParseFloat(val, 64)) }
 
 	var fieldInfos []fieldInfo
 	for fieldIndex := range structType.NumField() {
@@ -316,19 +404,18 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 
 		// Slice order MUST match struct field order
 		fi := fieldInfo{
-			name:        propName,
-			structField: structField.Name,
-			kind:        dereference(structField.Type).Kind(),
-			minval:      tagToFloat64(tag, "minval"),
-			maxval:      tagToFloat64(tag, "maxval"),
-			minlen:      tagToInt64(tag, "minlen"),
-			maxlen:      tagToInt64(tag, "maxlen"),
-			enums:       tagTo(tag, "enums", func(val string) optional[[]string] { return newOptional(strings.Split(val, ",")) }),
-			regx: tagTo(tag, "regx",
-				func(val string) optional[*regexp.Regexp] {
-					return newOptional(regexp.MustCompile(val))
-				}),
-			timeFmt: tagTo(tag, "time", func(val string) optional[string] { return newOptional(val) }),
+			jsonName:   propName,
+			fieldName:  structField.Name,
+			fieldType:  structField.Type,
+			minval:     tagTo(tag, "minval", parseFloat64),
+			maxval:     tagTo(tag, "maxval", parseFloat64),
+			minlen:     tagTo(tag, "minlen", parseInt64),
+			maxlen:     tagTo(tag, "maxlen", parseInt64),
+			minitems:   tagTo(tag, "minitems", parseInt64),
+			maxitems:   tagTo(tag, "maxitems", parseInt64),
+			enumValues: tagTo(tag, "enums", func(val string) []string { return strings.Split(val, ",") }),
+			regx:       tagTo(tag, "regx", func(val string) *regexp.Regexp { return regexp.MustCompile(val) }),
+			format:     tagTo(tag, "format", func(val string) string { return val }),
 		}
 		fieldInfos = append(fieldInfos, fi)
 	}

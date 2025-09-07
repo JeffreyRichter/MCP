@@ -22,13 +22,35 @@
             ],
         },
         {
-            "name": "server",
+            "name": "Local MCP",
             "type": "go",
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/mcpsvc",
             "buildFlags": [
-                "-tags=goexperiment.jsonv2"
+                "-tags local goexperiment.jsonv2"
+            ],
+            "envFile": "${workspaceFolder}/mcpsvc/.env"
+        },
+        {
+            "name": "Remote MCP",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/mcpsvc",
+            "buildFlags": [
+                "-tags=remote goexperiment.jsonv2"
+            ],
+            "envFile": "${workspaceFolder}/mcpsvc/.env"
+        },
+        {
+            "name": "Local & Remote MCP",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/mcpsvc",
+            "buildFlags": [
+                "-tags=local remote goexperiment.jsonv2"
             ],
             "envFile": "${workspaceFolder}/mcpsvc/.env"
         }

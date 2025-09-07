@@ -114,7 +114,7 @@ func TestVerifyStructFields_BasicFields(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  "field 'name' has invalid length",
+			errorMsg:  "field 'Name' violation",
 		},
 		{
 			name: "invalid name - regex mismatch",
@@ -129,7 +129,7 @@ func TestVerifyStructFields_BasicFields(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  "field 'name' does not match regex",
+			errorMsg:  "field 'Name' violation",
 		},
 		{
 			name: "invalid price - too low",
@@ -144,13 +144,13 @@ func TestVerifyStructFields_BasicFields(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  "field 'price' has invalid value",
+			errorMsg:  "field 'Price' violation",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyStructFields(&tt.input)
+			err := verifyStructFields(&tt.input)
 			if tt.wantError && err == nil {
 				t.Errorf("expected error but got none")
 			} else if !tt.wantError && err != nil {
@@ -224,7 +224,7 @@ func TestVerifyStructFields_PointerFields(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  "field 'age' has invalid value",
+			errorMsg:  "field 'OptionalAge' violation",
 		},
 		{
 			name: "invalid optional name",
@@ -240,7 +240,7 @@ func TestVerifyStructFields_PointerFields(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  "field 'optionalName' has invalid length",
+			errorMsg:  "field 'OptionalName' violation",
 		},
 		{
 			name: "invalid optional price",
@@ -256,13 +256,13 @@ func TestVerifyStructFields_PointerFields(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  "field 'optionalPrice' has invalid value",
+			errorMsg:  "field 'OptionalPrice' violation",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyStructFields(&tt.input)
+			err := verifyStructFields(&tt.input)
 			if tt.wantError && err == nil {
 				t.Errorf("expected error but got none")
 			} else if !tt.wantError && err != nil {
@@ -315,7 +315,7 @@ func TestVerifyStructFields_NestedStructs(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  `field "address": field 'zipCode' does not match regex`,
+			errorMsg:  `field 'ZipCode' violation`,
 		},
 		{
 			name: "invalid nested struct - street too short",
@@ -330,7 +330,7 @@ func TestVerifyStructFields_NestedStructs(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  `field "address": field 'street' has invalid length`,
+			errorMsg:  `field 'Street' violation`,
 		},
 		{
 			name: "valid nested pointer struct",
@@ -382,7 +382,7 @@ func TestVerifyStructFields_NestedStructs(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  `field "contact": field 'email' does not match regex`,
+			errorMsg:  `field 'Email' violation`,
 		},
 		{
 			name: "invalid nested pointer struct - bad phone",
@@ -401,13 +401,13 @@ func TestVerifyStructFields_NestedStructs(t *testing.T) {
 				},
 			},
 			wantError: true,
-			errorMsg:  `field "contact": field 'phone' does not match regex`,
+			errorMsg:  `field 'Phone' violation`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyStructFields(&tt.input)
+			err := verifyStructFields(&tt.input)
 			if tt.wantError && err == nil {
 				t.Errorf("expected error but got none")
 			} else if !tt.wantError && err != nil {
@@ -435,16 +435,14 @@ func TestVerifyStructFields_EdgeCases(t *testing.T) {
 			errorMsg:  "s must be a struct",
 		},
 		{
-			name:      "nil input",
-			input:     (*TestStruct)(nil),
-			wantError: true,
-			errorMsg:  "s cannot be a nil pointer",
+			name:  "nil input",
+			input: (*TestStruct)(nil),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyStructFields(tt.input)
+			err := verifyStructFields(tt.input)
 			if tt.wantError && err == nil {
 				t.Errorf("expected error but got none")
 			} else if !tt.wantError && err != nil {

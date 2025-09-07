@@ -1,0 +1,151 @@
+package v20250808
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/JeffreyRichter/mcpsvr/mcp"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
+	"github.com/JeffreyRichter/svrcore"
+)
+
+type countToolCaller struct {
+	defaultToolCaller
+	ops *httpOperations
+}
+
+type CountToolCallRequest struct {
+	Start      int `json:"start,omitempty"`
+	Increments int `json:"increments,omitempty"`
+}
+
+// TODO
+type CountToolCallProgress struct {
+	Count int `json:"count,omitempty"`
+	Max   int `json:"max,omitempty"`
+}
+
+type CountToolCallResult struct {
+	N int `json:"n,omitempty"`
+}
+
+type CountToolCallError struct {
+	Overflow bool `json:"overflowcode,omitempty"`
+}
+
+func (c *countToolCaller) Tool() *mcp.Tool {
+	return &mcp.Tool{
+		BaseMetadata: mcp.BaseMetadata{
+			Name:  "count",
+			Title: svrcore.Ptr("Count up from an integer"),
+		},
+		Description: svrcore.Ptr("Count from a starting value, adding 1 to it for the specified number of increments"),
+		InputSchema: mcp.JSONSchema{
+			Type: "object",
+			Properties: &map[string]any{
+				"start": map[string]any{
+					"type":        "integer",
+					"Description": svrcore.Ptr("The starting value"),
+				},
+				"increments": map[string]any{
+					"type":        "integer",
+					"Description": svrcore.Ptr("The number of increments to perform"),
+				},
+			},
+			Required: []string{},
+		},
+		OutputSchema: &mcp.JSONSchema{
+			Type: "object",
+			Properties: &map[string]any{
+				"n": map[string]any{
+					"type":        "integer",
+					"Description": svrcore.Ptr("The final count"),
+				},
+			},
+			Required: []string{"n"},
+		},
+		Annotations: &mcp.ToolAnnotations{
+			Title:           svrcore.Ptr("Count a specified number of increments"),
+			ReadOnlyHint:    svrcore.Ptr(false),
+			DestructiveHint: svrcore.Ptr(false),
+			IdempotentHint:  svrcore.Ptr(true),
+			OpenWorldHint:   svrcore.Ptr(true),
+		},
+	}
+}
+
+func (c *countToolCaller) Create(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+	var trequest CountToolCallRequest
+	if err := r.UnmarshalBody(&trequest); err != nil {
+		return err
+	}
+	tc.Request = must(json.Marshal(trequest))
+
+	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusRunning)
+	tc.Phase = svrcore.Ptr(strconv.Itoa(trequest.Increments))
+	err := c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	if err != nil {
+		return err
+	}
+	pm := GetPhaseManager()
+	go pm.StartPhaseProcessing(context.TODO(), tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+}
+
+func (c *countToolCaller) Get(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	// TODO: Fix up 304-Not Modified
+	if err != nil {
+		return err
+	}
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+}
+
+// TODO: could all tool calls use the same cancel method?
+func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	if err != nil {
+		return err
+	}
+	if err = r.ValidatePreconditions(svrcore.ResourceValues{ETag: tc.ETag}); err != nil {
+		return err
+	}
+	if tc.Status == nil {
+		return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "tool call status is nil; can't cancel")
+	}
+	switch *tc.Status {
+	case toolcalls.ToolCallStatusSuccess, toolcalls.ToolCallStatusFailed, toolcalls.ToolCallStatusCanceled:
+		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	}
+
+	tc.ElicitationRequest, tc.Error, tc.Result, tc.Status = nil, nil, nil, svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
+	if err = c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+		return err
+	}
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+}
+
+// TODO: this belongs on v20250808.httpOperations or at least in v20250808 but can't be there now because
+// the phase manager needs to reference this function at construction; see GetPhaseManager above. Overall
+// this arrangement is awkward because the phase manager is nominally version-independent but in practice
+// needs to know about specific tool calls
+func (c *countToolCaller) ProcessPhase(_ context.Context, tc *toolcalls.ToolCall, _ toolcalls.PhaseProcessor) error {
+	phase, err := strconv.Atoi(*tc.Phase)
+	if err != nil {
+		return fmt.Errorf("invalid phase %q", *tc.Phase)
+	}
+
+	time.Sleep(17 * time.Millisecond) // Simulate doing work
+	phase--
+	tc.Phase = svrcore.Ptr(strconv.Itoa(phase))
+	// TODO: if we needed data from the client request e.g. CountToolCallRequest here, we'd have to unmarshal it again
+	if phase <= 0 {
+		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Result = must(json.Marshal(struct{ N int }{N: 42}))
+	}
+	return nil
+}
