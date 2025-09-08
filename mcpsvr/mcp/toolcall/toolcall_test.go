@@ -1,4 +1,4 @@
-package toolcalls
+package toolcall
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 
 func TestUnmarshalElicitationRequest(t *testing.T) {
 	t.Run("BooleanSchema", func(t *testing.T) {
-		b := []byte(`{"name":"pii","toolCallId":"1755566895766434","expiration":"2025-08-19T18:44:22.056185961-07:00","advanceQueue":"ToolCallAdvanceQueue","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"approve PII","requestedSchema":{"type":"object","properties":{"approved":{"type":"boolean","title":"Approval","description":"Whether to approve PII access","default":false}},"required":["approved"]}}}`)
+		b := []byte(`{"toolname":"pii","id":"1755566895766434","expiration":"2025-08-19T18:44:22.056185961-07:00","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"approve PII","requestedSchema":{"type":"object","properties":{"approved":{"type":"boolean","title":"Approval","description":"Whether to approve PII access","default":false}},"required":["approved"]}}}`)
 		tc := ToolCall{}
 		err := json.Unmarshal(b, &tc)
 		if err != nil {
@@ -57,7 +57,7 @@ func TestUnmarshalElicitationRequest(t *testing.T) {
 	})
 
 	t.Run("StringSchema", func(t *testing.T) {
-		b := []byte(`{"name":"userInput","toolCallId":"1755566895766435","expiration":"2025-08-19T18:44:22.056185961-07:00","advanceQueue":"ToolCallAdvanceQueue","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Enter your name","requestedSchema":{"type":"object","properties":{"name":{"type":"string","title":"Full Name","description":"Enter your full name","minLength":2,"maxLength":100,"format":"text"},"email":{"type":"string","title":"Email Address","description":"Your email address","format":"email"}},"required":["name","email"]}}}`)
+		b := []byte(`{"name":"userInput","id":"1755566895766435","expiration":"2025-08-19T18:44:22.056185961-07:00","advanceQueue":"ToolCallAdvanceQueue","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Enter your name","requestedSchema":{"type":"object","properties":{"name":{"type":"string","title":"Full Name","description":"Enter your full name","minLength":2,"maxLength":100,"format":"text"},"email":{"type":"string","title":"Email Address","description":"Your email address","format":"email"}},"required":["name","email"]}}}`)
 		tc := ToolCall{}
 		err := json.Unmarshal(b, &tc)
 		if err != nil {
@@ -129,7 +129,7 @@ func TestUnmarshalElicitationRequest(t *testing.T) {
 	})
 
 	t.Run("NumberSchema", func(t *testing.T) {
-		b := []byte(`{"name":"measurement","toolCallId":"1755566895766436","expiration":"2025-08-19T18:44:22.056185961-07:00","advanceQueue":"ToolCallAdvanceQueue","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Enter measurements","requestedSchema":{"type":"object","properties":{"temperature":{"type":"number","title":"Temperature","description":"Temperature in Celsius","minimum":-273.15,"maximum":1000.0},"count":{"type":"integer","title":"Item Count","description":"Number of items","minimum":0,"maximum":999}},"required":["temperature"]}}}`)
+		b := []byte(`{"toolname":"measurement","id":"1755566895766436","expiration":"2025-08-19T18:44:22.056185961-07:00","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Enter measurements","requestedSchema":{"type":"object","properties":{"temperature":{"type":"number","title":"Temperature","description":"Temperature in Celsius","minimum":-273.15,"maximum":1000.0},"count":{"type":"integer","title":"Item Count","description":"Number of items","minimum":0,"maximum":999}},"required":["temperature"]}}}`)
 		tc := ToolCall{}
 		err := json.Unmarshal(b, &tc)
 		if err != nil {
@@ -187,7 +187,7 @@ func TestUnmarshalElicitationRequest(t *testing.T) {
 	})
 
 	t.Run("EnumSchema", func(t *testing.T) {
-		b := []byte(`{"name":"selection","toolCallId":"1755566895766437","expiration":"2025-08-19T18:44:22.056185961-07:00","advanceQueue":"ToolCallAdvanceQueue","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Make a selection","requestedSchema":{"type":"object","properties":{"priority":{"type":"string","title":"Priority Level","description":"Select priority level","enum":["low","medium","high","critical"],"enumNames":["Low Priority","Medium Priority","High Priority","Critical Priority"]},"status":{"type":"string","title":"Status","description":"Current status","enum":["pending","approved","rejected"]}},"required":["priority"]}}}`)
+		b := []byte(`{"name":"selection","id":"1755566895766437","expiration":"2025-08-19T18:44:22.056185961-07:00","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Make a selection","requestedSchema":{"type":"object","properties":{"priority":{"type":"string","title":"Priority Level","description":"Select priority level","enum":["low","medium","high","critical"],"enumNames":["Low Priority","Medium Priority","High Priority","Critical Priority"]},"status":{"type":"string","title":"Status","description":"Current status","enum":["pending","approved","rejected"]}},"required":["priority"]}}}`)
 		tc := ToolCall{}
 		err := json.Unmarshal(b, &tc)
 		if err != nil {
@@ -258,7 +258,7 @@ func TestUnmarshalElicitationRequest(t *testing.T) {
 	})
 
 	t.Run("MixedSchemas", func(t *testing.T) {
-		b := []byte(`{"name":"complex","toolCallId":"1755566895766438","expiration":"2025-08-19T18:44:22.056185961-07:00","advanceQueue":"ToolCallAdvanceQueue","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Fill out form","requestedSchema":{"type":"object","properties":{"name":{"type":"string","title":"Name","maxLength":50},"age":{"type":"integer","title":"Age","minimum":0,"maximum":150},"active":{"type":"boolean","title":"Active","default":true},"role":{"type":"string","title":"Role","enum":["admin","user","guest"]}},"required":["name","age"]}}}`)
+		b := []byte(`{"name":"complex","id":"1755566895766438","expiration":"2025-08-19T18:44:22.056185961-07:00","etag":null,"status":"awaitingElicitationResult","elicitationRequest":{"message":"Fill out form","requestedSchema":{"type":"object","properties":{"name":{"type":"string","title":"Name","maxLength":50},"age":{"type":"integer","title":"Age","minimum":0,"maximum":150},"active":{"type":"boolean","title":"Active","default":true},"role":{"type":"string","title":"Role","enum":["admin","user","guest"]}},"required":["name","age"]}}}`)
 		tc := ToolCall{}
 		err := json.Unmarshal(b, &tc)
 		if err != nil {

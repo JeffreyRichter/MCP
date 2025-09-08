@@ -14,38 +14,54 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JeffreyRichter/mcpsvr/config"
-	v20250808 "github.com/JeffreyRichter/mcpsvr/v20250808"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/JeffreyRichter/svrcore"
 	"github.com/JeffreyRichter/svrcore/policies"
 )
 
 var (
-	logger      = slog.Default()
-	shutdownMgr = policies.NewShutdownMgr(policies.ShutdownMgrConfig{
-		Logger:            logger,
-		HealthProbeDelay:  time.Second * 2,
-		CancellationDelay: time.Second * 3,
-	})
+	errorLogger   = slog.Default()
+	requestLogger = slog.Default()
+	metricsLogger = slog.Default()
+	shutdownMgr   = policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: errorLogger, HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
 )
 
 func main() {
-	key := ""
-	port := "8080"
-	if config.Get().Local {
-		b := make([]byte, 16)
-		_, _ = rand.Read(b) // guaranteed to return len(b), nil
-		key = fmt.Sprintf("%x", b)
-		port = "0" // let the OS choose a port
+	var c Configuration
+	c.Load()
+
+	var ops *httpOps
+	port, sharedKey := "8080", ""
+	switch {
+	case c.Local:
+		ops = newLocalMcpServer(shutdownMgr.Context, errorLogger)
+		b := [16]byte{}
+		_, _ = rand.Read(b[:]) // guaranteed to return len(b), nil
+		port, sharedKey = "0", fmt.Sprintf("%x", b)
+
+	case c.AzuriteAccount != "":
+		blobCred := must(azblob.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
+		blobClient := must(azblob.NewClientWithSharedKeyCredential(c.AzureBlobURL, blobCred, nil))
+		queueCred := must(azqueue.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
+		queueClient := must(azqueue.NewQueueClientWithSharedKeyCredential(c.AzureQueueURL, queueCred, nil))
+		ops = newAzureMcpServer(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+
+	default:
+		cred := must(azidentity.NewDefaultAzureCredential(nil))
+		blobClient := must(azblob.NewClient(c.AzureBlobURL, cred, nil))
+		queueClient := must(azqueue.NewQueueClient(c.AzureQueueURL, cred, nil))
+		ops = newAzureMcpServer(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 	}
 
 	policies := []svrcore.Policy{
 		shutdownMgr.NewPolicy(),
-		newApiVersionSimulatorPolicy("api-version"),
-		policies.NewRequestLogPolicy(logger),
+		newApiVersionSimulatorPolicy(),
+		policies.NewRequestLogPolicy(requestLogger),
 		policies.NewThrottlingPolicy(100),
-		policies.NewAuthorizationPolicy(key),
-		policies.NewMetricsPolicy(logger),
+		policies.NewAuthorizationPolicy(sharedKey),
+		policies.NewMetricsPolicy(metricsLogger),
 		policies.NewDistributedTracing(),
 	}
 
@@ -55,7 +71,7 @@ func main() {
 	// 3. Retire old preview/GA version
 	avis := []*svrcore.ApiVersionInfo{
 		{ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
-		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: v20250808.Routes},
+		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: ops.Routes20250808},
 	}
 
 	s := &http.Server{
@@ -74,14 +90,14 @@ func main() {
 		WriteTimeout:                 30 * time.Second,
 	}
 
-	ln := must(net.Listen("tcp", ":"+port))
+	ln := must(net.Listen("tcp", net.JoinHostPort("", port)))
 	var err error
 	if _, port, err = net.SplitHostPort(ln.Addr().String()); err != nil {
 		panic(err)
 	}
 	startMsg := fmt.Sprintf("Listening on port: %s", port)
-	if config.Get().Local {
-		startMsg = fmt.Sprintf(`{"key":%q,"port":%s}`, key, port)
+	if c.Local {
+		startMsg = fmt.Sprintf(`{"port":%s, "key":%q}`, port, sharedKey)
 	}
 	fmt.Println(startMsg)
 
@@ -119,10 +135,10 @@ func noApiVersionRoutes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionR
 	}
 }
 
-func newApiVersionSimulatorPolicy(key string) svrcore.Policy {
+func newApiVersionSimulatorPolicy() svrcore.Policy {
 	return func(ctx context.Context, r *svrcore.ReqRes) error {
 		if !strings.HasPrefix(r.R.URL.Path, "/debug/") {
-			r.R.Header.Set(key, "2025-08-08")
+			r.R.Header.Set("api-version", "2025-08-08")
 		}
 		return r.Next(ctx)
 	}

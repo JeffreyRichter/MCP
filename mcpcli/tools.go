@@ -37,8 +37,8 @@ func parseLastCall(responseBody string) (bool, ElicitationData) {
 		return false, ElicitationData{}
 	}
 
-	callID, _ := response["toolCallId"].(string)
-	toolName, _ := response["name"].(string)
+	callID, _ := response["id"].(string)
+	toolName, _ := response["toolname"].(string)
 
 	elicitation := ElicitationData{
 		CallID:   callID,

@@ -34,11 +34,11 @@ type AccessConditions struct {
 	IfUnmodifiedSince *time.Time
 }
 
-// ValidatePreconditions checks a resource's current ETag/LastModified values against a request's
-// If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, ValidatePreconditions returns nil; else,
+// CheckPreconditions checks a resource's current ETag/LastModified values against a request's
+// If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, CheckPreconditions returns nil; else,
 // it returns an appropriate ServierError (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]).
-func ValidatePreconditions(rv ResourceValues, method string, c AccessConditions) error {
+func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) error {
 	if !rv.AllowedConditionals.Check(AllowedConditionalsMatch) && (c.IfMatch != nil || c.IfNoneMatch != nil) {
 		return NewServerError(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
 	}

@@ -11,8 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
-	"github.com/JeffreyRichter/mcpsvr/resources"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -28,12 +27,12 @@ type toolCallStore struct {
 }
 
 // NewToolCallStore creates a new localToolCallStore; ctx is used to cancel the expiry goroutine
-func NewToolCallStore(client *azblob.Client) resources.ToolCallStore {
+func NewToolCallStore(client *azblob.Client) toolcall.Store {
 	return &toolCallStore{client: client}
 }
 
-func (tcs *toolCallStore) toBlobInfo(tc *toolcalls.ToolCall) (containerName, blobName string) {
-	return *tc.Tenant, *tc.ToolName + "/" + *tc.ToolCallId
+func (tcs *toolCallStore) toBlobInfo(tc *toolcall.ToolCall) (containerName, blobName string) {
+	return *tc.Tenant, *tc.ToolName + "/" + *tc.ID
 }
 
 /*func (tcs *toolCallStore) fromBlobUrl(blobUrl string) (tenant, toolName, toolCallID string) {
@@ -56,7 +55,7 @@ func (*toolCallStore) accessConditions(ac svrcore.AccessConditions) *azblob.Acce
 	}
 }
 
-func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	// Get the tool call by tenant, tool name and tool call id
 	containerName, blobName := tcs.toBlobInfo(tc)
 	response, err := tcs.client.DownloadStream(ctx, containerName, blobName,
@@ -79,7 +78,7 @@ func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcalls.ToolCall, ac sv
 	return nil
 }
 
-func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	buffer, err := json.Marshal(tc)
 	if err != nil {
 		return err
@@ -108,7 +107,7 @@ func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcalls.ToolCall, ac sv
 	}
 }
 
-func (tcs *toolCallStore) Delete(ctx context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+func (tcs *toolCallStore) Delete(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	containerName, blobName := tcs.toBlobInfo(tc)
 	_, err := tcs.client.DeleteBlob(ctx, containerName, blobName, &azblob.DeleteBlobOptions{AccessConditions: tcs.accessConditions(ac)})
 	return err

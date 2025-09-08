@@ -1,4 +1,4 @@
-package v20250808
+package main
 
 import (
 	"context"
@@ -6,29 +6,27 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/JeffreyRichter/mcpsvr/resources"
-	"github.com/JeffreyRichter/mcpsvr/resources/localresources"
 	"github.com/JeffreyRichter/svrcore"
 	"github.com/JeffreyRichter/svrcore/policies"
 )
 
+var testSvr *httpOps = newLocalMcpServer(context.Background(), slog.Default())
+
 func testServer(t *testing.T) *httptest.Server {
-	setupMockStore(t)
 	logger := slog.Default()
 
 	policies := []svrcore.Policy{
-		policies.NewShutdownMgr(policies.ShutdownMgrConfig{Logger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewPolicy(),
+		policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewPolicy(),
 		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),
 		policies.NewMetricsPolicy(logger),
 		policies.NewDistributedTracing(),
 	}
-	avis := []*svrcore.ApiVersionInfo{{GetRoutes: Routes}}
+	avis := []*svrcore.ApiVersionInfo{{GetRoutes: testSvr.Routes20250808}}
 	handler := svrcore.BuildHandler(
 		svrcore.BuildHandlerConfig{
 			Policies:              policies,
@@ -87,26 +85,4 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 		c.t.Fatal(err)
 	}
 	return resp
-}
-
-// setupMockStore replaces the default Azure Storage persistence implementation with an in-memory one for the duration of a test.
-// This won't work for parallel tests because the store is a singleton.
-func setupMockStore(t *testing.T) {
-	mock := localresources.NewToolCallStore(context.TODO() /*shutdownCtx*/)
-
-	before := GetToolCallStore
-	GetToolCallStore = sync.OnceValue(func() resources.ToolCallStore { return mock })
-
-	beforeGetOps := GetOps
-	GetOps = sync.OnceValue(func() *httpOperations { return &httpOperations{ToolCallStore: mock} })
-
-	// Reset the GetToolInfos singleton so it picks up the new GetOps
-	beforeGetToolInfos := GetToolInfos
-	GetToolInfos = sync.OnceValue(buildToolInfosMap)
-
-	t.Cleanup(func() {
-		GetToolCallStore = before
-		GetOps = beforeGetOps
-		GetToolInfos = beforeGetToolInfos
-	})
 }

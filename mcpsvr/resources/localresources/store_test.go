@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -14,11 +14,11 @@ var ctx = context.Background()
 
 func TestLocalToolCallStore_Get_NotFound(t *testing.T) {
 	store := NewToolCallStore(ctx)
-	tc := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	tc := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 	}
 	err := store.Get(ctx, tc, svrcore.AccessConditions{})
@@ -37,14 +37,14 @@ func TestLocalToolCallStore_Get_NotFound(t *testing.T) {
 func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 	store := NewToolCallStore(ctx)
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 		Expiration: svrcore.Ptr(time.Now().Add(24 * time.Hour)),
-		Status:     svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status:     svrcore.Ptr(toolcall.StatusRunning),
 		Request:    jsontext.Value(`{"param":"value"}`),
 	}
 
@@ -62,15 +62,15 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 		t.Errorf("ToolName mismatch: expected %s, got %s", *originalToolCall.ToolName, *putResult.ToolName)
 	}
 
-	if *putResult.ToolCallId != *originalToolCall.ToolCallId {
-		t.Errorf("ToolCallId mismatch: expected %s, got %s", *originalToolCall.ToolCallId, *putResult.ToolCallId)
+	if *putResult.ID != *originalToolCall.ID {
+		t.Errorf("ID mismatch: expected %s, got %s", *originalToolCall.ID, *putResult.ID)
 	}
 
-	getToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	getToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 	}
 
@@ -84,8 +84,8 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 		t.Errorf("ToolName mismatch: expected %s, got %s", *originalToolCall.ToolName, *getResult.ToolName)
 	}
 
-	if *getResult.ToolCallId != *originalToolCall.ToolCallId {
-		t.Errorf("ToolCallId mismatch: expected %s, got %s", *originalToolCall.ToolCallId, *getResult.ToolCallId)
+	if *getResult.ID != *originalToolCall.ID {
+		t.Errorf("ID mismatch: expected %s, got %s", *originalToolCall.ID, *getResult.ID)
 	}
 
 	if getResult.ETag == nil {
@@ -99,13 +99,13 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
 	putResult1 := originalToolCall.Copy()
@@ -114,13 +114,13 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		t.Fatalf("First put failed: %v", err)
 	}
 
-	updatedToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	updatedToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusSuccess),
+		Status: svrcore.Ptr(toolcall.StatusSuccess),
 	}
 
 	accessConditions := svrcore.AccessConditions{IfMatch: putResult1.ETag}
@@ -136,7 +136,7 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		t.Fatalf("Second put with if-match should give 400, got %d", serverError.StatusCode)
 	}
 
-	if *putResult2.Status != toolcalls.ToolCallStatusSuccess {
+	if *putResult2.Status != toolcall.StatusSuccess {
 		t.Errorf("Expected status to be updated to success, got %s", *putResult2.Status)
 	}
 }
@@ -145,13 +145,13 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
@@ -159,11 +159,11 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	getToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	getToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 	}
 
@@ -197,13 +197,13 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
 	putResult := originalToolCall.Copy()
@@ -212,11 +212,11 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	getToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	getToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 	}
 
@@ -237,13 +237,13 @@ func TestLocalToolCallStore_Delete(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
 	err := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
@@ -271,13 +271,13 @@ func TestLocalToolCallStore_Delete_AccessConditions(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
@@ -308,11 +308,11 @@ func TestLocalToolCallStore_Delete_NonExistent(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	toolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	toolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 	}
 
@@ -329,13 +329,13 @@ func TestLocalToolCallStore_TenantIsolation(t *testing.T) {
 	tenant1 := "test-tenant"
 	tenant2 := "different-tenant"
 
-	toolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	toolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status: svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
 	err := store.Put(ctx, toolCall, svrcore.AccessConditions{})
@@ -365,13 +365,13 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	originalToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
-		Status:  svrcore.Ptr(toolcalls.ToolCallStatusRunning),
+		Status:  svrcore.Ptr(toolcall.StatusRunning),
 		Request: jsontext.Value(`{"param":"original"}`),
 	}
 	putResult := originalToolCall.Copy()
@@ -380,14 +380,14 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	*originalToolCall.Status = toolcalls.ToolCallStatusSuccess
+	*originalToolCall.Status = toolcall.StatusSuccess
 	originalToolCall.Request = jsontext.Value(`{"param":"modified"}`)
 
-	getToolCall := &toolcalls.ToolCall{
-		ToolCallIdentity: toolcalls.ToolCallIdentity{
-			Tenant:     svrcore.Ptr("test-tenant"),
-			ToolName:   svrcore.Ptr("test-tool"),
-			ToolCallId: svrcore.Ptr("test-id"),
+	getToolCall := &toolcall.ToolCall{
+		Identity: toolcall.Identity{
+			Tenant:   svrcore.Ptr("test-tenant"),
+			ToolName: svrcore.Ptr("test-tool"),
+			ID:       svrcore.Ptr("test-id"),
 		},
 	}
 
@@ -397,7 +397,7 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	if *getResult.Status != toolcalls.ToolCallStatusRunning {
+	if *getResult.Status != toolcall.StatusRunning {
 		t.Errorf("Expected status to remain 'running', got %s", *getResult.Status)
 	}
 
@@ -405,7 +405,7 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 		t.Errorf("Expected request to remain original, got %s", string(getResult.Request))
 	}
 
-	*getResult.Status = toolcalls.ToolCallStatusFailed
+	*getResult.Status = toolcall.StatusFailed
 	getResult.Request = jsontext.Value(`{"param":"get-modified"}`)
 
 	getResult2 := getToolCall.Copy()
@@ -414,7 +414,7 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 		t.Fatalf("Second get failed: %v", err)
 	}
 
-	if *getResult2.Status != toolcalls.ToolCallStatusRunning {
+	if *getResult2.Status != toolcall.StatusRunning {
 		t.Errorf("Expected stored status to remain 'running', got %s", *getResult2.Status)
 	}
 

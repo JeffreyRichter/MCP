@@ -1,4 +1,4 @@
-package v20250808
+package main
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 )
 
 func TestToolCallPIICreate(t *testing.T) {
@@ -24,13 +24,13 @@ func TestToolCallPIICreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := toolcalls.ToolCall{}
+	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusAwaitingElicitationResult {
-		t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusAwaitingElicitationResult, tc.Status)
+	if tc.Status == nil || *tc.Status != toolcall.StatusAwaitingElicitationResult {
+		t.Fatalf("expected status %q, got %v", toolcall.StatusAwaitingElicitationResult, tc.Status)
 	}
 	if tc.ElicitationRequest == nil {
 		t.Fatal("expected elicitation request to be present")
@@ -59,13 +59,13 @@ func TestToolCallPIIGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := toolcalls.ToolCall{}
+	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusAwaitingElicitationResult {
-		t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusAwaitingElicitationResult, tc.Status)
+	if tc.Status == nil || *tc.Status != toolcall.StatusAwaitingElicitationResult {
+		t.Fatalf("expected status %q, got %v", toolcall.StatusAwaitingElicitationResult, tc.Status)
 	}
 }
 
@@ -87,14 +87,14 @@ func TestToolCallPIIElicitationApproved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tc := toolcalls.ToolCall{}
+	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusSuccess {
-		t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusSuccess, tc.Status)
+	if tc.Status == nil || *tc.Status != toolcall.StatusSuccess {
+		t.Fatalf("expected status %q, got %v", toolcall.StatusSuccess, tc.Status)
 	}
 	if tc.ElicitationRequest != nil {
 		t.Fatal("expected elicitation request to be nil after processing")
@@ -133,13 +133,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tc := toolcalls.ToolCall{}
+			tc := toolcall.ToolCall{}
 			err = json.Unmarshal(b, &tc)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusCanceled {
-				t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusCanceled, tc.Status)
+			if tc.Status == nil || *tc.Status != toolcall.StatusCanceled {
+				t.Fatalf("expected status %q, got %v", toolcall.StatusCanceled, tc.Status)
 			}
 			if tc.ElicitationRequest != nil {
 				t.Fatal("expected nil elicitation request after processing")
@@ -168,13 +168,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tc := toolcalls.ToolCall{}
+		tc := toolcall.ToolCall{}
 		err = json.Unmarshal(b, &tc)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusCanceled {
-			t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusCanceled, tc.Status)
+		if tc.Status == nil || *tc.Status != toolcall.StatusCanceled {
+			t.Fatalf("expected status %q, got %v", toolcall.StatusCanceled, tc.Status)
 		}
 		if tc.ElicitationRequest != nil {
 			t.Fatal("expected elicitation request to be nil after processing")
@@ -203,13 +203,13 @@ func TestToolCallPIICancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := toolcalls.ToolCall{}
+	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusCanceled {
-		t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusCanceled, tc.Status)
+	if tc.Status == nil || *tc.Status != toolcall.StatusCanceled {
+		t.Fatalf("expected status %q, got %v", toolcall.StatusCanceled, tc.Status)
 	}
 	if tc.ElicitationRequest != nil {
 		t.Fatal("expected elicitation request to be nil after cancellation")
@@ -245,12 +245,12 @@ func TestToolCallPIICancelAlreadyCompleted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tc := toolcalls.ToolCall{}
+	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tc.Status == nil || *tc.Status != toolcalls.ToolCallStatusSuccess {
-		t.Fatalf("expected status %q, got %v", toolcalls.ToolCallStatusSuccess, tc.Status)
+	if tc.Status == nil || *tc.Status != toolcall.StatusSuccess {
+		t.Fatalf("expected status %q, got %v", toolcall.StatusSuccess, tc.Status)
 	}
 }

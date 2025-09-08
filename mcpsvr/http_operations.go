@@ -1,4 +1,4 @@
-package v20250808
+package main
 
 // For timeouts/cancellation, see https://ieftimov.com/posts/make-resilient-golang-net-http-servers-using-timeouts-deadlines-context-cancellation/
 
@@ -7,106 +7,85 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
-	"sync"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/JeffreyRichter/mcpsvr/config"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
-	"github.com/JeffreyRichter/mcpsvr/resources"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/mcpsvr/resources/azresources"
 	"github.com/JeffreyRichter/mcpsvr/resources/localresources"
 	"github.com/JeffreyRichter/svrcore"
 )
 
-const v20250808 = "v20250808"
+// Resource type & operations pattern:
+// 1. Define Resource Type struct & define api-agnostic resource type operations on this type
+// 2. Construct global singleton instance/variable of the Resource Type used to call #1 methods
+// 3. Define api-version Resource Type Operations struct with field of #1 & define api-specific HTTP operations on this type
+// 4. Construct global singleton instance/variable of #3 wrapping #2 & set api-version routes to these var/methods
 
-// singletons are defined as function variables so tests can insert mocks
-// TODO: reconsider this architecture; a hierarchy of singletons complicates testing
-var (
-	GetOps = sync.OnceValue(func() *httpOperations {
-		store := GetToolCallStore()
-		return &httpOperations{ToolCallStore: store}
-	})
+func newLocalMcpServer(shutdownCtx context.Context, errorLogger *slog.Logger) *httpOps {
+	ops := &httpOps{errorLogger: errorLogger, store: localresources.NewToolCallStore(shutdownCtx)}
+	ops.pm = localresources.NewPhaseMgr(shutdownCtx, localresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
+	ops.buildToolInfos()
+	return ops
+}
 
-	GetToolInfos = sync.OnceValue(buildToolInfosMap)
+func newAzureMcpServer(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *httpOps {
+	ops := &httpOps{errorLogger: errorLogger, store: azresources.NewToolCallStore(blobClient)}
+	pm, err := azresources.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
+	if err != nil {
+		panic(err)
+	}
+	ops.pm = pm
+	ops.buildToolInfos()
+	return ops
+}
 
-	// GetToolCallStore returns a singleton ToolCallStore. It's an exported variable so offline tests can replace the production default with a mock.
-	GetToolCallStore = sync.OnceValue(func() resources.ToolCallStore {
-		if config.Get().Local {
-			return localresources.NewToolCallStore(context.TODO() /*shutdownCtx*/)
-		}
-		if cfg := config.Get(); cfg.AzuriteAccount != "" && cfg.AzuriteKey != "" {
-			fmt.Println("Using Azurite for tool call storage")
-			cred := must(azblob.NewSharedKeyCredential(cfg.AzuriteAccount, cfg.AzuriteKey))
-			return azresources.NewToolCallStore(must(azblob.NewClientWithSharedKeyCredential(cfg.AzureBlobURL, cred, nil)))
-		}
-		cred := must(azidentity.NewDefaultAzureCredential(nil))
-		serviceURL := must(url.Parse(config.Get().AzureBlobURL)).String()
-		client := must(azblob.NewClient(serviceURL, cred, nil))
-		return azresources.NewToolCallStore(client)
-	})
+// httpOps wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
+type httpOps struct {
+	errorLogger *slog.Logger
+	store       toolcall.Store
+	pm          toolcall.PhaseMgr
+	toolInfos   map[string]*ToolInfo
+}
 
-	GetPhaseManager = sync.OnceValue(func() resources.PhaseMgr {
-		ops := GetOps()
-		return must(azresources.NewPhaseMgr(context.TODO() /*shutdownCtx*/, config.Get().AzureQueueURL, azresources.PhaseMgrConfig{
-			Logger:                     slog.Default(),
-			ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc,
-		}, ops.ToolCallStore))
-	})
-)
-
-func buildToolInfosMap() map[string]*ToolInfo {
-	toolInfos := map[string]*ToolInfo{}
-	ops := GetOps()
+func (ops *httpOps) buildToolInfos() {
+	ops.toolInfos = map[string]*ToolInfo{}
 	for _, tc := range []ToolCaller{
 		&addToolCaller{ops: ops},
 		&countToolCaller{ops: ops},
 		&piiToolCaller{ops: ops},
 	} {
 		if t := tc.Tool(); t != nil {
-			toolInfos[t.Name] = &ToolInfo{Tool: t, Caller: tc}
+			ops.toolInfos[t.Name] = &ToolInfo{Tool: t, Caller: tc}
 		}
 	}
-	return toolInfos
 }
 
-// httpOperations wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
-type httpOperations struct{ resources.ToolCallStore }
-
 // etag returns the ETag for this version's HTTP operations
-func (ops *httpOperations) etag() *svrcore.ETag { return svrcore.Ptr(svrcore.ETag("v20250808")) }
+func (ops *httpOps) etag() *svrcore.ETag { return svrcore.Ptr(svrcore.ETag("v20250808")) }
 
 // lookupToolCall retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
-func (*httpOperations) lookupToolCall(r *svrcore.ReqRes) (*ToolInfo, *toolcalls.ToolCall, error) {
+func (ops *httpOps) lookupToolCall(r *svrcore.ReqRes) (*ToolInfo, *toolcall.ToolCall, error) {
 	tenant := "sometenant"
-	toolName, toolCallId := r.R.PathValue("toolName"), r.R.PathValue("toolCallId")
+	toolName, toolCallID := r.R.PathValue("toolName"), r.R.PathValue("toolCallID")
 	if toolName == "" {
 		return nil, nil, r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "Tool name required")
 	}
-	if toolCallId == "" {
+	if toolCallID == "" {
 		return nil, nil, r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "Tool call ID required")
 	}
-	infos := GetToolInfos()
-	ti, ok := infos[toolName]
+	ti, ok := ops.toolInfos[toolName]
 	if !ok {
 		return nil, nil, r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "Tool '%s' not found", toolName)
 	}
-	return ti, toolcalls.NewToolCall(tenant, toolName, toolCallId), nil
+	return ti, toolcall.New(tenant, toolName, toolCallID), nil
 }
 
-/* TODO: Fix for error below:
-pm, err := resources.NewPhaseMgr(hutdownCtx, "", ops.toolNameToProcessPhaseFunc)
-if err != nil {
-	return nil, err
-}*/
-
 // toolNameToProcessPhaseFunc converts a toolname to a function that knows how to advance the tool call's phase/state
-func (ops *httpOperations) toolNameToProcessPhaseFunc(toolName string) (toolcalls.ProcessPhaseFunc, error) {
-	ti, ok := GetToolInfos()[toolName]
+func (ops *httpOps) toolNameToProcessPhaseFunc(toolName string) (toolcall.ProcessPhaseFunc, error) {
+	ti, ok := ops.toolInfos[toolName]
 	if !ok {
 		return nil, fmt.Errorf("tool '%s' not found", toolName)
 	}
@@ -115,12 +94,12 @@ func (ops *httpOperations) toolNameToProcessPhaseFunc(toolName string) (toolcall
 
 // putToolCallResource creates a new tool call resource (idempotently if a retry occurs).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
-func (ops *httpOperations) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return err
 	}
-	if err := r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); err != nil {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); err != nil {
 		return err
 	}
 
@@ -132,7 +111,7 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *svrcore.R
 		}
 	}
 	tc.IdempotencyKey = r.H.IdempotencyKey
-	return ti.Caller.Create(ctx, tc, r)
+	return ti.Caller.Create(ctx, tc, r, ops.pm)
 }
 
 // preambleToolCallResource retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant),
@@ -140,23 +119,23 @@ func (ops *httpOperations) putToolCallResource(ctx context.Context, r *svrcore.R
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid,
 // the ToolCall resource is not found, or preconditions are not met.
 // This method is used is called by GET & POST (not PUT) because it assumes the resource must already exist.
-func (ops *httpOperations) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (*ToolInfo, *toolcalls.ToolCall, error) {
+func (ops *httpOps) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (*ToolInfo, *toolcall.ToolCall, error) {
 	ti, tc, err := ops.lookupToolCall(r)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err = ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return nil, nil, r.WriteError(http.StatusNotFound, nil, nil, "NotFound", "Tool call not found")
 	}
-	if err = r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return nil, nil, err
 	}
 	return ti, tc, nil
 }
 
 // getToolCallResource retrieves the ToolCall resource from the request.
-func (ops *httpOperations) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.preambleToolCallResource(ctx, r)
 	if err != nil {
 		return err
@@ -165,7 +144,7 @@ func (ops *httpOperations) getToolCallResource(ctx context.Context, r *svrcore.R
 }
 
 // postToolCallAdvance advances the state of a tool call using r's body (CreateMessageResult or ElicitResult)
-func (ops *httpOperations) postToolCallResourceAdvance(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) postToolCallResourceAdvance(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.preambleToolCallResource(ctx, r)
 	if err != nil {
 		return err
@@ -174,7 +153,7 @@ func (ops *httpOperations) postToolCallResourceAdvance(ctx context.Context, r *s
 }
 
 // postToolCallCancelResource cancels a tool call.
-func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) postToolCallCancelResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.preambleToolCallResource(ctx, r)
 	if err != nil {
 		return err
@@ -185,36 +164,35 @@ func (ops *httpOperations) postToolCallCancelResource(ctx context.Context, r *sv
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // getToolList retrieves the list of tools.
-func (ops *httpOperations) getToolList(ctx context.Context, r *svrcore.ReqRes) error {
-	if err := r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: svrcore.Ptr(svrcore.ETag(v20250808))}); err != nil {
+func (ops *httpOps) getToolList(ctx context.Context, r *svrcore.ReqRes) error {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: ops.etag()}); err != nil {
 		return err
 	}
-	info := GetToolInfos()
-	result := mcp.ListToolsResult{Tools: make([]mcp.Tool, 0, len(info))}
-	for _, ti := range info {
+	result := mcp.ListToolsResult{Tools: make([]mcp.Tool, 0, len(ops.toolInfos))}
+	for _, ti := range ops.toolInfos {
 		result.Tools = append(result.Tools, *ti.Tool)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: svrcore.Ptr(svrcore.ETag(v20250808))}, nil, result)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: ops.etag()}, nil, result)
 }
 
 // listToolCalls retrieves the list of tool calls.
-func (ops *httpOperations) listToolCalls(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) listToolCalls(ctx context.Context, r *svrcore.ReqRes) error {
 	body := any(nil)
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: ops.etag()}, nil, body)
 }
 
 // getResources retrieves the list of resources.
-func (ops *httpOperations) getResources(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) getResources(ctx context.Context, r *svrcore.ReqRes) error {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // getResourcesTemplates retrieves the list of resource templates.
-func (ops *httpOperations) getResourcesTemplates(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) getResourcesTemplates(ctx context.Context, r *svrcore.ReqRes) error {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // getResource retrieves a specific resource by name.
-func (ops *httpOperations) getResource(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) getResource(ctx context.Context, r *svrcore.ReqRes) error {
 	resourceName := r.R.PathValue("name")
 	if resourceName == "" {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "Resource name is required")
@@ -223,22 +201,22 @@ func (ops *httpOperations) getResource(ctx context.Context, r *svrcore.ReqRes) e
 }
 
 // getPrompts retrieves the list of prompts.
-func (ops *httpOperations) getPrompts(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) getPrompts(ctx context.Context, r *svrcore.ReqRes) error {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // getPrompt retrieves a specific prompt by name.
-func (ops *httpOperations) getPrompt(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) getPrompt(ctx context.Context, r *svrcore.ReqRes) error {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // putRoots updates the list of root resources.
-func (ops *httpOperations) putRoots(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) putRoots(ctx context.Context, r *svrcore.ReqRes) error {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // postCompletion returns a text completion.
-func (ops *httpOperations) postCompletion(ctx context.Context, r *svrcore.ReqRes) error {
+func (ops *httpOps) postCompletion(ctx context.Context, r *svrcore.ReqRes) error {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 

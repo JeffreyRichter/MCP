@@ -38,7 +38,7 @@ func (sm *ShutdownMgr) HealthProbe(ctx context.Context, r *svrcore.ReqRes) error
 
 // ShutdownMgrConfig holds the configuration for the shutdown policy.
 type ShutdownMgrConfig struct {
-	Logger *slog.Logger
+	ErrorLogger *slog.Logger
 	// HealthProbeDelay indicates the time the load balancer takes to stop sending traffic to the process.
 	// After this delay, all operations using ShutdownMgr are canceled.
 	HealthProbeDelay time.Duration
@@ -58,7 +58,7 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM) // Register the signals we want the channel to receive
 		switch sig := <-sigs; sig {                          // Block until signal is received
 		case syscall.SIGINT, syscall.SIGTERM: // SIGINT is Ctrl-C, SIGTERM is default termination signal
-			c.Logger.Info("Signal " + sig.String() + ": Service instance shutting down")
+			c.ErrorLogger.Info("Signal " + sig.String() + ": Service instance shutting down")
 			// 1. Set flag indicating that shutdown has been requested (health probe uses this to notify load balancer to take node out of rotation)
 			sm.shuttingDown.Store(true) // All future requests immedidately return http.StatusServiceUnavailable via this policy
 
@@ -70,7 +70,7 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 			time.Sleep(c.CancellationDelay)
 
 			// 4. No more time given, force node shutdown
-			c.Logger.Info("All inflight requests complete: Service instance shutting down")
+			c.ErrorLogger.Info("All inflight requests complete: Service instance shutting down")
 			os.Exit(1) // Kill this service instance
 		}
 	}()

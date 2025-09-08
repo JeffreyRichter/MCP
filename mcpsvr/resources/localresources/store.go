@@ -6,20 +6,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
-	"github.com/JeffreyRichter/mcpsvr/resources"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
 // LocalToolCallStore is an in-memory [ToolCallStore] having the same semantics as [AzureBlobToolCallStore]
 type localToolCallStore struct {
-	data map[string]*toolcalls.ToolCall
+	data map[string]*toolcall.ToolCall
 	mu   *sync.RWMutex
 }
 
-// NewToolCallStore creates a [resources.ToolCallStore]; ctx is used to cancel the expiry goroutine
-func NewToolCallStore(ctx context.Context) resources.ToolCallStore {
-	s := &localToolCallStore{data: map[string]*toolcalls.ToolCall{}, mu: &sync.RWMutex{}}
+// NewToolCallStore creates a [toolcall.Store]; ctx is used to cancel the expiry goroutine
+func NewToolCallStore(ctx context.Context) toolcall.Store {
+	s := &localToolCallStore{data: map[string]*toolcall.ToolCall{}, mu: &sync.RWMutex{}}
 	go s.expiry(ctx)
 	return s
 }
@@ -43,11 +42,11 @@ func (s *localToolCallStore) expiry(ctx context.Context) {
 	}
 }
 
-func (s *localToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+func (s *localToolCallStore) Get(_ context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
+	key := s.key(*tc.Tenant, *tc.ToolName, *tc.ID)
 	stored, ok := s.data[key]
 	if !ok {
 		return &svrcore.ServerError{
@@ -57,20 +56,20 @@ func (s *localToolCallStore) Get(_ context.Context, tc *toolcalls.ToolCall, ac s
 		}
 	}
 	*tc = stored.Copy() // copying prevents the caller mutating stored data
-	err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodGet, ac)
+	err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodGet, ac)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *localToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+func (s *localToolCallStore) Put(_ context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
+	key := s.key(*tc.Tenant, *tc.ToolName, *tc.ID)
 	if stored, ok := s.data[key]; ok {
-		err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodPut, ac)
+		err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodPut, ac)
 		if err != nil {
 			return err
 		}
@@ -82,13 +81,13 @@ func (s *localToolCallStore) Put(_ context.Context, tc *toolcalls.ToolCall, ac s
 	return nil
 }
 
-func (s *localToolCallStore) Delete(_ context.Context, tc *toolcalls.ToolCall, ac svrcore.AccessConditions) error {
+func (s *localToolCallStore) Delete(_ context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := key(*tc.Tenant, *tc.ToolName, *tc.ToolCallId)
+	key := s.key(*tc.Tenant, *tc.ToolName, *tc.ID)
 	if stored, ok := s.data[key]; ok {
-		err := svrcore.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodDelete, ac)
+		err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodDelete, ac)
 		if err != nil {
 			return err
 		}
@@ -97,6 +96,6 @@ func (s *localToolCallStore) Delete(_ context.Context, tc *toolcalls.ToolCall, a
 	return nil
 }
 
-func key(tenant, toolName, toolCallId string) string {
-	return tenant + "/" + toolName + "/" + toolCallId
+func (*localToolCallStore) key(tenant, toolName, toolCallID string) string {
+	return tenant + "/" + toolName + "/" + toolCallID
 }

@@ -1,4 +1,4 @@
-package toolcalls
+package toolcall
 
 import (
 	"context"
@@ -12,20 +12,21 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-type ToolCallIdentity struct {
-	Tenant     *string `json:"tenant"`
-	ToolName   *string `json:"name"`
-	ToolCallId *string `json:"toolCallId"`
+// Identity is the identity of a ToolCall whcih includes Tenant, ToolName, and ToolCallId
+type Identity struct {
+	Tenant   *string `json:"tenant"`
+	ToolName *string `json:"toolname"`
+	ID       *string `json:"id"` // Scoped within tenant & tool name
 }
 
-// ToolCall is the data model for the version-agnostic tool calls resource type.
+// ToolCall is the data model for the version-agnostic tool call resource type.
 type ToolCall struct {
-	ToolCallIdentity   `json:",inline"`
+	Identity           `json:",inline"`
 	Expiration         *time.Time          `json:"expiration,omitempty"`
 	IdempotencyKey     *string             `json:"idempotencyKey,omitempty"` // Used for retried PUTs to determine if PUT of same Request should be considered OK
 	ETag               *svrcore.ETag       `json:"etag"`
 	Phase              *string             `json:"phase,omitempty"`
-	Status             *ToolCallStatus     `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
+	Status             *Status             `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
 	Request            jsontext.Value      `json:"request,omitempty"`
 	SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
 	ElicitationRequest *ElicitationRequest `json:"elicitationRequest,omitempty"`
@@ -34,22 +35,16 @@ type ToolCall struct {
 	Error              jsontext.Value      `json:"error,omitempty"`
 }
 
-// TODO: Maybe use this for ToolCall's Result field & remove its Error field?
-/*type ToolCallResult struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L778
-	Content           []mcp.ContentBlock `json:"content"`
-	StructuredContent *map[string]any    `json:"structuredContent,omitempty"`
-	IsError           *bool              `json:"isError,omitempty"`
-}*/
-
-func NewToolCall(tenant, toolName, toolCallId string) *ToolCall {
+// New creates a new ToolCall with the specified tenant, tool name, and tool call ID.
+func New(tenant, toolName, toolCallID string) *ToolCall {
 	return &ToolCall{
-		ToolCallIdentity: ToolCallIdentity{Tenant: svrcore.Ptr(tenant), ToolName: svrcore.Ptr(toolName), ToolCallId: svrcore.Ptr(toolCallId)},
-		Expiration:       svrcore.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
-		Status:           svrcore.Ptr(ToolCallStatusSubmitted),
+		Identity:   Identity{Tenant: svrcore.Ptr(tenant), ToolName: svrcore.Ptr(toolName), ID: svrcore.Ptr(toolCallID)},
+		Expiration: svrcore.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
+		Status:     svrcore.Ptr(StatusSubmitted),
 	}
 }
 
-// Copy (deeply) the ToolCall
+// Copy returns a deep copy of tc
 func (tc *ToolCall) Copy() ToolCall {
 	if tc == nil {
 		panic("tc can't be nil")
@@ -60,17 +55,38 @@ func (tc *ToolCall) Copy() ToolCall {
 	return cp
 }
 
-type ToolCallStatus string
+type Status string
 
 const (
-	ToolCallStatusSubmitted                 ToolCallStatus = "submitted"
-	ToolCallStatusRunning                   ToolCallStatus = "running"
-	ToolCallStatusAwaitingSamplingResult    ToolCallStatus = "awaitingSamplingResult"
-	ToolCallStatusAwaitingElicitationResult ToolCallStatus = "awaitingElicitationResult"
-	ToolCallStatusSuccess                   ToolCallStatus = "success"
-	ToolCallStatusFailed                    ToolCallStatus = "failed"
-	ToolCallStatusCanceled                  ToolCallStatus = "canceled"
+	StatusSubmitted                 Status = "submitted"
+	StatusRunning                   Status = "running"
+	StatusAwaitingSamplingResult    Status = "awaitingSamplingResult"
+	StatusAwaitingElicitationResult Status = "awaitingElicitationResult"
+	StatusSuccess                   Status = "success"
+	StatusFailed                    Status = "failed"
+	StatusCanceled                  Status = "canceled"
 )
+
+// Store manages persistent storage of ToolCalls
+type Store interface {
+	Put(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+	Get(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+	Delete(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+}
+
+/********************* Types for Phase Processing ***************/
+type PhaseMgr interface {
+	// StartPhaseProcessing: enqueues a new tool call phase with tool name & tool call id.
+	StartPhase(ctx context.Context, tc *ToolCall) error
+}
+
+type PhaseProcessor interface {
+	ExtendTime(ctx context.Context, phaseExecutionTime time.Duration) error
+}
+
+type ProcessPhaseFunc func(context.Context, *ToolCall, PhaseProcessor) error
+
+type ToolNameToProcessPhaseFunc func(toolName string) (ProcessPhaseFunc, error)
 
 type SamplingRequest struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L986
 	Messages []mcp.SamplingMessage `json:"messages"`
@@ -240,14 +256,4 @@ func must[T any](val T, err error) T {
 		panic(err)
 	}
 	return val
-}
-
-/********************* Types for Phase Processing ***************/
-
-type ProcessPhaseFunc func(context.Context, *ToolCall, PhaseProcessor) error
-
-type ToolNameToProcessPhaseFunc func(toolName string) (ProcessPhaseFunc, error)
-
-type PhaseProcessor interface {
-	ExtendProcessingTime(ctx context.Context, phaseExecutionTime time.Duration) error
 }

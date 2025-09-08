@@ -1,11 +1,11 @@
-package v20250808
+package main
 
 /*
 GET /mcp/tools
 GET /mcp/tools/{toolName}/calls
-PUT/GET /mcp/tools/{toolName}/calls/{toolCallId}
-POST /mcp/tools/{toolName}/calls/{toolCallId}/advance
-POST /mcp/tools/{toolName}/calls/{toolCallId}/cancel
+PUT/GET /mcp/tools/{toolName}/calls/{toolCallID}
+POST /mcp/tools/{toolName}/calls/{toolCallID}/advance
+POST /mcp/tools/{toolName}/calls/{toolCallID}/cancel
 
 GET /mcp/resources
 GET /mcp/resources-templates
@@ -22,14 +22,13 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-func Routes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
+func (ops *httpOps) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 	// If no base api-version, baseRoutes == nil; build routes from scratch
 
 	// Use the patterns below to MODIFY the base's routes (or ignore baseRoutes to build routes from scratch):
 	// To existing URL, add/overwrite HTTP method: baseRoutes["<ExistinUrl>"]["<ExistingOrNewHttpMethod>"] = postFoo
 	// To existing URL, remove HTTP method:        delete(baseRoutes["<ExistingUrl>"], "<ExisitngHttpMethod>")
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
-	ops := GetOps()
 	return svrcore.ApiVersionRoutes{
 		// ***** TOOLS *****
 		"/mcp/tools": map[string]*svrcore.MethodInfo{
@@ -38,7 +37,7 @@ func Routes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 		"/mcp/tools/{toolName}/calls": map[string]*svrcore.MethodInfo{
 			"GET": {Policy: ops.listToolCalls},
 		},
-		"/mcp/tools/{toolName}/calls/{toolCallId}": map[string]*svrcore.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallID}": map[string]*svrcore.MethodInfo{
 			"PUT": {
 				Policy: ops.putToolCallResource,
 				ValidHeader: &svrcore.ValidHeader{
@@ -49,7 +48,7 @@ func Routes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 			"GET": {Policy: ops.getToolCallResource},
 		},
 
-		"/mcp/tools/{toolName}/calls/{toolCallId}/advance": map[string]*svrcore.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallID}/advance": map[string]*svrcore.MethodInfo{
 			"POST": {
 				Policy: ops.postToolCallResourceAdvance,
 				ValidHeader: &svrcore.ValidHeader{
@@ -59,7 +58,7 @@ func Routes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 			},
 		},
 
-		"/mcp/tools/{toolName}/calls/{toolCallId}/cancel": map[string]*svrcore.MethodInfo{
+		"/mcp/tools/{toolName}/calls/{toolCallID}/cancel": map[string]*svrcore.MethodInfo{
 			"POST": {
 				Policy: ops.postToolCallCancelResource,
 				ValidHeader: &svrcore.ValidHeader{
@@ -95,11 +94,4 @@ func Routes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 			"POST": {Policy: ops.postCompletion},
 		},
 	}
-}
-
-func must[T any](value T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return value
 }

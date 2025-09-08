@@ -10,7 +10,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.2
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.1
 	github.com/JeffreyRichter/svrcore v0.0.0-00010101000000-000000000000
-	github.com/caarlos0/env/v11 v11.3.1
 	github.com/stretchr/testify v1.10.0
 )
 

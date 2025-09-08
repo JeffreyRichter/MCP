@@ -1,4 +1,4 @@
-package v20250808
+package main
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"net/http"
 
 	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
 type piiToolCaller struct {
 	defaultToolCaller
-	ops *httpOperations
+	ops *httpOps
 }
 
 type PIIToolCallRequest struct {
@@ -57,7 +57,7 @@ func (c *piiToolCaller) Tool() *mcp.Tool {
 }
 
 // TODO: client must specify elicitation capability
-func (c *piiToolCaller) Create(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var trequest PIIToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
 		return err
@@ -67,7 +67,7 @@ func (c *piiToolCaller) Create(ctx context.Context, tc *toolcalls.ToolCall, r *s
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "key is required")
 	}
 
-	tc.ElicitationRequest = &toolcalls.ElicitationRequest{
+	tc.ElicitationRequest = &toolcall.ElicitationRequest{
 		Message: "The requested data contains personal information (PII). Please approve access to this data.",
 		RequestedSchema: struct {
 			Type       string                                   `json:"type"`
@@ -85,39 +85,39 @@ func (c *piiToolCaller) Create(ctx context.Context, tc *toolcalls.ToolCall, r *s
 			Required: []string{"approved"},
 		},
 	}
-	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusAwaitingElicitationResult)
+	tc.Status = svrcore.Ptr(toolcall.StatusAwaitingElicitationResult)
 
-	err := c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *piiToolCaller) Get(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *piiToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
 		return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "can't advance because tool call has no status")
 	}
-	if *tc.Status != toolcalls.ToolCallStatusAwaitingElicitationResult {
+	if *tc.Status != toolcall.StatusAwaitingElicitationResult {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "not expecting an elicitation result for call with status %q", *tc.Status)
 	}
 
-	var er toolcalls.ElicitationResult
+	var er toolcall.ElicitationResult
 	err = r.UnmarshalBody(&er)
 	if err != nil {
 		return err
@@ -136,42 +136,42 @@ func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcalls.ToolCall, r *
 			return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", `missing "approved" boolean in elicitation result content`)
 		}
 	}
-	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
+	tc.Status = svrcore.Ptr(toolcall.StatusCanceled)
 	if approved {
-		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 		tresult := &PIIToolCallResult{Data: "here's your PII"}
 		tc.Result = must(json.Marshal(tresult))
 	}
 	// drop the elicitation request because it's been processed
 	tc.ElicitationRequest = nil
 
-	if err = c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *piiToolCaller) Cancel(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *piiToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
 		return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "tool call status is nil; can't cancel")
 	}
 	switch *tc.Status {
-	case toolcalls.ToolCallStatusSuccess, toolcalls.ToolCallStatusFailed, toolcalls.ToolCallStatusCanceled:
+	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 	}
 
 	tc.ElicitationRequest = nil
 	tc.Error = nil
 	tc.Result = nil
-	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
-	if err = c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	tc.Status = svrcore.Ptr(toolcall.StatusCanceled)
+	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)

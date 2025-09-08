@@ -1,4 +1,4 @@
-package v20250808
+package main
 
 import (
 	"context"
@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
 type countToolCaller struct {
 	defaultToolCaller
-	ops *httpOperations
+	ops *httpOps
 }
 
 type CountToolCallRequest struct {
@@ -78,26 +78,25 @@ func (c *countToolCaller) Tool() *mcp.Tool {
 	}
 }
 
-func (c *countToolCaller) Create(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var trequest CountToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
 		return err
 	}
 	tc.Request = must(json.Marshal(trequest))
 
-	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusRunning)
+	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 	tc.Phase = svrcore.Ptr(strconv.Itoa(trequest.Increments))
-	err := c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	pm := GetPhaseManager()
-	go pm.StartPhaseProcessing(context.TODO(), tc)
+	go pm.StartPhase(context.TODO(), tc)
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *countToolCaller) Get(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *countToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
 	if err != nil {
 		return err
@@ -106,24 +105,24 @@ func (c *countToolCaller) Get(ctx context.Context, tc *toolcalls.ToolCall, r *sv
 }
 
 // TODO: could all tool calls use the same cancel method?
-func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err = r.ValidatePreconditions(svrcore.ResourceValues{ETag: tc.ETag}); err != nil {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{ETag: tc.ETag}); err != nil {
 		return err
 	}
 	if tc.Status == nil {
 		return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "tool call status is nil; can't cancel")
 	}
 	switch *tc.Status {
-	case toolcalls.ToolCallStatusSuccess, toolcalls.ToolCallStatusFailed, toolcalls.ToolCallStatusCanceled:
+	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 	}
 
-	tc.ElicitationRequest, tc.Error, tc.Result, tc.Status = nil, nil, nil, svrcore.Ptr(toolcalls.ToolCallStatusCanceled)
-	if err = c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	tc.ElicitationRequest, tc.Error, tc.Result, tc.Status = nil, nil, nil, svrcore.Ptr(toolcall.StatusCanceled)
+	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -133,7 +132,7 @@ func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcalls.ToolCall, r 
 // the phase manager needs to reference this function at construction; see GetPhaseManager above. Overall
 // this arrangement is awkward because the phase manager is nominally version-independent but in practice
 // needs to know about specific tool calls
-func (c *countToolCaller) ProcessPhase(_ context.Context, tc *toolcalls.ToolCall, _ toolcalls.PhaseProcessor) error {
+func (c *countToolCaller) ProcessPhase(_ context.Context, tc *toolcall.ToolCall, _ toolcall.PhaseProcessor) error {
 	phase, err := strconv.Atoi(*tc.Phase)
 	if err != nil {
 		return fmt.Errorf("invalid phase %q", *tc.Phase)
@@ -144,7 +143,7 @@ func (c *countToolCaller) ProcessPhase(_ context.Context, tc *toolcalls.ToolCall
 	tc.Phase = svrcore.Ptr(strconv.Itoa(phase))
 	// TODO: if we needed data from the client request e.g. CountToolCallRequest here, we'd have to unmarshal it again
 	if phase <= 0 {
-		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 		tc.Result = must(json.Marshal(struct{ N int }{N: 42}))
 	}
 	return nil

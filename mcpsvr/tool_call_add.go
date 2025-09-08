@@ -1,4 +1,4 @@
-package v20250808
+package main
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcalls"
+	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
 type addToolCaller struct {
 	//defaultToolCaller
-	ops *httpOperations
+	ops *httpOps
 }
 type AddToolCallRequest struct {
 	X int `json:"x,omitempty"`
@@ -78,31 +78,31 @@ func (c *addToolCaller) Tool() *mcp.Tool {
 	}
 }
 
-func (c *addToolCaller) Create(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var trequest AddToolCallRequest
 	if err := r.UnmarshalBody(&trequest); err != nil {
 		return err
 	}
 	tc.Request = must(json.Marshal(trequest))
 
-	tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
+	tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 	tresult := &AddToolCallResult{Sum: trequest.X + trequest.Y}
 	tc.Result = must(json.Marshal(tresult))
 
 	// simulate this tool call requiring some effort
 	d := time.Duration(5 + rand.Intn(1500))
-	fmt.Fprintf(os.Stderr, "[%s] blocking for %dms\n", *tc.ToolCallId, d)
+	fmt.Fprintf(os.Stderr, "[%s] blocking for %dms\n", *tc.ID, d)
 	time.Sleep(d * time.Millisecond)
 
-	err := c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
+	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
 	if err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *addToolCaller) Get(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *addToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
 	if err != nil {
 		return err
@@ -110,26 +110,26 @@ func (c *addToolCaller) Get(ctx context.Context, tc *toolcalls.ToolCall, r *svrc
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *addToolCaller) Advance(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+func (c *addToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if err != nil {
 		return err
 	}
-	if err := r.ValidatePreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
 		return err
 	}
 	switch *tc.Status {
-	case toolcalls.ToolCallStatusAwaitingElicitationResult:
-		var er toolcalls.ElicitationResult
+	case toolcall.StatusAwaitingElicitationResult:
+		var er toolcall.ElicitationResult
 		err := r.UnmarshalBody(&er)
 		if err != nil {
 			return err
 		}
 		// TODO: Process the er, update progress?, update status, update result/error
-		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
+		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 
-	case toolcalls.ToolCallStatusAwaitingSamplingResult:
-		var sr toolcalls.SamplingResult
+	case toolcall.StatusAwaitingSamplingResult:
+		var sr toolcall.SamplingResult
 		err := r.UnmarshalBody(&sr)
 		if err != nil {
 			return err
@@ -139,14 +139,14 @@ func (c *addToolCaller) Advance(ctx context.Context, tc *toolcalls.ToolCall, r *
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "tool call status is '%s'; not expecting a result", *tc.Status)
 	}
 
-	err = c.ops.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
+	err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
 	if err != nil {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *addToolCaller) Cancel(ctx context.Context, tc *toolcalls.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	/*
 		1.	GET ToolCall resource/etag from client-passed ID
 		2.	If status==terminal, return
@@ -162,18 +162,18 @@ func (c *addToolCaller) Cancel(ctx context.Context, tc *toolcalls.ToolCall, r *s
 
 /////////////////////////////////////////////////////////////////////////
 
-func (c *addToolCaller) ProcessPhase(ctx context.Context, tc *toolcalls.ToolCall, pp toolcalls.PhaseProcessor) error {
+func (c *addToolCaller) ProcessPhase(ctx context.Context, tc *toolcall.ToolCall, pp toolcall.PhaseProcessor) error {
 	switch *tc.Phase {
 	case "submitted":
 		// Do work
 		tc.Phase = svrcore.Ptr("one")
-		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusRunning)
+		tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 		return nil
 
 	case "one":
 		// Do work
-		pp.ExtendProcessingTime(ctx, time.Millisecond*300)
-		tc.Status = svrcore.Ptr(toolcalls.ToolCallStatusSuccess)
+		pp.ExtendTime(ctx, time.Millisecond*300)
+		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 		tc.Phase = (*string)(tc.Status) // No more phases
 		return nil
 	}

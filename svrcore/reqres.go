@@ -291,12 +291,12 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 	return nil
 }
 
-// ValidatePreconditions checks the passed-in ETag & LastModified (for the current resource) against the request's
-// If(None)Match & Id(Un)ModifiedSince headers. If preconditions pass, ValidatePreconditions returns nil; else, it
+// CheckPreconditions checks the passed-in ETag & LastModified (for the current resource) against the request's
+// If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, CheckPreconditions returns nil; else, it
 // writes an appropriate ServerError to the HTTP response (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]) and returns the *ServerError.
-func (r *ReqRes) ValidatePreconditions(rv ResourceValues) error {
-	se := ValidatePreconditions(rv, r.R.Method, AccessConditions{
+func (r *ReqRes) CheckPreconditions(rv ResourceValues) error {
+	se := CheckPreconditions(rv, r.R.Method, AccessConditions{
 		IfMatch:           r.H.IfMatch,
 		IfNoneMatch:       r.H.IfNoneMatch,
 		IfModifiedSince:   r.H.IfModifiedSince,

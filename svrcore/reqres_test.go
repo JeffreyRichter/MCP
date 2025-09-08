@@ -511,7 +511,7 @@ func TestValidatePreconditions(t *testing.T) {
 			}
 			rw := httptest.NewRecorder()
 			rr, _ := newReqRes(nil, req, rw)
-			err = rr.ValidatePreconditions(tt.resourceValues)
+			err = rr.CheckPreconditions(tt.resourceValues)
 			// ValidatePreconditions is responsible for the status code only in error
 			// cases and when preconditions aren't met as stipulated in RFC 7232
 			if tt.expectedCode == 0 {
