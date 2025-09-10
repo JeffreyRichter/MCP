@@ -4,38 +4,73 @@
 
 **Status:** draft
 **Type:** Standards Track
-**Created:** 2025-09-08
+**Created:** 2025-09-10
 **Authors:** Jeffrey Richter, Mike Kistler
-
-## Abstract
-
-This SEP proposes a Pure HTTP transport layer for the Model Context Protocol (MCP). The proposed transport will enable
-scalable and efficient communication between MCP clients and servers using the mature and proven HTTP protocol, without the complexities of JSON-RPC over HTTP.
 
 ## Motivation
 
-The HTTP protocol is widely adopted and supported across various platforms and programming languages, making it an ideal choice for a transport layer in the MCP ecosystem. HTTP was designed to be scalable, reliable, and efficient, which aligns well with the needs of enterprise MCP servers.
+This SEP proposes a Pure HTTP transport layer for the Model Context Protocol (MCP). 
 
-Unlike local MCP Servers, remote MCP Servers are multi-tenant (accessed by multiple clients simultaneously). Remote MCP Servers must be scalable and fault tolerant and this is accomplished by creating a cluster of nodes running the MCP Server code with a load balancer that distributes incoming requests across the cluster. The Pure HTTP transport is designed to facilitate this architecture.
+The motivation for this proposal comes from attempting to implement enterprise-scale MCP clients/servers for Microsoft Azure and Office (with ~350M monthly users).
+- Our cloud architecture consists of a cluster of nodes all running MCP Server code.
+- Each client network request enter through a load-balancer which randomly directs each request to a node.
+   - NOTE: Azure's load-balancer forcibly terminates network connections every [4 minutes (by default)](https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-tcp-idle-timeout?tabs=tcp-reset-idle-portal).
+- The number of nodes in the cluster dynamically scales up/down based on client load
+- Nodes temporarily go down when new versions of the MCP code is deployed or if the code crashes.
+- Office has a cluster of MCP client website nodes where each browser requests also goes through a load balancer and these nodes adhere to the same archtecture as the MCP Server nodes above.
+
+The transport discussed in the proposal addresses the above cloud architecture and enables many benefits:
+- Enterprise cloud-based MCP clients/servers to scale efficiently due to no long-lived or sticky network connections.
+- Clients/servers can easily be made fault-tolerant and resilient to network failures, timeouts, and client/server crashes using retries and idempotency.
+- Clients/servers can change their features/capabilities dynamically as new client/server code is deployed without any downtime or re-establishing of connections/sessions.
+- HTTP has been an industry standard since 1997 with very significant cross-language support easing learning curve and adoption of MCP.
+- The HTTP API is simpler in that it is resource-focused (with CRUDL operations) as opposed to JSON-RPC method focused.
+- MCP SDKs are more for convenience and are not necessary for people to adopt the MCP protocol enabling MCP to be adopted by more languages quicker.
+- Improved performance by reducing client/server messages using HTTP's standard caching & optimistic concurrency patterns (etags).
+- The existing MCP Auth solutions continue to work as-is since they already follow HTTP industry standards.
+- This same HTTP transport can be used securely for local MCP Servers HTTP enabling one transport for use by both local and remote MCP clients/servers.  ***** TODO: Add section on this.
+- Improved performance since HTTP allows multiple requests from a single or multiple tenants to be processed in parallel.
+- ***** TODO: Say something about multi-tenancy? (done via Auth?
+- ***** TODO: Say something about not having to learn/understand/process JSON-RPC at all?
+
+The list of HTTP routes necessary to implement the MCP protocol is shown here:
+| MCP operation | HTTP route | Notes |
+|-------------------------------|
+| roots/list | PUT /mcp/roots | |
+| completion/complete TODO | POST /mcp/complete | |
+| resources/list | GET /mcp/resources | |
+| resource/templates/list | GET /mcp/resources-templates | |
+| resources/read  | POST /mcp/resources/{name} | TODO: Should really be a GET |
+| prompts/list | GET /mcp/prompts | |
+| prompts/get | POST /mcp/prompts/{name} | |
+| tools/list | GET /mcp/tools | |
+
+| tools/call | PUT /mcp/tools/{toolName}/calls/{toolCallID} | Returns ElicitRequest/SamplingRequest request or ToolResult |
+| * new * | POST /mcp/tools/{toolName}/calls/{toolCallID}/advance | Client sends ElicitResult/SamplingResult |
+| notification/cancelled | POST /mcp/tools/{toolName}/calls/{toolCallID}/cancel | | 
+| * new * | GET /mcp/tools/{toolName}/calls | Fault-tolerance: enables client to get list of in-flight tool calls |
+| * new * | GET /mcp/tools/{toolName}/calls/{toolCallID} | Fault-tolerance: enables client to get an inflight-tool call | 
+
+- NOTE: List change notifications are not needed because client polls using industry standard HTTP GET with if-none-match: etag header. Cilents just push updated roots to server with HTTP PUT.
 
 ## Specification
 
 The complete technical specification for this SEP will be provided in a forthcoming PR. Here we provide an overview of the key design elements and decisions.
 
-The Pure HTTP transport for MCP will utilize standard HTTP methods (GET, POST, PUT, DELETE) to perform operations defined in the MCP protocol. Each MCP operation will be mapped to a specific HTTP endpoint, allowing clients to interact with the MCP server using standard HTTP requests.
+The Pure HTTP transport for MCP utilizes standard HTTP methods (GET, POST, PUT, DELETE) to perform operations defined in the MCP protocol. Each MCP operation is mapped to a specific HTTP endpoint, allowing clients to interact with the MCP server using standard HTTP requests.
 
-The transport will also define a set of HTTP headers to convey metadata and control information necessary for MCP operations, such as authentication tokens, request identifiers, and content types.
+The transport defines a set of HTTP headers to convey metadata and control information necessary for MCP operations, such as authentication tokens, request identifiers, and content types.
 
 ### Schema changes
 
-The Pure HTTP transport will only flow the "payload" portion of the MCP messages over HTTP. This will require that message payload schemas be defined independently of the JSON-RPC message that is used in the STDIO and Streamable HTTP transports.
+The Pure HTTP transport only flows the "payload" portion of the MCP messages over HTTP. This requires that message payload schemas be defined independently of the JSON-RPC message that is used in the STDIO and Streamable HTTP transports.
 These schema changes have already been proposed in [SEP-1319] and are simply included here by reference.
 
 [SEP-1319]: https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1319
 
 ### Error Responses
 
-The Pure HTTP transport will use standard HTTP status codes for error conditions that occur during MCP operations.
+The Pure HTTP transport uses standard HTTP status codes for error conditions that occur during MCP operations.
 
 | MCP Error Condition               | HTTP Status Code |
 |-----------------------------------|------------------|
@@ -57,7 +92,7 @@ HTTP/1.1 400 Bad Request
 Content-Type: application/json
 
 {
-  "code": -32602,
+  "code": -32602,  ***** TODO: Mike, I don't think we'd keep the JSON-RPC error code numbers, do you?
   "message": "Unknown tool: invalid_tool_name"
 }
 ```
@@ -66,28 +101,30 @@ Content-Type: application/json
 
 Each MCP operation (at the application layer) is mapped to a specific HTTP endpoint and method. The following sections provide the details of this mapping, but here we describe the general pattern for mapping MCP operations to HTTP requests.
 
-MCP operations that retrieve data (e.g., `tools/list`, `resources/get`) will typically use the HTTP GET method, while operations that create or modify data (e.g., `tools/call`, `resources/create`) will use the HTTP POST or PUT methods as appropriate.
+MCP operations that retrieve data (e.g., `tools/list`, `resources/get`) use the HTTP GET method, while operations that create or modify data (e.g., `tools/call`, `resources/create`) use the HTTP POST or PUT methods as appropriate.
 
-Parameters to MCP operations mapped to HTTP GET requests will be passed as query parameters in the URL, while parameters for POST and PUT requests will be included in the request body as JSON.
+Parameters to MCP operations mapped to HTTP GET requests are passed as URL query parameters, while parameters for POST and PUT requests are included in the JSON request body.
 
-Note that MCP allows any request to contain a "_meta" property with arbitrary metadata for the request. For operations that are mapped to HTTP PUT or POST requests, the "_meta" property will be included in the request body along with the other parameters. For operations mapped to HTTP GET requests, the "_meta" property will be passed in headers, with one header per property in the "_meta" object. These headers will use a naming convention of "MCP-Meta-{property-name}" to allow the MCP Server to reconstruct the "_meta" object from the headers.
+Note that MCP allows any request to contain a "_meta" property with arbitrary metadata for the request. For operations mapped to HTTP PUT or POST requests, the "_meta" property is included in the request body along with the other parameters. For operations mapped to HTTP GET requests, the "_meta" property values are passed in headers, with one header per property in the "_meta" object. These headers use a naming convention of "MCP-Meta-{property-name}" to allow the MCP Server to reconstruct the "_meta" object from the headers.
 
-As in the Streamable HTTP transport, the Pure HTTP transport will use HTTP headers to convey certain protocol metadata, including:
+As in the Streamable HTTP transport, the Pure HTTP transport uses HTTP headers to convey certain protocol metadata, including:
 
 | Header Name               | Description                                      |
 |---------------------------|--------------------------------------------------|
-| MCP-Protocol-Version      | Indicates the version of the MCP protocol being used in the request.                        |
+| MCP-Protocol-Version      | Indicates the version of the MCP protocol being used in the request. |
 | MCP-Session-ID            | Identifies the session associated with the request. |
 
 ### Initialization
 
-The Pure HTTP transport will support an initialization step that allows the MCP Client to establish a session with the MCP Server. The "initialize" MCP operation is mapped to an HTTP POST request to the "/initialize" endpoint. The request body will contain a JSON object representing the `InitializeRequest` schema, and the response body will contain a JSON object representing the `InitializeResult` schema.
+***** TODO: Mike, we should discuss - this introduces statefulness and hurts the ability for clients/servers to dynamically change their features/capabilities at runtime (a bullet I have above under benefits)
+
+The Pure HTTP transport supports an initialization step that allows the MCP Client to establish a session with the MCP Server. The "initialize" MCP operation is mapped to an HTTP POST request to the "/initialize" endpoint. The request body contains a JSON object representing the `InitializeRequest` schema, and the response body contains a JSON object representing the `InitializeResult` schema.
 
 ### Tools
 
 #### tools/list
 
-A "tools/list" MCP request will be implemented as an HTTP GET request to the "/tools" endpoint. The `cursor` property of `ListToolsRequest.Params` will be passed as a query parameter named `cursor`. The response body will contain a JSON object representing the `ListToolsResult`.
+A "tools/list" MCP request is implemented as an HTTP GET request to the "/tools" endpoint. The `cursor` property of `ListToolsRequest.Params` is passed as a query parameter named `cursor`. The response body contains a JSON object representing the `ListToolsResult`.
 
 ##### Example Request
 
@@ -121,7 +158,7 @@ Content-Type: application/json
 
 #### tools/call
 
-A "tools/call" MCP request will be implemented as an HTTP PUT request to the "/tools/{toolName}/calls/{toolCallID}" endpoint. The body of the HTTP request will contain the JSON object representing the `params` field of the `ToolCallRequest`, without the `name` field since this is already specified in the URL path. The `toolCallID` will correspond to the `id` field of the JSON-RPC request. The response body will contain a JSON object representing the `ToolCallResult`.
+A "tools/call" MCP request is implemented as an HTTP PUT request to the "/tools/{toolName}/calls/{toolCallID}" endpoint. The body of the HTTP request will contain the JSON object representing the `params` field of the `ToolCallRequest`, without the `name` field since this is already specified in the URL path. The `toolCallID` will correspond to the `id` field of the JSON-RPC request. The response body will contain a JSON object representing the `ToolCallResult`.
 
 ##### Example Request
 
