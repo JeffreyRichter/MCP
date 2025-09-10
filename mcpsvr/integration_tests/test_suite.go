@@ -26,13 +26,13 @@ func (TestSuite) TestToolCallAdd() error {
 	callID := "test-add"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+"/mcp/tools/add/calls/"+callID, strings.NewReader(`{"x":5,"y":3}`))
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	defer resp.Body.Close()
@@ -42,7 +42,7 @@ func (TestSuite) TestToolCallAdd() error {
 	}
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	var add struct {
@@ -50,7 +50,7 @@ func (TestSuite) TestToolCallAdd() error {
 			Sum int `json:"sum"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal(body, &add); err != nil {
+	if err := json.Unmarshal(body, &add); isError(err) {
 		return err
 	}
 	if add.Result.Sum != 8 {
@@ -67,13 +67,13 @@ func (TestSuite) TestToolCallPIIElicitationApproved() error {
 	callID := "test-pii-elicitation-approved"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+"/mcp/tools/pii/calls/"+callID, strings.NewReader(`{"key":"test"}`))
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	defer resp.Body.Close()
@@ -85,13 +85,13 @@ func (TestSuite) TestToolCallPIIElicitationApproved() error {
 	advanceBody := `{"action":"accept","content":{"approved":true}}`
 
 	req, err = http.NewRequestWithContext(ctx, http.MethodPost, req.URL.String()+"/advance", strings.NewReader(advanceBody))
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	defer resp.Body.Close()
@@ -101,7 +101,7 @@ func (TestSuite) TestToolCallPIIElicitationApproved() error {
 	}
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	var tc struct {
@@ -109,7 +109,7 @@ func (TestSuite) TestToolCallPIIElicitationApproved() error {
 		ElicitationRequest any     `json:"elicitationRequest"`
 		Result             any     `json:"result"`
 	}
-	if err := json.Unmarshal(body, &tc); err != nil {
+	if err := json.Unmarshal(body, &tc); isError(err) {
 		return err
 	}
 	if tc.Status == nil || *tc.Status != "success" {
@@ -122,13 +122,13 @@ func (TestSuite) TestToolCallPIIElicitationApproved() error {
 		return errors.New("expected result")
 	}
 	b, err := json.Marshal(tc.Result)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	var result struct {
 		Data string `json:"data"`
 	}
-	if err := json.Unmarshal(b, &result); err != nil {
+	if err := json.Unmarshal(b, &result); isError(err) {
 		return err
 	}
 	if len(result.Data) == 0 {
@@ -137,12 +137,12 @@ func (TestSuite) TestToolCallPIIElicitationApproved() error {
 
 	// trying to advance the completed tool call is a bad request
 	req, err = http.NewRequestWithContext(ctx, http.MethodPost, req.URL.String(), strings.NewReader(advanceBody))
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	defer resp.Body.Close()
@@ -163,13 +163,13 @@ func (TestSuite) TestToolCallPIICreateIdempotent() error {
 	responses := make([]*http.Response, 2)
 	for i := range 2 {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+"/mcp/tools/pii/calls/"+callID, strings.NewReader(requestBody))
-		if err != nil {
+		if isError(err) {
 			return err
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
+		if isError(err) {
 			return err
 		}
 		defer resp.Body.Close()
@@ -188,11 +188,11 @@ func (TestSuite) TestToolCallPIICreateIdempotent() error {
 	toolCalls := make([]toolcall.ToolCall, 2)
 	for i, resp := range responses {
 		body, err := io.ReadAll(resp.Body)
-		if err != nil {
+		if isError(err) {
 			return err
 		}
 		tc := toolcall.ToolCall{}
-		if err := json.Unmarshal(body, &tc); err != nil {
+		if err := json.Unmarshal(body, &tc); isError(err) {
 			return fmt.Errorf("failed to unmarshal response %d: %w", i, err)
 		}
 		toolCalls[i] = tc

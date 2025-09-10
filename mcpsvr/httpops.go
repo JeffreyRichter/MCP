@@ -33,7 +33,7 @@ func newLocalMcpServer(shutdownCtx context.Context, errorLogger *slog.Logger) *h
 func newAzureMcpServer(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *httpOps {
 	ops := &httpOps{errorLogger: errorLogger, store: azresources.NewToolCallStore(blobClient)}
 	pm, err := azresources.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
-	if err != nil {
+	if isError(err) {
 		panic(err)
 	}
 	ops.pm = pm
@@ -96,10 +96,10 @@ func (ops *httpOps) toolNameToProcessPhaseFunc(toolName string) (toolcall.Proces
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
 func (ops *httpOps) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.lookupToolCall(r)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); err != nil {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); isError(err) {
 		return err
 	}
 
@@ -121,14 +121,14 @@ func (ops *httpOps) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) 
 // This method is used is called by GET & POST (not PUT) because it assumes the resource must already exist.
 func (ops *httpOps) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (*ToolInfo, *toolcall.ToolCall, error) {
 	ti, tc, err := ops.lookupToolCall(r)
-	if err != nil {
+	if isError(err) {
 		return nil, nil, err
 	}
 	err = ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if err != nil {
+	if isError(err) {
 		return nil, nil, r.WriteError(http.StatusNotFound, nil, nil, "NotFound", "Tool call not found")
 	}
-	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); isError(err) {
 		return nil, nil, err
 	}
 	return ti, tc, nil
@@ -137,7 +137,7 @@ func (ops *httpOps) preambleToolCallResource(ctx context.Context, r *svrcore.Req
 // getToolCallResource retrieves the ToolCall resource from the request.
 func (ops *httpOps) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.preambleToolCallResource(ctx, r)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return ti.Caller.Get(ctx, tc, r)
@@ -146,7 +146,7 @@ func (ops *httpOps) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) 
 // postToolCallAdvance advances the state of a tool call using r's body (CreateMessageResult or ElicitResult)
 func (ops *httpOps) postToolCallResourceAdvance(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.preambleToolCallResource(ctx, r)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return ti.Caller.Advance(ctx, tc, r)
@@ -155,7 +155,7 @@ func (ops *httpOps) postToolCallResourceAdvance(ctx context.Context, r *svrcore.
 // postToolCallCancelResource cancels a tool call.
 func (ops *httpOps) postToolCallCancelResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := ops.preambleToolCallResource(ctx, r)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return ti.Caller.Cancel(ctx, tc, r)
@@ -165,7 +165,7 @@ func (ops *httpOps) postToolCallCancelResource(ctx context.Context, r *svrcore.R
 
 // getToolList retrieves the list of tools.
 func (ops *httpOps) getToolList(ctx context.Context, r *svrcore.ReqRes) error {
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: ops.etag()}); err != nil {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: ops.etag()}); isError(err) {
 		return err
 	}
 	result := mcp.ListToolsResult{Tools: make([]mcp.Tool, 0, len(ops.toolInfos))}

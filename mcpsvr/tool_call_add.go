@@ -80,7 +80,7 @@ func (c *addToolCaller) Tool() *mcp.Tool {
 
 func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var trequest AddToolCallRequest
-	if err := r.UnmarshalBody(&trequest); err != nil {
+	if err := r.UnmarshalBody(&trequest); isError(err) {
 		return err
 	}
 	tc.Request = must(json.Marshal(trequest))
@@ -95,7 +95,7 @@ func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	time.Sleep(d * time.Millisecond)
 
 	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -104,7 +104,7 @@ func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 func (c *addToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -112,17 +112,17 @@ func (c *addToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrco
 
 func (c *addToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if err != nil {
+	if isError(err) {
 		return err
 	}
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); err != nil {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); isError(err) {
 		return err
 	}
 	switch *tc.Status {
 	case toolcall.StatusAwaitingElicitationResult:
 		var er toolcall.ElicitationResult
 		err := r.UnmarshalBody(&er)
-		if err != nil {
+		if isError(err) {
 			return err
 		}
 		// TODO: Process the er, update progress?, update status, update result/error
@@ -131,7 +131,7 @@ func (c *addToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 	case toolcall.StatusAwaitingSamplingResult:
 		var sr toolcall.SamplingResult
 		err := r.UnmarshalBody(&sr)
-		if err != nil {
+		if isError(err) {
 			return err
 		}
 		// TODO: Process the sr, update progress?, update status, update result/error
@@ -140,7 +140,7 @@ func (c *addToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 	}
 
 	err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)

@@ -69,7 +69,7 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, c.url+path, body)
-	if err != nil {
+	if isError(err) {
 		c.t.Fatal(err)
 	}
 	if body != nil {
@@ -81,7 +81,7 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 		}
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
+	if isError(err) {
 		c.t.Fatal(err)
 	}
 	return resp

@@ -28,7 +28,7 @@ func createPIICall() (string, map[string]any) {
 // parseLastCall parses a response to check if elicitation is required
 func parseLastCall(responseBody string) (bool, ElicitationData) {
 	var response map[string]any
-	if err := json.Unmarshal([]byte(responseBody), &response); err != nil {
+	if err := json.Unmarshal([]byte(responseBody), &response); isError(err) {
 		return false, ElicitationData{}
 	}
 

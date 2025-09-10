@@ -44,7 +44,7 @@ func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
 // newReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
 func newReqRes(p []Policy, r *http.Request, rw http.ResponseWriter) (*ReqRes, error) {
 	rr := &ReqRes{ID: time.Now().Unix(), p: p, R: r, H: &RequestHeader{}, RW: &responseWriterWrapper{ResponseWriter: rw}}
-	if err := unmarshalHeaderToStruct(r.Header, rr.H); err != nil { // Deserialize standard HTTP request headers into this struct
+	if err := unmarshalHeaderToStruct(r.Header, rr.H); isError(err) { // Deserialize standard HTTP request headers into this struct
 		return nil, rr.WriteError(http.StatusBadRequest, nil, nil, "UnparsableHeaders", "The request has some invalid headers: %s", err.Error())
 	}
 	return rr, nil
@@ -94,7 +94,7 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 	body, err := []byte{}, error(nil)
 	if bodyStruct != nil {
 		body, err = json.Marshal(bodyStruct)
-		if err != nil {
+		if isError(err) {
 			// TODO: Log error
 			return nil
 		}
@@ -312,7 +312,7 @@ func (r *ReqRes) CheckPreconditions(rv ResourceValues) error {
 // are unrecognized, it writes an appropriate ServerError (BadRequest) to the HTTP response and returns the *ServerError.
 func (r *ReqRes) UnmarshalQuery(s any) error {
 	values := r.R.URL.Query() // Each call to Query re-parses so we CAN mutate values
-	if err := unmarshalQueryToStruct(values, s); err != nil {
+	if err := unmarshalQueryToStruct(values, s); isError(err) {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "Invalid query parameters", "%s", err.Error())
 	}
 	uf := reflect.ValueOf(s).FieldByName("Unknown").Interface().(Unknown)
@@ -327,10 +327,10 @@ func (r *ReqRes) UnmarshalQuery(s any) error {
 func (r *ReqRes) UnmarshalBody(s any) error {
 	body, err := io.ReadAll(r.R.Body) // Ensure body is fully read
 	defer r.R.Body.Close()
-	if err != nil {
+	if isError(err) {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "Unable to read full body", "%s", err.Error())
 	}
-	if err := json.Unmarshal(body, &s); err != nil { // NOTE: jsonv2 errors if unrecognized fields are found
+	if err := json.Unmarshal(body, &s); isError(err) { // NOTE: jsonv2 errors if unrecognized fields are found
 		return r.WriteError(http.StatusBadRequest, nil, nil, "Invalid JSON body", "%s", err.Error())
 	}
 	return nil

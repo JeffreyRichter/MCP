@@ -25,7 +25,7 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 		duration := time.Since(start) // Latency: the amount of time it takes to process a unit of work, broken down between success and failures.
 		requestLatencyPerMinute.Add(duration.Milliseconds())
 		var se *svrcore.ServerError
-		if err != nil && errors.As(err, &se) && (se.StatusCode >= 500 && se.StatusCode < 600) {
+		if isError(err) && errors.As(err, &se) && (se.StatusCode >= 500 && se.StatusCode < 600) {
 			requestServiceFailuresPerMinute.Add(1) // Errors: the rate of unexpected service things (5xx) happening.
 		}
 
@@ -41,3 +41,4 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 		return err
 	}
 }
+func isError(err error) bool { return err != nil }

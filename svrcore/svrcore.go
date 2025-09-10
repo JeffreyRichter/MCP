@@ -83,7 +83,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This is the 1st function called when an HTTP request comes into the service
 		rr, err := newReqRes(policies, r, w)
-		if err == nil { // No error, start the policies
+		if !isError(err) { // No error, start the policies
 			err = rr.Next(rr.R.Context())
 		}
 		if rr.StatusCode() == 0 { // No response was ever sent back to the client; send one now
@@ -91,7 +91,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 				slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
 			rr.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "")
 		}
-		if err != nil { // Some error occurreed
+		if isError(err) { // Some error occurreed
 			if _, ok := err.(*ServerError); ok {
 				// An HTTP error occured which is normal. If it wasn't sent to the client, then it was logged above.
 			} else { // A non-HTTP error occured, log it
@@ -165,7 +165,7 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 					hackPostActionForServeHTTP(r, false)
 					s.r.R = r // Replace old R with new 'r' which has PathValues set
 					s.err = s.r.ValidateHeader(policyInfo.ValidHeader)
-					if s.err == nil {
+					if !isError(s.err) {
 						s.err = policyInfo.Policy(s.ctx, s.r) // Smuggle any error back to our caller
 					}
 				}))
@@ -258,4 +258,5 @@ type smuggler struct {
 }
 
 // Ptr converts a value to a pointer-to-value typically used when setting structure fields to be marshaled.
-func Ptr[T any](t T) *T { return &t }
+func Ptr[T any](t T) *T      { return &t }
+func isError(err error) bool { return err != nil }

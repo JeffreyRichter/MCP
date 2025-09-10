@@ -142,7 +142,7 @@ func (er *ElicitationRequest) UnmarshalJSON(data []byte) error {
 		} `json:"requestedSchema"`
 	}
 
-	if err := json.Unmarshal(data, &temp); err != nil {
+	if err := json.Unmarshal(data, &temp); isError(err) {
 		return err
 	}
 
@@ -252,8 +252,9 @@ func (er *ElicitationRequest) UnmarshalJSON(data []byte) error {
 }
 
 func must[T any](val T, err error) T {
-	if err != nil {
+	if isError(err) {
 		panic(err)
 	}
 	return val
 }
+func isError(err error) bool { return err != nil }

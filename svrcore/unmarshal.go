@@ -168,60 +168,60 @@ func verifyStructFields(s any) error {
 
 		case *float32, *float64:
 			if !isNumPtrNil(v) {
-				if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Elem().Float()); err != nil {
+				if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Elem().Float()); isError(err) {
 					return err
 				}
 			}
 		case float32, float64:
-			if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Float()); err != nil {
+			if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Float()); isError(err) {
 				return err
 			}
 
 		case *int, *int8, *int16, *int32, *int64:
 			if !isNumPtrNil(v) {
-				if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Elem().Int()); err != nil {
+				if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Elem().Int()); isError(err) {
 					return err
 				}
 			}
 
 		case int, int8, int16, int32, int64:
-			if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Int()); err != nil {
+			if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Int()); isError(err) {
 				return err
 			}
 
 		case *uint, *uint8, *uint16, *uint32, *uint64:
 			if !isNumPtrNil(v) {
-				if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Elem().Uint()); err != nil {
+				if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Elem().Uint()); isError(err) {
 					return err
 				}
 			}
 
 		case uint, uint8, uint16, uint32, uint64:
-			if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Uint()); err != nil {
+			if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Uint()); isError(err) {
 				return err
 			}
 
 		case *string:
 			if v != nil {
-				if err := fi.verifyString(fi.fieldName, *v); err != nil {
+				if err := fi.verifyString(fi.fieldName, *v); isError(err) {
 					return err
 				}
 			}
 
 		case string:
-			if err := fi.verifyString(fi.fieldName, v); err != nil {
+			if err := fi.verifyString(fi.fieldName, v); isError(err) {
 				return err
 			}
 
 		case *[]string:
 			if v != nil {
-				if err := fi.verifyStrings(fi.fieldName, *v); err != nil {
+				if err := fi.verifyStrings(fi.fieldName, *v); isError(err) {
 					return err
 				}
 			}
 
 		case []string:
-			if err := fi.verifyStrings(fi.fieldName, v); err != nil {
+			if err := fi.verifyStrings(fi.fieldName, v); isError(err) {
 				return err
 			}
 
@@ -232,13 +232,13 @@ func verifyStructFields(s any) error {
 
 			case fieldValue.Type().Kind() == reflect.Pointer && fieldValue.Type().Elem().Kind() == reflect.Struct:
 				// Recursively validate struct fields
-				if err := verifyStructFields(fieldValue.Interface()); err != nil {
+				if err := verifyStructFields(fieldValue.Interface()); isError(err) {
 					return fmt.Errorf("field %q: %v", fi.jsonName, err)
 				}
 
 			case fieldValue.Type().Kind() == reflect.Struct:
 				// Recursively validate struct fields
-				if err := verifyStructFields(fieldValue.Interface()); err != nil {
+				if err := verifyStructFields(fieldValue.Interface()); isError(err) {
 					return fmt.Errorf("field %q: %v", fi.jsonName, err)
 				}
 
@@ -308,7 +308,7 @@ func (fi *fieldInfo) verifyLength(name string, length int) error {
 }
 
 func (fi *fieldInfo) verifyString(name string, s string) error {
-	if err := fi.verifyLength(name, len(s)); err != nil {
+	if err := fi.verifyLength(name, len(s)); isError(err) {
 		return err
 	}
 	if fi.enumValues.isSet && !slices.Contains(fi.enumValues.value, s) {
@@ -328,7 +328,7 @@ func (fi *fieldInfo) verifyStrings(name string, s []string) error {
 		return fmt.Errorf("field '%s' violation: value=%d != maxitems=%d", name, len(s), int(fi.maxitems.value))
 	}
 	for _, eachString := range s {
-		if err := fi.verifyString(fmt.Sprintf("%s[%s]", name, eachString), eachString); err != nil {
+		if err := fi.verifyString(fmt.Sprintf("%s[%s]", name, eachString), eachString); isError(err) {
 			return err
 		}
 	}
@@ -403,7 +403,7 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 var typeToFieldInfos = syncmap.Map[reflect.Type, []fieldInfo]{}
 
 func must[T any](val T, err error) T {
-	if err != nil {
+	if isError(err) {
 		panic(err)
 	}
 	return val

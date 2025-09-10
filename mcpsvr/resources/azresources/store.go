@@ -37,7 +37,7 @@ func (tcs *toolCallStore) toBlobInfo(tc *toolcall.ToolCall) (containerName, blob
 
 /*func (tcs *toolCallStore) fromBlobUrl(blobUrl string) (tenant, toolName, toolCallID string) {
 	parts, err := azblob.ParseURL(blobUrl)
-	if err != nil {
+	if isError(err){
 		return "", "", ""
 	}
 	segments := strings.Split(parts.BlobName, "/")
@@ -60,7 +60,7 @@ func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcall.ToolCall, ac svr
 	containerName, blobName := tcs.toBlobInfo(tc)
 	response, err := tcs.client.DownloadStream(ctx, containerName, blobName,
 		&azblob.DownloadStreamOptions{AccessConditions: tcs.accessConditions(ac)})
-	if err != nil {
+	if isError(err) {
 		return err // Blob not found or precondition failed
 	}
 
@@ -68,10 +68,10 @@ func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcall.ToolCall, ac svr
 	defer response.Body.Close()
 	const MaxToolCallResourceSizeInBytes = 4 * 1024 * 1024 // 4MB
 	buffer, err := io.ReadAll(io.LimitReader(response.Body, MaxToolCallResourceSizeInBytes))
-	if err != nil {
+	if isError(err) {
 		return err
 	}
-	if err := json.Unmarshal(buffer, tc); err != nil {
+	if err := json.Unmarshal(buffer, tc); isError(err) {
 		return err
 	}
 	tc.ETag = (*svrcore.ETag)(response.ETag) // Set the ETag from the response
@@ -80,7 +80,7 @@ func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcall.ToolCall, ac svr
 
 func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	buffer, err := json.Marshal(tc)
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	containerName, blobName := tcs.toBlobInfo(tc)
@@ -88,7 +88,7 @@ func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcall.ToolCall, ac svr
 		// Attempt to upload the Tool Call blob
 		response, err := tcs.client.UploadBuffer(ctx, containerName, blobName, buffer,
 			&azblob.UploadBufferOptions{AccessConditions: tcs.accessConditions(ac)})
-		if err == nil { // Successfully uploaded the Tool Call blob
+		if !isError(err) { // Successfully uploaded the Tool Call blob
 			tc.ETag = (*svrcore.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
 			blockClient := tcs.client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(blobName)
 			// TODO: Log any error from SetExpiry
@@ -100,7 +100,7 @@ func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcall.ToolCall, ac svr
 		if !bloberror.HasCode(err, bloberror.ContainerNotFound) {
 			return err
 		}
-		if _, err := tcs.client.CreateContainer(ctx, containerName, nil); err != nil { // Attempt to create the missing tenant container
+		if _, err := tcs.client.CreateContainer(ctx, containerName, nil); isError(err) { // Attempt to create the missing tenant container
 			return err // Failed to create container, return
 		}
 		// Successfully created the container, retry uploading the Tool Call blob
@@ -115,3 +115,4 @@ func (tcs *toolCallStore) Delete(ctx context.Context, tc *toolcall.ToolCall, ac 
 
 // Blobs are cheap, fast (below link), simple, and offer features we need (like expiry)
 // https://learn.microsoft.com/en-us/azure/architecture/best-practices/data-partitioning-strategies
+func isError(err error) bool { return err != nil }

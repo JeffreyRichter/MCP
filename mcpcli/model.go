@@ -128,7 +128,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.updateNormal(msg)
 	case toolsLoadedMsg:
-		if msg.err != nil {
+		if isError(msg.err) {
 			m.err = msg.err
 			m.state = StateError
 		} else {
@@ -181,7 +181,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// simple status flash can be done by setting err=nil & state revert
 		return m, m.startPathExec(msg.path)
 	case pathExecResultMsg:
-		if msg.err != nil {
+		if isError(msg.err) {
 			m.err = msg.err
 			m.state = StateError
 		} else {
@@ -190,7 +190,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Key  string `json:"key"`
 				Port int    `json:"port"`
 			}
-			if err := json.Unmarshal([]byte(msg.firstLine), &parsed); err != nil || parsed.Key == "" || parsed.Port == 0 {
+			if err := json.Unmarshal([]byte(msg.firstLine), &parsed); isError(err) || parsed.Key == "" || parsed.Port == 0 {
 				// invalid; kill process if running
 				if msg.cmd != nil && msg.cmd.Process != nil {
 					_ = msg.cmd.Process.Kill()
@@ -350,12 +350,12 @@ func (m Model) startPathExec(path string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(path)
 		stdout, err := cmd.StdoutPipe()
-		if err != nil {
+		if isError(err) {
 			return pathExecResultMsg{err: err}
 		}
 		cmd.Stderr = cmd.Stdout
 		cmd.Env = []string{"MCPSVR_LOCAL=true"}
-		if err := cmd.Start(); err != nil {
+		if err := cmd.Start(); isError(err) {
 			return pathExecResultMsg{err: err}
 		}
 		// store command pointer in model via follow-up message (pid also captured here)

@@ -20,13 +20,13 @@ func TestToolCallPIICreate(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 
 	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if tc.Status == nil || *tc.Status != toolcall.StatusAwaitingElicitationResult {
@@ -55,13 +55,13 @@ func TestToolCallPIIGet(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 
 	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if tc.Status == nil || *tc.Status != toolcall.StatusAwaitingElicitationResult {
@@ -84,12 +84,12 @@ func TestToolCallPIIElicitationApproved(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 
@@ -105,7 +105,7 @@ func TestToolCallPIIElicitationApproved(t *testing.T) {
 
 	var result PIIToolCallResult
 	err = json.Unmarshal(tc.Result, &result)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if result.Data != "here's your PII" {
@@ -129,13 +129,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 			}
 
 			b, err := io.ReadAll(resp.Body)
-			if err != nil {
+			if isError(err) {
 				t.Fatal(err)
 			}
 
 			tc := toolcall.ToolCall{}
 			err = json.Unmarshal(b, &tc)
-			if err != nil {
+			if isError(err) {
 				t.Fatal(err)
 			}
 			if tc.Status == nil || *tc.Status != toolcall.StatusCanceled {
@@ -164,13 +164,13 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 		}
 
 		b, err := io.ReadAll(resp.Body)
-		if err != nil {
+		if isError(err) {
 			t.Fatal(err)
 		}
 
 		tc := toolcall.ToolCall{}
 		err = json.Unmarshal(b, &tc)
-		if err != nil {
+		if isError(err) {
 			t.Fatal(err)
 		}
 		if tc.Status == nil || *tc.Status != toolcall.StatusCanceled {
@@ -199,13 +199,13 @@ func TestToolCallPIICancel(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 
 	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if tc.Status == nil || *tc.Status != toolcall.StatusCanceled {
@@ -241,13 +241,13 @@ func TestToolCallPIICancelAlreadyCompleted(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 
 	tc := toolcall.ToolCall{}
 	err = json.Unmarshal(b, &tc)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if tc.Status == nil || *tc.Status != toolcall.StatusSuccess {

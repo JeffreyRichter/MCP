@@ -10,10 +10,10 @@ import (
 
 func TestNewReqRes(t *testing.T) {
 	r, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
-	if rr, err := newReqRes(nil, r, nil); err != nil || rr == nil {
+	if rr, err := newReqRes(nil, r, nil); isError(err) || rr == nil {
 		t.Fatal(err)
 	}
 }
@@ -24,7 +24,7 @@ func TestUnmarshalRequestHeader(t *testing.T) {
 		"Authorization": []string{"granted"},
 		"If-Match":      []string{"123"},
 	}, &rh)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if rh.Authorization == nil {
@@ -73,7 +73,7 @@ func TestRequestHeaderVerifyStructFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyStructFields(tt.rh)
-			if err != nil {
+			if isError(err) {
 				t.Fatal(err)
 			}
 		})
@@ -503,7 +503,7 @@ func TestValidatePreconditions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req, err := http.NewRequest(tt.method, "http://localhost", nil)
-			if err != nil {
+			if isError(err) {
 				t.Fatal(err)
 			}
 			for k, v := range tt.headers {
@@ -522,12 +522,12 @@ func TestValidatePreconditions(t *testing.T) {
 				case http.StatusNotModified, http.StatusPreconditionFailed:
 					t.Errorf("expected preconditions to hold but ValidatePreconditions set status code %q", http.StatusText(rw.Code))
 				}
-				if err != nil {
+				if isError(err) {
 					t.Error(err)
 				}
 				return
 			}
-			if err == nil {
+			if !isError(err) {
 				t.Error("expected an error because preconditions failed")
 			}
 			if rw.Code != tt.expectedCode {

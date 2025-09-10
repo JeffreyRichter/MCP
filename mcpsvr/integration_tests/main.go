@@ -28,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := startServices(ctx); err != nil {
+	if err := startServices(ctx); isError(err) {
 		fmt.Printf("Failed to start services: %v", err)
 		os.Exit(1)
 	}
@@ -38,7 +38,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		if err := run(tests); err != nil {
+		if err := run(tests); isError(err) {
 			fmt.Println(err)
 		}
 		sigChan <- syscall.SIGTERM
@@ -61,7 +61,7 @@ func run(tests []testInfo) error {
 	var failed []string
 	for i, test := range tests {
 		fmt.Printf("\n=== %s (%d/%d) ===\n", test.Name, i+1, len(tests))
-		if err := test.Run(); err != nil {
+		if err := test.Run(); isError(err) {
 			failed = append(failed, test.Name)
 			fmt.Printf("\t%s\n=== %s failed ===\n", err, test.Name)
 		} else {
@@ -129,7 +129,7 @@ func cleanup() {
 	logCmd.Stdout = os.Stdout
 	logCmd.Stderr = os.Stderr
 	logCmd.WaitDelay = time.Second
-	if err := logCmd.Run(); err != nil {
+	if err := logCmd.Run(); isError(err) {
 		fmt.Println(err)
 	}
 
@@ -138,7 +138,8 @@ func cleanup() {
 	downCmd.Stdout = os.Stdout
 	downCmd.Stderr = os.Stderr
 	logCmd.WaitDelay = time.Second
-	if err := downCmd.Run(); err != nil {
+	if err := downCmd.Run(); isError(err) {
 		fmt.Println(err)
 	}
 }
+func isError(err error) bool { return err != nil }

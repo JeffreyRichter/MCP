@@ -80,7 +80,7 @@ func (c *countToolCaller) Tool() *mcp.Tool {
 
 func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var trequest CountToolCallRequest
-	if err := r.UnmarshalBody(&trequest); err != nil {
+	if err := r.UnmarshalBody(&trequest); isError(err) {
 		return err
 	}
 	tc.Request = must(json.Marshal(trequest))
@@ -88,7 +88,7 @@ func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *
 	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 	tc.Phase = svrcore.Ptr(strconv.Itoa(trequest.Increments))
 	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	go pm.StartPhase(context.TODO(), tc)
@@ -98,7 +98,7 @@ func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *
 func (c *countToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	// TODO: Fix up 304-Not Modified
-	if err != nil {
+	if isError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -107,10 +107,10 @@ func (c *countToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svr
 // TODO: could all tool calls use the same cancel method?
 func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if err != nil {
+	if isError(err) {
 		return err
 	}
-	if err = r.CheckPreconditions(svrcore.ResourceValues{ETag: tc.ETag}); err != nil {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{ETag: tc.ETag}); isError(err) {
 		return err
 	}
 	if tc.Status == nil {
@@ -122,7 +122,7 @@ func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *
 	}
 
 	tc.ElicitationRequest, tc.Error, tc.Result, tc.Status = nil, nil, nil, svrcore.Ptr(toolcall.StatusCanceled)
-	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); err != nil {
+	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); isError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -134,7 +134,7 @@ func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *
 // needs to know about specific tool calls
 func (c *countToolCaller) ProcessPhase(_ context.Context, tc *toolcall.ToolCall, _ toolcall.PhaseProcessor) error {
 	phase, err := strconv.Atoi(*tc.Phase)
-	if err != nil {
+	if isError(err) {
 		return fmt.Errorf("invalid phase %q", *tc.Phase)
 	}
 

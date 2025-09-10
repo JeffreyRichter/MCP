@@ -50,7 +50,7 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -76,7 +76,7 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 
 	getResult := getToolCall.Copy()
 	err = store.Get(ctx, &getResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 
 	putResult1 := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult1, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("First put failed: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	}
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -171,7 +171,7 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 
 	getResult := getToolCall.Copy()
 	err = store.Get(ctx, getToolCall, accessConditions)
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Get with correct ETag failed: %v", err)
 	}
 
@@ -208,7 +208,7 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -247,12 +247,12 @@ func TestLocalToolCallStore_Delete(t *testing.T) {
 	}
 
 	err := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
 	err = store.Delete(ctx, originalToolCall, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestLocalToolCallStore_Delete_AccessConditions(t *testing.T) {
 	}
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -299,7 +299,7 @@ func TestLocalToolCallStore_Delete_AccessConditions(t *testing.T) {
 
 	accessConditions.IfMatch = putResult.ETag
 	err = store.Delete(ctx, originalToolCall, accessConditions)
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Delete with correct ETag failed: %v", err)
 	}
 }
@@ -317,7 +317,7 @@ func TestLocalToolCallStore_Delete_NonExistent(t *testing.T) {
 	}
 
 	err := store.Delete(ctx, toolCall, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Delete of non-existent item should not fail, got: %v", err)
 	}
 }
@@ -339,7 +339,7 @@ func TestLocalToolCallStore_TenantIsolation(t *testing.T) {
 	}
 
 	err := store.Put(ctx, toolCall, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put to tenant1 failed: %v", err)
 	}
 
@@ -356,7 +356,7 @@ func TestLocalToolCallStore_TenantIsolation(t *testing.T) {
 
 	toolCall.Tenant = &tenant1
 	err = store.Get(ctx, toolCall, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Get from tenant1 should still work: %v", err)
 	}
 }
@@ -376,7 +376,7 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 	}
 	putResult := originalToolCall.Copy()
 	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -393,7 +393,7 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 
 	getResult := getToolCall.Copy()
 	err = store.Get(ctx, &getResult, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
@@ -410,7 +410,7 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 
 	getResult2 := getToolCall.Copy()
 	err = store.Get(ctx, &getResult2, svrcore.AccessConditions{})
-	if err != nil {
+	if isError(err) {
 		t.Fatalf("Second get failed: %v", err)
 	}
 

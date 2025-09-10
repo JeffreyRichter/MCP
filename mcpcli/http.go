@@ -28,7 +28,7 @@ func (c *httpClient) getTools() ([]ToolInfo, *HTTPTransaction, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.serverURL+"/mcp/tools", nil)
-	if err != nil {
+	if isError(err) {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
@@ -49,13 +49,13 @@ func (c *httpClient) getTools() ([]ToolInfo, *HTTPTransaction, error) {
 		Error:          err,
 	}
 
-	if err != nil {
+	if isError(err) {
 		return nil, txn, fmt.Errorf("failed to fetch tools: %w", err)
 	}
 	defer resp.Body.Close()
 	txn.StatusCode = resp.StatusCode
 	txn.ResponseHeaders = resp.Header.Clone()
-	if body, err := io.ReadAll(resp.Body); err == nil {
+	if body, err := io.ReadAll(resp.Body); !isError(err) {
 		// TODO: clarify responsibility for response formatting, remove the double read
 		txn.ResponseBody = string(body)
 		resp.Body = io.NopCloser(bytes.NewReader(body))
@@ -68,7 +68,7 @@ func (c *httpClient) getTools() ([]ToolInfo, *HTTPTransaction, error) {
 	var result struct {
 		Tools []ToolInfo `json:"tools"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); isError(err) {
 		return nil, txn, fmt.Errorf("failed to decode tools response: %w", err)
 	}
 
@@ -78,14 +78,14 @@ func (c *httpClient) getTools() ([]ToolInfo, *HTTPTransaction, error) {
 // createToolCall executes a tool call and returns the HTTP transaction
 func (c *httpClient) createToolCall(toolName, callID string, params map[string]any) (*HTTPTransaction, error) {
 	body, err := json.Marshal(params)
-	if err != nil {
+	if isError(err) {
 		return nil, fmt.Errorf("failed to marshal parameters: %w", err)
 	}
 	url := fmt.Sprintf("%s/mcp/tools/%s/calls/%s", c.serverURL, toolName, callID)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
-	if err != nil {
+	if isError(err) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -96,7 +96,7 @@ func (c *httpClient) createToolCall(toolName, callID string, params map[string]a
 	start := time.Now()
 	resp, err := c.Do(req)
 	duration := time.Since(start)
-	if err == nil {
+	if !isError(err) {
 		defer resp.Body.Close()
 	}
 
@@ -119,7 +119,7 @@ func (c *httpClient) createToolCall(toolName, callID string, params map[string]a
 		}
 	}
 
-	if err != nil {
+	if isError(err) {
 		return transaction, fmt.Errorf("request failed: %w", err)
 	}
 
@@ -137,13 +137,13 @@ func (c *httpClient) advanceElicitation(callID string, approved bool) (*HTTPTran
 	}
 
 	body, err := json.Marshal(params)
-	if err != nil {
+	if isError(err) {
 		return nil, fmt.Errorf("failed to marshal elicitation response: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
+	if isError(err) {
 		return nil, fmt.Errorf("failed to create elicitation request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -154,7 +154,7 @@ func (c *httpClient) advanceElicitation(callID string, approved bool) (*HTTPTran
 	start := time.Now()
 	resp, err := c.Do(req)
 	duration := time.Since(start)
-	if err == nil {
+	if !isError(err) {
 		defer resp.Body.Close()
 	}
 
@@ -177,9 +177,10 @@ func (c *httpClient) advanceElicitation(callID string, approved bool) (*HTTPTran
 		}
 	}
 
-	if err != nil {
+	if isError(err) {
 		return transaction, fmt.Errorf("elicitation advance failed: %w", err)
 	}
 
 	return transaction, nil
 }
+func isError(err error) bool { return err != nil }

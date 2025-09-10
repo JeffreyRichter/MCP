@@ -15,7 +15,7 @@ type Configuration struct {
 
 func (c *Configuration) Load() {
 	b, err := os.ReadFile(".env")
-	if err != nil {
+	if isError(err) {
 		panic(".env file missing")
 	}
 	// read lines froma buffer:

@@ -18,13 +18,13 @@ func TestToolCallAdd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Hour)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, srv.URL+"/mcp/tools/add/calls/test-123", strings.NewReader(`{"x":5,"y":3}`))
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -38,13 +38,13 @@ func TestToolCallAdd(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
 	add := struct{ Result AddToolCallResult }{}
 	err = json.Unmarshal(b, &add)
-	if err != nil {
+	if isError(err) {
 		t.Fatal(err)
 	}
 

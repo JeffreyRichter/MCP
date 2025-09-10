@@ -104,7 +104,7 @@ type RequestMeta struct {
 
 /*func (m *RequestMeta) UnmarshalJSON(data []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(data, &raw); isError(err){
 		return err
 	}
 

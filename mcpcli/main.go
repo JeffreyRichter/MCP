@@ -37,7 +37,7 @@ func main() {
 	if v := *debugViewFlag; v != "" {
 		model = setupDebugModel(model, v)
 		// Get terminal size and apply the same logic as tea.WindowSizeMsg handling
-		if width, height, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+		if width, height, err := term.GetSize(int(os.Stdout.Fd())); !isError(err) {
 			model.setWindowSize(width, height)
 		}
 		fmt.Print(model.View())
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	program := tea.NewProgram(model, tea.WithAltScreen())
-	if _, err := program.Run(); err != nil {
+	if _, err := program.Run(); isError(err) {
 		fmt.Printf("Error running program: %v", err)
 		os.Exit(1)
 	}

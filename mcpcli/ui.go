@@ -235,11 +235,11 @@ func (m Model) renderStatusLine() string {
 	case StatePathInput:
 		st = "Entering file path..."
 	case StateError:
-		if m.err != nil {
+		if isError(m.err) {
 			st = "Error: " + m.err.Error()
 		}
 	}
-	if m.theme != nil && m.err != nil {
+	if m.theme != nil && isError(m.err) {
 		st = m.theme.StatusError.Render(st)
 	}
 	line := "Status: " + st
@@ -258,7 +258,7 @@ func (m Model) formatJSON(jsonStr string) string {
 		return ""
 	}
 	var data any
-	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &data); isError(err) {
 		lines := strings.Split(jsonStr, "\n")
 		for i, l := range lines {
 			lines[i] = "    " + l
@@ -266,7 +266,7 @@ func (m Model) formatJSON(jsonStr string) string {
 		return strings.Join(lines, "\n")
 	}
 	b, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
+	if isError(err) {
 		return jsonStr
 	}
 	lines := strings.Split(string(b), "\n")

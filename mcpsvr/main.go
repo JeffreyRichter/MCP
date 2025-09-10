@@ -92,7 +92,7 @@ func main() {
 
 	ln := must(net.Listen("tcp", net.JoinHostPort("", port)))
 	var err error
-	if _, port, err = net.SplitHostPort(ln.Addr().String()); err != nil {
+	if _, port, err = net.SplitHostPort(ln.Addr().String()); isError(err) {
 		panic(err)
 	}
 	startMsg := fmt.Sprintf("Listening on port: %s", port)
@@ -101,7 +101,7 @@ func main() {
 	}
 	fmt.Println(startMsg)
 
-	if err := s.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := s.Serve(ln); isError(err) && !errors.Is(err, http.ErrServerClosed) {
 		panic(err)
 	}
 }
@@ -145,8 +145,9 @@ func newApiVersionSimulatorPolicy() svrcore.Policy {
 }
 
 func must[T any](v T, err error) T {
-	if err != nil {
+	if isError(err) {
 		panic(err)
 	}
 	return v
 }
+func isError(err error) bool { return err != nil }

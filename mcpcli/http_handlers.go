@@ -19,7 +19,7 @@ func (m Model) handleHTTPResponse(msg httpResponseMsg) (Model, tea.Cmd) {
 		m.syncRequestViewportContent()
 	}
 
-	if msg.err != nil {
+	if isError(msg.err) {
 		m.err = msg.err
 		// If we have a transaction, synthesize an error response for the Response panel.
 		// TODO: simplify this and clarify responsibility for response formatting
