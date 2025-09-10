@@ -30,6 +30,7 @@ The transport discussed in the proposal addresses the above cloud architecture a
 - The existing MCP Auth solutions continue to work as-is since they already follow HTTP industry standards.
 - This same HTTP transport can be used securely for local MCP Servers HTTP enabling one transport for use by both local and remote MCP clients/servers.  ***** TODO: Add section on this.
 - Improved performance since HTTP allows multiple requests from a single or multiple tenants to be processed in parallel.
+- Existing HTTP services that can't parse the HTTP body can be used such as API Gateways, CDNs, SSL/TLS termination,  frontdoors, metrics/logging collection, and distributed tracing
 - ***** TODO: Say something about multi-tenancy? (done via Auth?
 - ***** TODO: Say something about not having to learn/understand/process JSON-RPC at all?
 
