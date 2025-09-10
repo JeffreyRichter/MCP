@@ -16,7 +16,7 @@ import (
 
 type addToolCaller struct {
 	//defaultToolCaller
-	ops *httpOps
+	ops *mcpPolicies
 }
 type AddToolCallRequest struct {
 	X int `json:"x,omitempty"`

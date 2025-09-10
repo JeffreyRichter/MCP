@@ -258,5 +258,4 @@ type smuggler struct {
 }
 
 // Ptr converts a value to a pointer-to-value typically used when setting structure fields to be marshaled.
-func Ptr[T any](t T) *T      { return &t }
-func isError(err error) bool { return err != nil }
+func Ptr[T any](t T) *T { return &t }

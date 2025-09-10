@@ -133,9 +133,7 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 					panic("unsupported field type")
 				}
 			case reflect.Slice:
-				if f.Elem().Kind() != reflect.String {
-					panic("unsupported slice field type")
-				}
+				assert(f.Elem().Kind() == reflect.String, "unsupported slice field type; must be string")
 				for _, s := range f.Interface().([]string) {
 					rwh.Add(jsonFieldName, s)
 				}

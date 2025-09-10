@@ -15,9 +15,8 @@ type Configuration struct {
 
 func (c *Configuration) Load() {
 	b, err := os.ReadFile(".env")
-	if isError(err) {
-		panic(".env file missing")
-	}
+	assert(!isError(err), ".env file missing")
+
 	// read lines froma buffer:
 	for _, line := range strings.Split(string(b), "\r\n") {
 		tokens := strings.Split(line, "=")

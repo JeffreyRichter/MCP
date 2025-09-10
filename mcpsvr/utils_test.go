@@ -13,7 +13,7 @@ import (
 	"github.com/JeffreyRichter/svrcore/policies"
 )
 
-var testSvr *httpOps = newLocalMcpServer(context.Background(), slog.Default())
+var testSvr *mcpPolicies = newLocalMcpPolicies(context.Background(), slog.Default())
 
 func testServer(t *testing.T) *httptest.Server {
 	logger := slog.Default()

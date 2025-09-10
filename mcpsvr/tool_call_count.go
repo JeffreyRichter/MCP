@@ -15,7 +15,7 @@ import (
 
 type countToolCaller struct {
 	defaultToolCaller
-	ops *httpOps
+	ops *mcpPolicies
 }
 
 type CountToolCallRequest struct {

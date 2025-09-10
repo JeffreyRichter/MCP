@@ -12,7 +12,7 @@ import (
 
 type piiToolCaller struct {
 	defaultToolCaller
-	ops *httpOps
+	ops *mcpPolicies
 }
 
 type PIIToolCallRequest struct {

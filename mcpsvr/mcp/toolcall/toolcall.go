@@ -1,7 +1,9 @@
 package toolcall
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"encoding/json/jsontext"
 	"errors"
@@ -46,12 +48,11 @@ func New(tenant, toolName, toolCallID string) *ToolCall {
 
 // Copy returns a deep copy of tc
 func (tc *ToolCall) Copy() ToolCall {
-	if tc == nil {
-		panic("tc can't be nil")
-	}
+	assert(tc != nil, "tc can't be nil")
+	var buffer bytes.Buffer
+	assertNoError(gob.NewEncoder(&buffer).Encode(tc))
 	cp := ToolCall{}
-	buffer := must(json.Marshal(tc))
-	must(0, json.Unmarshal(buffer, &cp))
+	assertNoError(gob.NewDecoder(&buffer).Decode(&cp))
 	return cp
 }
 
@@ -250,11 +251,3 @@ func (er *ElicitationRequest) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
-
-func must[T any](val T, err error) T {
-	if isError(err) {
-		panic(err)
-	}
-	return val
-}
-func isError(err error) bool { return err != nil }

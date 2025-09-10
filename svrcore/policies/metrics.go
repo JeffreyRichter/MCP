@@ -41,4 +41,3 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 		return err
 	}
 }
-func isError(err error) bool { return err != nil }

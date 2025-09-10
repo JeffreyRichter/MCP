@@ -22,7 +22,7 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-func (ops *httpOps) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
+func (p *mcpPolicies) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {
 	// If no base api-version, baseRoutes == nil; build routes from scratch
 
 	// Use the patterns below to MODIFY the base's routes (or ignore baseRoutes to build routes from scratch):
@@ -32,25 +32,25 @@ func (ops *httpOps) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcore.
 	return svrcore.ApiVersionRoutes{
 		// ***** TOOLS *****
 		"/mcp/tools": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.getToolList},
+			"GET": {Policy: p.getToolList},
 		},
 		"/mcp/tools/{toolName}/calls": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.listToolCalls},
+			"GET": {Policy: p.listToolCalls},
 		},
 		"/mcp/tools/{toolName}/calls/{toolCallID}": map[string]*svrcore.MethodInfo{
 			"PUT": {
-				Policy: ops.putToolCallResource,
+				Policy: p.putToolCallResource,
 				ValidHeader: &svrcore.ValidHeader{
 					ContentTypes:     []string{"application/json"},
 					MaxContentLength: int64(1024),
 				},
 			},
-			"GET": {Policy: ops.getToolCallResource},
+			"GET": {Policy: p.getToolCallResource},
 		},
 
 		"/mcp/tools/{toolName}/calls/{toolCallID}/advance": map[string]*svrcore.MethodInfo{
 			"POST": {
-				Policy: ops.postToolCallResourceAdvance,
+				Policy: p.postToolCallResourceAdvance,
 				ValidHeader: &svrcore.ValidHeader{
 					ContentTypes:     []string{"application/json"},
 					MaxContentLength: int64(1024),
@@ -60,7 +60,7 @@ func (ops *httpOps) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcore.
 
 		"/mcp/tools/{toolName}/calls/{toolCallID}/cancel": map[string]*svrcore.MethodInfo{
 			"POST": {
-				Policy: ops.postToolCallCancelResource,
+				Policy: p.postToolCallCancelResource,
 				ValidHeader: &svrcore.ValidHeader{
 					MaxContentLength: int64(0), // No content expected for cancel
 				},
@@ -69,29 +69,29 @@ func (ops *httpOps) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcore.
 
 		// ***** RESOURCES *****
 		"/mcp/resources": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.getResources},
+			"GET": {Policy: p.getResources},
 		},
 		"/mcp/resources-templates": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.getResourcesTemplates},
+			"GET": {Policy: p.getResourcesTemplates},
 		},
 		"/mcp/resources/{name}": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.getResource},
+			"GET": {Policy: p.getResource},
 		},
 
 		// ***** PROMPTS *****
 		"/mcp/prompts": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.getPrompts},
+			"GET": {Policy: p.getPrompts},
 		},
 		"/mcp/prompts/{name}": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: ops.getPrompt},
+			"GET": {Policy: p.getPrompt},
 		},
 
 		// ***** ROOTS & COMPLETIONS *****
 		"/mcp/roots": map[string]*svrcore.MethodInfo{
-			"PUT": {Policy: ops.putRoots},
+			"PUT": {Policy: p.putRoots},
 		},
 		"/mcp/complete": map[string]*svrcore.MethodInfo{
-			"POST": {Policy: ops.postCompletion},
+			"POST": {Policy: p.postCompletion},
 		},
 	}
 }

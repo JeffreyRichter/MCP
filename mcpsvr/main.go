@@ -32,11 +32,11 @@ func main() {
 	var c Configuration
 	c.Load()
 
-	var ops *httpOps
+	var p *mcpPolicies
 	port, sharedKey := "8080", ""
 	switch {
 	case c.Local:
-		ops = newLocalMcpServer(shutdownMgr.Context, errorLogger)
+		p = newLocalMcpPolicies(shutdownMgr.Context, errorLogger)
 		b := [16]byte{}
 		_, _ = rand.Read(b[:]) // guaranteed to return len(b), nil
 		port, sharedKey = "0", fmt.Sprintf("%x", b)
@@ -46,13 +46,13 @@ func main() {
 		blobClient := must(azblob.NewClientWithSharedKeyCredential(c.AzureBlobURL, blobCred, nil))
 		queueCred := must(azqueue.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
 		queueClient := must(azqueue.NewQueueClientWithSharedKeyCredential(c.AzureQueueURL, queueCred, nil))
-		ops = newAzureMcpServer(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+		p = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 
 	default:
 		cred := must(azidentity.NewDefaultAzureCredential(nil))
 		blobClient := must(azblob.NewClient(c.AzureBlobURL, cred, nil))
 		queueClient := must(azqueue.NewQueueClient(c.AzureQueueURL, cred, nil))
-		ops = newAzureMcpServer(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+		p = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 	}
 
 	policies := []svrcore.Policy{
@@ -71,7 +71,7 @@ func main() {
 	// 3. Retire old preview/GA version
 	avis := []*svrcore.ApiVersionInfo{
 		{ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
-		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: ops.Routes20250808},
+		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: p.Routes20250808},
 	}
 
 	s := &http.Server{
@@ -143,11 +143,3 @@ func newApiVersionSimulatorPolicy() svrcore.Policy {
 		return r.Next(ctx)
 	}
 }
-
-func must[T any](v T, err error) T {
-	if isError(err) {
-		panic(err)
-	}
-	return v
-}
-func isError(err error) bool { return err != nil }

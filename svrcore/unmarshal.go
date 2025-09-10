@@ -79,9 +79,7 @@ func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]str
 			setStructField(s, fis[i], inputJsonFieldSlice)
 
 		case reflect.TypeFor[*time.Time]():
-			if !fis[i].format.isSet {
-				panic(fmt.Sprintf("Struct time.Time field %q missing format tag", fis[i].fieldName))
-			}
+			assert(fis[i].format.isSet, fmt.Sprintf("Struct time.Time field %q missing format tag", fis[i].fieldName))
 			if format := fis[i].format.value; format == "RFC1123" {
 				setStructField(s, fis[i], must(time.Parse(http.TimeFormat, inputJsonFieldSlice[0])))
 			} else {
@@ -111,9 +109,7 @@ func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]str
 // keys with string values: enums (comma-separated), regx, format
 // If any field is invalid, an error is returned.
 func verifyStructFields(s any) error {
-	if s == nil {
-		panic("should never get here")
-	}
+	assert(s != nil, "should never get here")
 	structValue := reflect.ValueOf(s)
 	if structValue.Kind() == reflect.Pointer {
 		if structValue.IsNil() {
@@ -352,10 +348,7 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 		return t
 	}
 	structType = dereference(structType)
-	if structType.Kind() != reflect.Struct {
-		panic("getTypeInfo: structType must be a struct")
-	}
-
+	assert(structType.Kind() == reflect.Struct, "structType must be a struct")
 	if fieldInfos, ok := typeToFieldInfos.Load(structType); ok { // Not in cache
 		return fieldInfos
 	}
@@ -401,10 +394,3 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 }
 
 var typeToFieldInfos = syncmap.Map[reflect.Type, []fieldInfo]{}
-
-func must[T any](val T, err error) T {
-	if isError(err) {
-		panic(err)
-	}
-	return val
-}
