@@ -34,18 +34,18 @@ The transport discussed in the proposal addresses the above cloud architecture a
 - ***** TODO: Say something about not having to learn/understand/process JSON-RPC at all?
 
 The list of HTTP routes necessary to implement the MCP protocol is shown here:
+
 | MCP operation | HTTP route | Notes |
-|-------------------------------|
+|---------------|---------------|- |
 | roots/list | PUT /mcp/roots | |
-| completion/complete TODO | POST /mcp/complete | |
+| completion/complete | POST /mcp/complete | |
 | resources/list | GET /mcp/resources | |
 | resource/templates/list | GET /mcp/resources-templates | |
 | resources/read  | POST /mcp/resources/{name} | TODO: Should really be a GET |
 | prompts/list | GET /mcp/prompts | |
 | prompts/get | POST /mcp/prompts/{name} | |
 | tools/list | GET /mcp/tools | |
-
-| tools/call | PUT /mcp/tools/{toolName}/calls/{toolCallID} | Returns ElicitRequest/SamplingRequest request or ToolResult |
+| tools/call | PUT /mcp/tools/{toolName}/calls/{toolCallID} | Returns ToolResult or ElicitRequest/SamplingRequest request |
 | * new * | POST /mcp/tools/{toolName}/calls/{toolCallID}/advance | Client sends ElicitResult/SamplingResult |
 | notification/cancelled | POST /mcp/tools/{toolName}/calls/{toolCallID}/cancel | | 
 | * new * | GET /mcp/tools/{toolName}/calls | Fault-tolerance: enables client to get list of in-flight tool calls |
