@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 type TestStruct struct {
@@ -54,7 +56,7 @@ func TestJson2Struct(t *testing.T) {
 
 	var jsonObj map[string]any
 	err := json.Unmarshal([]byte(j), &jsonObj)
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
 	}
 
@@ -151,11 +153,11 @@ func TestVerifyStructFields_BasicFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyStructFields(&tt.input)
-			if tt.wantError && !isError(err) {
+			if tt.wantError && !aids.IsError(err) {
 				t.Errorf("expected error but got none")
-			} else if !tt.wantError && isError(err) {
+			} else if !tt.wantError && aids.IsError(err) {
 				t.Errorf("unexpected error: %v", err)
-			} else if tt.wantError && isError(err) && tt.errorMsg != "" {
+			} else if tt.wantError && aids.IsError(err) && tt.errorMsg != "" {
 				if !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("error message '%s' does not contain expected text '%s'", err.Error(), tt.errorMsg)
 				}
@@ -263,11 +265,11 @@ func TestVerifyStructFields_PointerFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyStructFields(&tt.input)
-			if tt.wantError && !isError(err) {
+			if tt.wantError && !aids.IsError(err) {
 				t.Errorf("expected error but got none")
-			} else if !tt.wantError && isError(err) {
+			} else if !tt.wantError && aids.IsError(err) {
 				t.Errorf("unexpected error: %v", err)
-			} else if tt.wantError && isError(err) && tt.errorMsg != "" {
+			} else if tt.wantError && aids.IsError(err) && tt.errorMsg != "" {
 				if !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("error message '%s' does not contain expected text '%s'", err.Error(), tt.errorMsg)
 				}
@@ -408,11 +410,11 @@ func TestVerifyStructFields_NestedStructs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyStructFields(&tt.input)
-			if tt.wantError && !isError(err) {
+			if tt.wantError && !aids.IsError(err) {
 				t.Errorf("expected error but got none")
-			} else if !tt.wantError && isError(err) {
+			} else if !tt.wantError && aids.IsError(err) {
 				t.Errorf("unexpected error: %v", err)
-			} else if tt.wantError && isError(err) && tt.errorMsg != "" {
+			} else if tt.wantError && aids.IsError(err) && tt.errorMsg != "" {
 				if !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("error message '%s' does not contain expected text '%s'", err.Error(), tt.errorMsg)
 				}
@@ -443,11 +445,11 @@ func TestVerifyStructFields_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := verifyStructFields(tt.input)
-			if tt.wantError && !isError(err) {
+			if tt.wantError && !aids.IsError(err) {
 				t.Errorf("expected error but got none")
-			} else if !tt.wantError && isError(err) {
+			} else if !tt.wantError && aids.IsError(err) {
 				t.Errorf("unexpected error: %v", err)
-			} else if tt.wantError && isError(err) && tt.errorMsg != "" {
+			} else if tt.wantError && aids.IsError(err) && tt.errorMsg != "" {
 				if !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("error message '%s' does not contain expected text '%s'", err.Error(), tt.errorMsg)
 				}

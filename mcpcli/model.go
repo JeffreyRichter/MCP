@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -128,7 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.updateNormal(msg)
 	case toolsLoadedMsg:
-		if isError(msg.err) {
+		if aids.IsError(msg.err) {
 			m.err = msg.err
 			m.state = StateError
 		} else {
@@ -181,7 +182,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// simple status flash can be done by setting err=nil & state revert
 		return m, m.startPathExec(msg.path)
 	case pathExecResultMsg:
-		if isError(msg.err) {
+		if aids.IsError(msg.err) {
 			m.err = msg.err
 			m.state = StateError
 		} else {
@@ -190,7 +191,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Key  string `json:"key"`
 				Port int    `json:"port"`
 			}
-			if err := json.Unmarshal([]byte(msg.firstLine), &parsed); isError(err) || parsed.Key == "" || parsed.Port == 0 {
+			if err := json.Unmarshal([]byte(msg.firstLine), &parsed); aids.IsError(err) || parsed.Key == "" || parsed.Port == 0 {
 				// invalid; kill process if running
 				if msg.cmd != nil && msg.cmd.Process != nil {
 					_ = msg.cmd.Process.Kill()
@@ -350,12 +351,12 @@ func (m Model) startPathExec(path string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(path)
 		stdout, err := cmd.StdoutPipe()
-		if isError(err) {
+		if aids.IsError(err) {
 			return pathExecResultMsg{err: err}
 		}
 		cmd.Stderr = cmd.Stdout
 		cmd.Env = []string{"MCPSVR_LOCAL=true"}
-		if err := cmd.Start(); isError(err) {
+		if err := cmd.Start(); aids.IsError(err) {
 			return pathExecResultMsg{err: err}
 		}
 		// store command pointer in model via follow-up message (pid also captured here)

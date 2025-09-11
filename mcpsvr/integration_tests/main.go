@@ -17,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 var ctx = context.Background()
@@ -28,7 +30,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := startServices(ctx); isError(err) {
+	if err := startServices(ctx); aids.IsError(err) {
 		fmt.Printf("Failed to start services: %v", err)
 		os.Exit(1)
 	}
@@ -38,7 +40,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		if err := run(tests); isError(err) {
+		if err := run(tests); aids.IsError(err) {
 			fmt.Println(err)
 		}
 		sigChan <- syscall.SIGTERM
@@ -61,7 +63,7 @@ func run(tests []testInfo) error {
 	var failed []string
 	for i, test := range tests {
 		fmt.Printf("\n=== %s (%d/%d) ===\n", test.Name, i+1, len(tests))
-		if err := test.Run(); isError(err) {
+		if err := test.Run(); aids.IsError(err) {
 			failed = append(failed, test.Name)
 			fmt.Printf("\t%s\n=== %s failed ===\n", err, test.Name)
 		} else {
@@ -129,7 +131,7 @@ func cleanup() {
 	logCmd.Stdout = os.Stdout
 	logCmd.Stderr = os.Stderr
 	logCmd.WaitDelay = time.Second
-	if err := logCmd.Run(); isError(err) {
+	if err := logCmd.Run(); aids.IsError(err) {
 		fmt.Println(err)
 	}
 
@@ -138,8 +140,7 @@ func cleanup() {
 	downCmd.Stdout = os.Stdout
 	downCmd.Stderr = os.Stderr
 	logCmd.WaitDelay = time.Second
-	if err := downCmd.Run(); isError(err) {
+	if err := downCmd.Run(); aids.IsError(err) {
 		fmt.Println(err)
 	}
 }
-func isError(err error) bool { return err != nil }

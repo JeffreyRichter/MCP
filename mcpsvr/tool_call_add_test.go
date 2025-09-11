@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 var ctx = context.Background()
@@ -18,13 +20,13 @@ func TestToolCallAdd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Hour)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, srv.URL+"/mcp/tools/add/calls/test-123", strings.NewReader(`{"x":5,"y":3}`))
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -38,13 +40,13 @@ func TestToolCallAdd(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
 	add := struct{ Result AddToolCallResult }{}
 	err = json.Unmarshal(b, &add)
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatal(err)
 	}
 

@@ -104,7 +104,7 @@ type RequestMeta struct {
 
 /*func (m *RequestMeta) UnmarshalJSON(data []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); isError(err){
+	if err := json.Unmarshal(data, &raw); aids.IsError(err){
 		return err
 	}
 
@@ -415,7 +415,7 @@ type CallToolResult struct {
 	Result
 	Content           []ContentBlock          `json:"content"`
 	StructuredContent *map[string]interface{} `json:"structuredContent,omitempty"`
-	IsError           *bool                   `json:"isError,omitempty"`
+	IsError           *bool                   `json:"aids.IsError,omitempty"`
 }
 
 // Logging

@@ -17,6 +17,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
+	"github.com/JeffreyRichter/internal/aids"
+	"github.com/JeffreyRichter/mcpsvr/resources/azresources"
+	"github.com/JeffreyRichter/mcpsvr/resources/localresources"
 	"github.com/JeffreyRichter/svrcore"
 	"github.com/JeffreyRichter/svrcore/policies"
 )
@@ -42,16 +45,16 @@ func main() {
 		port, sharedKey = "0", fmt.Sprintf("%x", b)
 
 	case c.AzuriteAccount != "":
-		blobCred := must(azblob.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
-		blobClient := must(azblob.NewClientWithSharedKeyCredential(c.AzureBlobURL, blobCred, nil))
-		queueCred := must(azqueue.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
-		queueClient := must(azqueue.NewQueueClientWithSharedKeyCredential(c.AzureQueueURL, queueCred, nil))
+		blobCred := aids.Must(azblob.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
+		blobClient := aids.Must(azblob.NewClientWithSharedKeyCredential(c.AzureBlobURL, blobCred, nil))
+		queueCred := aids.Must(azqueue.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
+		queueClient := aids.Must(azqueue.NewQueueClientWithSharedKeyCredential(c.AzureQueueURL, queueCred, nil))
 		p = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 
 	default:
-		cred := must(azidentity.NewDefaultAzureCredential(nil))
-		blobClient := must(azblob.NewClient(c.AzureBlobURL, cred, nil))
-		queueClient := must(azqueue.NewQueueClient(c.AzureQueueURL, cred, nil))
+		cred := aids.Must(azidentity.NewDefaultAzureCredential(nil))
+		blobClient := aids.Must(azblob.NewClient(c.AzureBlobURL, cred, nil))
+		queueClient := aids.Must(azqueue.NewQueueClient(c.AzureQueueURL, cred, nil))
 		p = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 	}
 
@@ -90,9 +93,9 @@ func main() {
 		WriteTimeout:                 30 * time.Second,
 	}
 
-	ln := must(net.Listen("tcp", net.JoinHostPort("", port)))
+	ln := aids.Must(net.Listen("tcp", net.JoinHostPort("", port)))
 	var err error
-	if _, port, err = net.SplitHostPort(ln.Addr().String()); isError(err) {
+	if _, port, err = net.SplitHostPort(ln.Addr().String()); aids.IsError(err) {
 		panic(err)
 	}
 	startMsg := fmt.Sprintf("Listening on port: %s", port)
@@ -101,9 +104,25 @@ func main() {
 	}
 	fmt.Println(startMsg)
 
-	if err := s.Serve(ln); isError(err) && !errors.Is(err, http.ErrServerClosed) {
+	if err := s.Serve(ln); aids.IsError(err) && !errors.Is(err, http.ErrServerClosed) {
 		panic(err)
 	}
+}
+
+func newLocalMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger) *mcpPolicies {
+	ops := &mcpPolicies{errorLogger: errorLogger, store: localresources.NewToolCallStore(shutdownCtx)}
+	ops.pm = localresources.NewPhaseMgr(shutdownCtx, localresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
+	ops.buildToolInfos()
+	return ops
+}
+
+func newAzureMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *mcpPolicies {
+	ops := &mcpPolicies{errorLogger: errorLogger, store: azresources.NewToolCallStore(blobClient)}
+	pm, err := azresources.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
+	aids.AssertSuccess(err)
+	ops.pm = pm
+	ops.buildToolInfos()
+	return ops
 }
 
 func noApiVersionRoutes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionRoutes {

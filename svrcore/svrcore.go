@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 // ApiVersionInfo represents information about an API version.
@@ -83,7 +85,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This is the 1st function called when an HTTP request comes into the service
 		rr, err := newReqRes(policies, r, w)
-		if !isError(err) { // No error, start the policies
+		if !aids.IsError(err) { // No error, start the policies
 			err = rr.Next(rr.R.Context())
 		}
 		if rr.StatusCode() == 0 { // No response was ever sent back to the client; send one now
@@ -91,7 +93,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 				slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
 			rr.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "")
 		}
-		if isError(err) { // Some error occurreed
+		if aids.IsError(err) { // Some error occurreed
 			if _, ok := err.(*ServerError); ok {
 				// An HTTP error occured which is normal. If it wasn't sent to the client, then it was logged above.
 			} else { // A non-HTTP error occured, log it
@@ -165,7 +167,7 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 					hackPostActionForServeHTTP(r, false)
 					s.r.R = r // Replace old R with new 'r' which has PathValues set
 					s.err = s.r.ValidateHeader(policyInfo.ValidHeader)
-					if !isError(s.err) {
+					if !aids.IsError(s.err) {
 						s.err = policyInfo.Policy(s.ctx, s.r) // Smuggle any error back to our caller
 					}
 				}))

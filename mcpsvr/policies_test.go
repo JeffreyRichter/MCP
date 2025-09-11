@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"testing"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 func TestListTools(t *testing.T) {
@@ -12,7 +14,7 @@ func TestListTools(t *testing.T) {
 	resp := client.Get("/mcp/tools", http.Header{})
 
 	b, err := io.ReadAll(resp.Body)
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
@@ -21,7 +23,7 @@ func TestListTools(t *testing.T) {
 		Tools []map[string]any `json:"tools"`
 	}{}
 	err = json.Unmarshal(b, &actual)
-	if isError(err) {
+	if aids.IsError(err) {
 		t.Fatal(err)
 	}
 	if actual := len(actual.Tools); actual != 3 {

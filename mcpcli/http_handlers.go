@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/JeffreyRichter/internal/aids"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -19,7 +20,7 @@ func (m Model) handleHTTPResponse(msg httpResponseMsg) (Model, tea.Cmd) {
 		m.syncRequestViewportContent()
 	}
 
-	if isError(msg.err) {
+	if aids.IsError(msg.err) {
 		m.err = msg.err
 		// If we have a transaction, synthesize an error response for the Response panel.
 		// TODO: simplify this and clarify responsibility for response formatting

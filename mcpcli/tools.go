@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 // createAddCall creates a hardcoded tool call for the 'add' tool
@@ -28,7 +30,7 @@ func createPIICall() (string, map[string]any) {
 // parseLastCall parses a response to check if elicitation is required
 func parseLastCall(responseBody string) (bool, ElicitationData) {
 	var response map[string]any
-	if err := json.Unmarshal([]byte(responseBody), &response); isError(err) {
+	if err := json.Unmarshal([]byte(responseBody), &response); aids.IsError(err) {
 		return false, ElicitationData{}
 	}
 

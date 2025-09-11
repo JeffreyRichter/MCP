@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
@@ -37,7 +38,7 @@ func main() {
 	if v := *debugViewFlag; v != "" {
 		model = setupDebugModel(model, v)
 		// Get terminal size and apply the same logic as tea.WindowSizeMsg handling
-		if width, height, err := term.GetSize(int(os.Stdout.Fd())); !isError(err) {
+		if width, height, err := term.GetSize(int(os.Stdout.Fd())); !aids.IsError(err) {
 			model.setWindowSize(width, height)
 		}
 		fmt.Print(model.View())
@@ -45,7 +46,7 @@ func main() {
 	}
 
 	program := tea.NewProgram(model, tea.WithAltScreen())
-	if _, err := program.Run(); isError(err) {
+	if _, err := program.Run(); aids.IsError(err) {
 		fmt.Printf("Error running program: %v", err)
 		os.Exit(1)
 	}

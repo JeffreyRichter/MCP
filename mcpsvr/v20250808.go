@@ -9,10 +9,10 @@ POST /mcp/tools/{toolName}/calls/{toolCallID}/cancel
 
 GET /mcp/resources
 GET /mcp/resources-templates
-GET /mcp/resources/{name}
+POST /mcp/resources/{name}
 
 GET /mcp/prompts
-GET /mcp/prompts/{name}
+POST /mcp/prompts/{name}
 
 PUT /mcp/roots
 POST /mcp/complete
@@ -75,7 +75,7 @@ func (p *mcpPolicies) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcor
 			"GET": {Policy: p.getResourcesTemplates},
 		},
 		"/mcp/resources/{name}": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: p.getResource},
+			"POST": {Policy: p.getResource},
 		},
 
 		// ***** PROMPTS *****
@@ -83,7 +83,7 @@ func (p *mcpPolicies) Routes20250808(baseRoutes svrcore.ApiVersionRoutes) svrcor
 			"GET": {Policy: p.getPrompts},
 		},
 		"/mcp/prompts/{name}": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: p.getPrompt},
+			"POST": {Policy: p.getPrompt},
 		},
 
 		// ***** ROOTS & COMPLETIONS *****

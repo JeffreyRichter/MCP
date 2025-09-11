@@ -1,15 +1,14 @@
 package toolcall
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/json"
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp"
 	"github.com/JeffreyRichter/svrcore"
 )
@@ -48,11 +47,10 @@ func New(tenant, toolName, toolCallID string) *ToolCall {
 
 // Copy returns a deep copy of tc
 func (tc *ToolCall) Copy() ToolCall {
-	assert(tc != nil, "tc can't be nil")
-	var buffer bytes.Buffer
-	assertNoError(gob.NewEncoder(&buffer).Encode(tc))
+	aids.Assert(tc != nil, "ToolCall.Copy: tc is nil")
+	b := aids.Must(json.Marshal(tc))
 	cp := ToolCall{}
-	assertNoError(gob.NewDecoder(&buffer).Decode(&cp))
+	aids.AssertSuccess(json.Unmarshal(b, &cp))
 	return cp
 }
 
@@ -143,7 +141,7 @@ func (er *ElicitationRequest) UnmarshalJSON(data []byte) error {
 		} `json:"requestedSchema"`
 	}
 
-	if err := json.Unmarshal(data, &temp); isError(err) {
+	if err := json.Unmarshal(data, &temp); aids.IsError(err) {
 		return err
 	}
 

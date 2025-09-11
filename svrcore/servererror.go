@@ -3,6 +3,8 @@ package svrcore
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 // ServerError represents a standard Service HTTP error response as documented here:
@@ -22,6 +24,6 @@ func (e *ServerError) Error() string {
 	v := struct {
 		Error *ServerError `json:"error"`
 	}{Error: e}
-	json := must(json.Marshal(v))
+	json := aids.Must(json.Marshal(v))
 	return string(json)
 }

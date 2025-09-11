@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/svrcore/syncmap"
 )
 
@@ -67,7 +68,7 @@ func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]str
 		case reflect.TypeFor[*float64](), reflect.TypeFor[*float32](),
 			reflect.TypeFor[*int](), reflect.TypeFor[*int8](), reflect.TypeFor[*int16](), reflect.TypeFor[*int32](), reflect.TypeFor[*int64]():
 			// All JSON numbers are float64; JSON unmarshal() will convert the float64 to the right struct field number type
-			setStructField(s, fis[i], must(strconv.ParseFloat(inputJsonFieldSlice[0], 64)))
+			setStructField(s, fis[i], aids.Must(strconv.ParseFloat(inputJsonFieldSlice[0], 64)))
 
 		case reflect.TypeFor[*string]():
 			setStructField(s, fis[i], inputJsonFieldSlice[0])
@@ -79,11 +80,11 @@ func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]str
 			setStructField(s, fis[i], inputJsonFieldSlice)
 
 		case reflect.TypeFor[*time.Time]():
-			assert(fis[i].format.isSet, fmt.Sprintf("Struct time.Time field %q missing format tag", fis[i].fieldName))
+			aids.Assert(fis[i].format.isSet, fmt.Sprintf("Struct time.Time field %q missing format tag", fis[i].fieldName))
 			if format := fis[i].format.value; format == "RFC1123" {
-				setStructField(s, fis[i], must(time.Parse(http.TimeFormat, inputJsonFieldSlice[0])))
+				setStructField(s, fis[i], aids.Must(time.Parse(http.TimeFormat, inputJsonFieldSlice[0])))
 			} else {
-				setStructField(s, fis[i], must(time.Parse(format, inputJsonFieldSlice[0])))
+				setStructField(s, fis[i], aids.Must(time.Parse(format, inputJsonFieldSlice[0])))
 			}
 
 		case reflect.TypeFor[*ETag]():
@@ -109,7 +110,7 @@ func unmarshalMapOfSliceOfStrings(jsonFieldNameToJsonFieldSlice map[string][]str
 // keys with string values: enums (comma-separated), regx, format
 // If any field is invalid, an error is returned.
 func verifyStructFields(s any) error {
-	assert(s != nil, "should never get here")
+	aids.Assert(s != nil, "should never get here")
 	structValue := reflect.ValueOf(s)
 	if structValue.Kind() == reflect.Pointer {
 		if structValue.IsNil() {
@@ -164,60 +165,60 @@ func verifyStructFields(s any) error {
 
 		case *float32, *float64:
 			if !isNumPtrNil(v) {
-				if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Elem().Float()); isError(err) {
+				if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Elem().Float()); aids.IsError(err) {
 					return err
 				}
 			}
 		case float32, float64:
-			if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Float()); isError(err) {
+			if err := fi.verifyFloat(fi.fieldName, reflect.ValueOf(v).Float()); aids.IsError(err) {
 				return err
 			}
 
 		case *int, *int8, *int16, *int32, *int64:
 			if !isNumPtrNil(v) {
-				if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Elem().Int()); isError(err) {
+				if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Elem().Int()); aids.IsError(err) {
 					return err
 				}
 			}
 
 		case int, int8, int16, int32, int64:
-			if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Int()); isError(err) {
+			if err := fi.verifyInt(fi.fieldName, reflect.ValueOf(v).Int()); aids.IsError(err) {
 				return err
 			}
 
 		case *uint, *uint8, *uint16, *uint32, *uint64:
 			if !isNumPtrNil(v) {
-				if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Elem().Uint()); isError(err) {
+				if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Elem().Uint()); aids.IsError(err) {
 					return err
 				}
 			}
 
 		case uint, uint8, uint16, uint32, uint64:
-			if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Uint()); isError(err) {
+			if err := fi.verifyUint(fi.fieldName, reflect.ValueOf(v).Uint()); aids.IsError(err) {
 				return err
 			}
 
 		case *string:
 			if v != nil {
-				if err := fi.verifyString(fi.fieldName, *v); isError(err) {
+				if err := fi.verifyString(fi.fieldName, *v); aids.IsError(err) {
 					return err
 				}
 			}
 
 		case string:
-			if err := fi.verifyString(fi.fieldName, v); isError(err) {
+			if err := fi.verifyString(fi.fieldName, v); aids.IsError(err) {
 				return err
 			}
 
 		case *[]string:
 			if v != nil {
-				if err := fi.verifyStrings(fi.fieldName, *v); isError(err) {
+				if err := fi.verifyStrings(fi.fieldName, *v); aids.IsError(err) {
 					return err
 				}
 			}
 
 		case []string:
-			if err := fi.verifyStrings(fi.fieldName, v); isError(err) {
+			if err := fi.verifyStrings(fi.fieldName, v); aids.IsError(err) {
 				return err
 			}
 
@@ -228,13 +229,13 @@ func verifyStructFields(s any) error {
 
 			case fieldValue.Type().Kind() == reflect.Pointer && fieldValue.Type().Elem().Kind() == reflect.Struct:
 				// Recursively validate struct fields
-				if err := verifyStructFields(fieldValue.Interface()); isError(err) {
+				if err := verifyStructFields(fieldValue.Interface()); aids.IsError(err) {
 					return fmt.Errorf("field %q: %v", fi.jsonName, err)
 				}
 
 			case fieldValue.Type().Kind() == reflect.Struct:
 				// Recursively validate struct fields
-				if err := verifyStructFields(fieldValue.Interface()); isError(err) {
+				if err := verifyStructFields(fieldValue.Interface()); aids.IsError(err) {
 					return fmt.Errorf("field %q: %v", fi.jsonName, err)
 				}
 
@@ -304,7 +305,7 @@ func (fi *fieldInfo) verifyLength(name string, length int) error {
 }
 
 func (fi *fieldInfo) verifyString(name string, s string) error {
-	if err := fi.verifyLength(name, len(s)); isError(err) {
+	if err := fi.verifyLength(name, len(s)); aids.IsError(err) {
 		return err
 	}
 	if fi.enumValues.isSet && !slices.Contains(fi.enumValues.value, s) {
@@ -324,7 +325,7 @@ func (fi *fieldInfo) verifyStrings(name string, s []string) error {
 		return fmt.Errorf("field '%s' violation: value=%d != maxitems=%d", name, len(s), int(fi.maxitems.value))
 	}
 	for _, eachString := range s {
-		if err := fi.verifyString(fmt.Sprintf("%s[%s]", name, eachString), eachString); isError(err) {
+		if err := fi.verifyString(fmt.Sprintf("%s[%s]", name, eachString), eachString); aids.IsError(err) {
 			return err
 		}
 	}
@@ -348,13 +349,13 @@ func getFieldInfos(structType reflect.Type) []fieldInfo {
 		return t
 	}
 	structType = dereference(structType)
-	assert(structType.Kind() == reflect.Struct, "structType must be a struct")
+	aids.Assert(structType.Kind() == reflect.Struct, "structType must be a struct")
 	if fieldInfos, ok := typeToFieldInfos.Load(structType); ok { // Not in cache
 		return fieldInfos
 	}
 
-	parseInt64 := func(val string) int64 { return must(strconv.ParseInt(val, 10, 64)) }
-	parseFloat64 := func(val string) float64 { return must(strconv.ParseFloat(val, 64)) }
+	parseInt64 := func(val string) int64 { return aids.Must(strconv.ParseInt(val, 10, 64)) }
+	parseFloat64 := func(val string) float64 { return aids.Must(strconv.ParseFloat(val, 64)) }
 
 	var fieldInfos []fieldInfo
 	for fieldIndex := range structType.NumField() {

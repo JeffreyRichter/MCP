@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/svrcore"
 	"github.com/JeffreyRichter/svrcore/policies"
 )
@@ -69,7 +70,7 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, c.url+path, body)
-	if isError(err) {
+	if aids.IsError(err) {
 		c.t.Fatal(err)
 	}
 	if body != nil {
@@ -81,7 +82,7 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 		}
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if isError(err) {
+	if aids.IsError(err) {
 		c.t.Fatal(err)
 	}
 	return resp

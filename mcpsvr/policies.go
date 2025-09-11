@@ -8,12 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
-	"github.com/JeffreyRichter/mcpsvr/resources/azresources"
-	"github.com/JeffreyRichter/mcpsvr/resources/localresources"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -22,22 +19,6 @@ import (
 // 2. Construct global singleton instance/variable of the Resource Type used to call #1 methods
 // 3. Define api-version Resource Type Operations struct with field of #1 & define api-specific HTTP operations on this type
 // 4. Construct global singleton instance/variable of #3 wrapping #2 & set api-version routes to these var/methods
-
-func newLocalMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger) *mcpPolicies {
-	ops := &mcpPolicies{errorLogger: errorLogger, store: localresources.NewToolCallStore(shutdownCtx)}
-	ops.pm = localresources.NewPhaseMgr(shutdownCtx, localresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
-	ops.buildToolInfos()
-	return ops
-}
-
-func newAzureMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *mcpPolicies {
-	ops := &mcpPolicies{errorLogger: errorLogger, store: azresources.NewToolCallStore(blobClient)}
-	pm, err := azresources.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
-	assertNoError(err)
-	ops.pm = pm
-	ops.buildToolInfos()
-	return ops
-}
 
 // mcpPolicies wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
 type mcpPolicies struct {
@@ -94,10 +75,10 @@ func (p *mcpPolicies) toolNameToProcessPhaseFunc(toolName string) (toolcall.Proc
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
 func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := p.lookupToolCall(r)
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); isError(err) {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); aids.IsError(err) {
 		return err
 	}
 
@@ -119,14 +100,14 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 // This method is used is called by GET & POST (not PUT) because it assumes the resource must already exist.
 func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (*ToolInfo, *toolcall.ToolCall, error) {
 	ti, tc, err := p.lookupToolCall(r)
-	if isError(err) {
+	if aids.IsError(err) {
 		return nil, nil, err
 	}
 	err = p.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if isError(err) {
+	if aids.IsError(err) {
 		return nil, nil, r.WriteError(http.StatusNotFound, nil, nil, "NotFound", "Tool call not found")
 	}
-	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); isError(err) {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); aids.IsError(err) {
 		return nil, nil, err
 	}
 	return ti, tc, nil
@@ -135,7 +116,7 @@ func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.R
 // getToolCallResource retrieves the ToolCall resource from the request.
 func (p *mcpPolicies) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := p.preambleToolCallResource(ctx, r)
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	return ti.Caller.Get(ctx, tc, r)
@@ -144,7 +125,7 @@ func (p *mcpPolicies) getToolCallResource(ctx context.Context, r *svrcore.ReqRes
 // postToolCallAdvance advances the state of a tool call using r's body (CreateMessageResult or ElicitResult)
 func (p *mcpPolicies) postToolCallResourceAdvance(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := p.preambleToolCallResource(ctx, r)
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	return ti.Caller.Advance(ctx, tc, r)
@@ -153,7 +134,7 @@ func (p *mcpPolicies) postToolCallResourceAdvance(ctx context.Context, r *svrcor
 // postToolCallCancelResource cancels a tool call.
 func (p *mcpPolicies) postToolCallCancelResource(ctx context.Context, r *svrcore.ReqRes) error {
 	ti, tc, err := p.preambleToolCallResource(ctx, r)
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	return ti.Caller.Cancel(ctx, tc, r)
@@ -163,7 +144,7 @@ func (p *mcpPolicies) postToolCallCancelResource(ctx context.Context, r *svrcore
 
 // getToolList retrieves the list of tools.
 func (p *mcpPolicies) getToolList(ctx context.Context, r *svrcore.ReqRes) error {
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: p.etag()}); isError(err) {
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: p.etag()}); aids.IsError(err) {
 		return err
 	}
 	result := mcp.ListToolsResult{Tools: make([]mcp.Tool, 0, len(p.toolInfos))}

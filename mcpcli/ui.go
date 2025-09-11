@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -235,11 +236,11 @@ func (m Model) renderStatusLine() string {
 	case StatePathInput:
 		st = "Entering file path..."
 	case StateError:
-		if isError(m.err) {
+		if aids.IsError(m.err) {
 			st = "Error: " + m.err.Error()
 		}
 	}
-	if m.theme != nil && isError(m.err) {
+	if m.theme != nil && aids.IsError(m.err) {
 		st = m.theme.StatusError.Render(st)
 	}
 	line := "Status: " + st
@@ -258,7 +259,7 @@ func (m Model) formatJSON(jsonStr string) string {
 		return ""
 	}
 	var data any
-	if err := json.Unmarshal([]byte(jsonStr), &data); isError(err) {
+	if err := json.Unmarshal([]byte(jsonStr), &data); aids.IsError(err) {
 		lines := strings.Split(jsonStr, "\n")
 		for i, l := range lines {
 			lines[i] = "    " + l
@@ -266,7 +267,7 @@ func (m Model) formatJSON(jsonStr string) string {
 		return strings.Join(lines, "\n")
 	}
 	b, err := json.MarshalIndent(data, "", "  ")
-	if isError(err) {
+	if aids.IsError(err) {
 		return jsonStr
 	}
 	lines := strings.Split(string(b), "\n")

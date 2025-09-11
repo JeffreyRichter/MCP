@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
@@ -57,7 +58,7 @@ func (s *localToolCallStore) Get(_ context.Context, tc *toolcall.ToolCall, ac sv
 	}
 	*tc = stored.Copy() // copying prevents the caller mutating stored data
 	err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodGet, ac)
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	return nil
@@ -70,7 +71,7 @@ func (s *localToolCallStore) Put(_ context.Context, tc *toolcall.ToolCall, ac sv
 	key := s.key(*tc.Tenant, *tc.ToolName, *tc.ID)
 	if stored, ok := s.data[key]; ok {
 		err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodPut, ac)
-		if isError(err) {
+		if aids.IsError(err) {
 			return err
 		}
 	}
@@ -88,7 +89,7 @@ func (s *localToolCallStore) Delete(_ context.Context, tc *toolcall.ToolCall, ac
 	key := s.key(*tc.Tenant, *tc.ToolName, *tc.ID)
 	if stored, ok := s.data[key]; ok {
 		err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodDelete, ac)
-		if isError(err) {
+		if aids.IsError(err) {
 			return err
 		}
 	}
@@ -99,5 +100,3 @@ func (s *localToolCallStore) Delete(_ context.Context, tc *toolcall.ToolCall, ac
 func (*localToolCallStore) key(tenant, toolName, toolCallID string) string {
 	return tenant + "/" + toolName + "/" + toolCallID
 }
-
-func isError(err error) bool { return err != nil }

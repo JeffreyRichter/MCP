@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
@@ -59,10 +60,10 @@ func (c *piiToolCaller) Tool() *mcp.Tool {
 // TODO: client must specify elicitation capability
 func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var trequest PIIToolCallRequest
-	if err := r.UnmarshalBody(&trequest); isError(err) {
+	if err := r.UnmarshalBody(&trequest); aids.IsError(err) {
 		return err
 	}
-	tc.Request = must(json.Marshal(trequest))
+	tc.Request = aids.Must(json.Marshal(trequest))
 	if trequest.Key == "" {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "key is required")
 	}
@@ -88,7 +89,7 @@ func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	tc.Status = svrcore.Ptr(toolcall.StatusAwaitingElicitationResult)
 
 	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -96,7 +97,7 @@ func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 
 func (c *piiToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -104,10 +105,10 @@ func (c *piiToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrco
 
 func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
-	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); isError(err) {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); aids.IsError(err) {
 		return err
 	}
 	if tc.Status == nil {
@@ -119,7 +120,7 @@ func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 
 	var er toolcall.ElicitationResult
 	err = r.UnmarshalBody(&er)
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
 	// all responses must specify an action; "content" is required only for "action": "accept"
@@ -140,12 +141,12 @@ func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 	if approved {
 		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 		tresult := &PIIToolCallResult{Data: "here's your PII"}
-		tc.Result = must(json.Marshal(tresult))
+		tc.Result = aids.Must(json.Marshal(tresult))
 	}
 	// drop the elicitation request because it's been processed
 	tc.ElicitationRequest = nil
 
-	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); isError(err) {
+	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -153,10 +154,10 @@ func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 
 func (c *piiToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if isError(err) {
+	if aids.IsError(err) {
 		return err
 	}
-	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); isError(err) {
+	if err = r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); aids.IsError(err) {
 		return err
 	}
 	if tc.Status == nil {
@@ -171,7 +172,7 @@ func (c *piiToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	tc.Error = nil
 	tc.Result = nil
 	tc.Status = svrcore.Ptr(toolcall.StatusCanceled)
-	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); isError(err) {
+	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
 		return err
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
