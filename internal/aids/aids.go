@@ -1,5 +1,10 @@
 package aids
 
+import (
+	"encoding/json"
+	"encoding/json/jsontext"
+)
+
 // IsError returns true if err is nil
 func IsError(err error) bool { return err != nil }
 
@@ -27,4 +32,12 @@ func AssertSuccess(err error) {
 func Must[T any](val T, err error) T {
 	Assert(!IsError(err), err)
 	return val
+}
+
+func Marshal(v any) jsontext.Value { return Must(json.Marshal(v)) }
+
+func Unmarshal[T any](data []byte) T {
+	var t T
+	AssertSuccess(json.Unmarshal(data, &t))
+	return t
 }

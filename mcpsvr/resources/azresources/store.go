@@ -3,7 +3,9 @@ package azresources
 import (
 	"context"
 	"encoding/json/v2"
+	"errors"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -22,33 +24,23 @@ import (
 // 3. Define api-version Resource Type Operations struct with field of #1 & define api-specific HTTP operations on this type
 // 4. Construct global singleton instance/variable of #3 wrapping #2 & set api-version routes to these var/methods
 
-// toolCallStore maintains the state required to manage all operations for the users resource type.
-type toolCallStore struct {
+// store maintains the state required to manage all operations for the users resource type.
+type store struct {
 	client *azblob.Client // Client to access the Azure Blob Storage service
 }
 
-// NewToolCallStore creates a new localToolCallStore; ctx is used to cancel the expiry goroutine
+// NewToolCallStore creates a new [toolcall.Store]
 func NewToolCallStore(client *azblob.Client) toolcall.Store {
-	return &toolCallStore{client: client}
+	return &store{client: client}
 }
 
-func (tcs *toolCallStore) toBlobInfo(tc *toolcall.ToolCall) (containerName, blobName string) {
+// toBlobInfo returns the container and blob name for the specified tool call
+func (s *store) toBlobInfo(tc *toolcall.ToolCall) (containerName, blobName string) {
 	return *tc.Tenant, *tc.ToolName + "/" + *tc.ID
 }
 
-/*func (tcs *toolCallStore) fromBlobUrl(blobUrl string) (tenant, toolName, toolCallID string) {
-	parts, err := azblob.ParseURL(blobUrl)
-	if aids.IsError(err){
-		return "", "", ""
-	}
-	segments := strings.Split(parts.BlobName, "/")
-	if segments == nil || len(segments) != 2 {
-		return "", "", ""
-	}
-	return parts.ContainerName, segments[0], segments[1]
-}*/
-
-func (*toolCallStore) accessConditions(ac svrcore.AccessConditions) *azblob.AccessConditions {
+// accessConditions converts svrcore.AccessConditions to azblob.AccessConditions
+func (*store) accessConditions(ac svrcore.AccessConditions) *azblob.AccessConditions {
 	return &azblob.AccessConditions{
 		ModifiedAccessConditions: &blob.ModifiedAccessConditions{
 			IfMatch:     (*azcore.ETag)(ac.IfMatch),
@@ -56,13 +48,18 @@ func (*toolCallStore) accessConditions(ac svrcore.AccessConditions) *azblob.Acce
 	}
 }
 
-func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
+// Get retrieves the specified tool call from storage into the passed-in ToolCall struct or a
+// [svrcore.ServerError] if an error occurs.
+func (s *store) Get(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	// Get the tool call by tenant, tool name and tool call id
-	containerName, blobName := tcs.toBlobInfo(tc)
-	response, err := tcs.client.DownloadStream(ctx, containerName, blobName,
-		&azblob.DownloadStreamOptions{AccessConditions: tcs.accessConditions(ac)})
+	containerName, blobName := s.toBlobInfo(tc)
+	response, err := s.client.DownloadStream(ctx, containerName, blobName,
+		&azblob.DownloadStreamOptions{AccessConditions: s.accessConditions(ac)})
 	if aids.IsError(err) {
-		return err // Blob not found or precondition failed
+		if rerr := (*azcore.ResponseError)(nil); errors.As(err, &rerr) { // Blob not found or precondition failed
+			return svrcore.NewServerError(rerr.StatusCode, "", "Failed to get tool call")
+		}
+		return svrcore.NewServerError(http.StatusInternalServerError, "InternalServerError", "failed to get tool call")
 	}
 
 	// Read the blob contents into a buffer and then deserialize it into a ToolCall struct
@@ -70,28 +67,31 @@ func (tcs *toolCallStore) Get(ctx context.Context, tc *toolcall.ToolCall, ac svr
 	const MaxToolCallResourceSizeInBytes = 4 * 1024 * 1024 // 4MB
 	buffer, err := io.ReadAll(io.LimitReader(response.Body, MaxToolCallResourceSizeInBytes))
 	if aids.IsError(err) {
-		return err
+		return svrcore.NewServerError(http.StatusInternalServerError, "InternalServerError", "failed to read tool call")
 	}
 	if err := json.Unmarshal(buffer, tc); aids.IsError(err) {
-		return err
+		return svrcore.NewServerError(http.StatusInternalServerError, "InternalServerError", "failed to unmarshal tool call")
 	}
 	tc.ETag = (*svrcore.ETag)(response.ETag) // Set the ETag from the response
 	return nil
 }
 
-func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
+// Put creates or updates the specified tool call in storage from the passed-in ToolCall struct.
+// On success, the ToolCall.ETag field is updated from the response ETag. Returns a
+// [svrcore.ServerError] if an error occurs.
+func (s *store) Put(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
 	buffer, err := json.Marshal(tc)
 	if aids.IsError(err) {
-		return err
+		return svrcore.NewServerError(http.StatusInternalServerError, "InternalServerError", "failed to marshal tool call")
 	}
-	containerName, blobName := tcs.toBlobInfo(tc)
+	containerName, blobName := s.toBlobInfo(tc)
 	for {
 		// Attempt to upload the Tool Call blob
-		response, err := tcs.client.UploadBuffer(ctx, containerName, blobName, buffer,
-			&azblob.UploadBufferOptions{AccessConditions: tcs.accessConditions(ac)})
+		response, err := s.client.UploadBuffer(ctx, containerName, blobName, buffer,
+			&azblob.UploadBufferOptions{AccessConditions: s.accessConditions(ac)})
 		if !aids.IsError(err) { // Successfully uploaded the Tool Call blob
 			tc.ETag = (*svrcore.ETag)(response.ETag) // Update the passed-in ToolCall's ETag from the response ETag
-			blockClient := tcs.client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(blobName)
+			blockClient := s.client.ServiceClient().NewContainerClient(containerName).NewBlockBlobClient(blobName)
 			// TODO: Log any error from SetExpiry
 			_, _ = blockClient.SetExpiry(ctx, blockblob.ExpiryTypeRelativeToNow(24*time.Hour), nil)
 			return nil
@@ -99,19 +99,23 @@ func (tcs *toolCallStore) Put(ctx context.Context, tc *toolcall.ToolCall, ac svr
 
 		// An error occured; if not related to missing container, return the error
 		if !bloberror.HasCode(err, bloberror.ContainerNotFound) {
-			return err
+			return svrcore.NewServerError(http.StatusInternalServerError, "", "failed to upload tool call")
 		}
-		if _, err := tcs.client.CreateContainer(ctx, containerName, nil); aids.IsError(err) { // Attempt to create the missing tenant container
-			return err // Failed to create container, return
+		if _, err := s.client.CreateContainer(ctx, containerName, nil); aids.IsError(err) { // Attempt to create the missing tenant container
+			return svrcore.NewServerError(http.StatusInternalServerError, "", "failed to create container")
 		}
 		// Successfully created the container, retry uploading the Tool Call blob
 	}
 }
 
-func (tcs *toolCallStore) Delete(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
-	containerName, blobName := tcs.toBlobInfo(tc)
-	_, err := tcs.client.DeleteBlob(ctx, containerName, blobName, &azblob.DeleteBlobOptions{AccessConditions: tcs.accessConditions(ac)})
-	return err
+// Delete deletes the specified tool call from storage or returns a [svrcore.ServerError] if an error occurs.
+func (s *store) Delete(ctx context.Context, tc *toolcall.ToolCall, ac svrcore.AccessConditions) error {
+	containerName, blobName := s.toBlobInfo(tc)
+	_, err := s.client.DeleteBlob(ctx, containerName, blobName, &azblob.DeleteBlobOptions{AccessConditions: s.accessConditions(ac)})
+	if aids.IsError(err) {
+		return svrcore.NewServerError(http.StatusInternalServerError, "", "failed to delete tool call")
+	}
+	return nil
 }
 
 // Blobs are cheap, fast (below link), simple, and offer features we need (like expiry)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -31,7 +30,8 @@ type CountToolCallProgress struct {
 }
 
 type CountToolCallResult struct {
-	N int `json:"n,omitempty"`
+	N    int      `json:"n,omitempty"`
+	Text []string `json:"text,omitempty"`
 }
 
 type CountToolCallError struct {
@@ -66,8 +66,15 @@ func (c *countToolCaller) Tool() *mcp.Tool {
 					"type":        "integer",
 					"Description": svrcore.Ptr("The final count"),
 				},
+				"text": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "string",
+					},
+					"Description": svrcore.Ptr("The text output array"),
+				},
 			},
-			Required: []string{"n"},
+			Required: []string{"n", "text"},
 		},
 		Annotations: &mcp.ToolAnnotations{
 			Title:           svrcore.Ptr("Count a specified number of increments"),
@@ -80,72 +87,58 @@ func (c *countToolCaller) Tool() *mcp.Tool {
 }
 
 func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
-	var trequest CountToolCallRequest
-	if err := r.UnmarshalBody(&trequest); aids.IsError(err) {
+	var request CountToolCallRequest
+	if err := r.UnmarshalBody(&request); aids.IsError(err) {
 		return err
 	}
-	tc.Request = aids.Must(json.Marshal(trequest))
-
+	tc.Request = aids.Marshal(request)
 	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
-	tc.Phase = svrcore.Ptr(strconv.Itoa(trequest.Increments))
+	tc.Phase = svrcore.Ptr(strconv.Itoa(request.Increments))
+	tc.Result = aids.Marshal(CountToolCallResult{
+		N:    request.Start,
+		Text: []string{fmt.Sprintf("Starting at %d", request.Start)},
+	})
 	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if aids.IsError(err) {
-		return err
+		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
-	go pm.StartPhase(context.TODO(), tc)
+	if err := pm.StartPhase(ctx, tc); aids.IsError(err) {
+		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
+	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
 func (c *countToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	// TODO: Fix up 304-Not Modified
-	if aids.IsError(err) {
-		return err
-	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-// TODO: could all tool calls use the same cancel method?
+// Cancel the tool call if it is running; otherwise, do nothing
 func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if aids.IsError(err) {
-		return err
-	}
-	if err = r.CheckPreconditions(svrcore.ResourceValues{ETag: tc.ETag}); aids.IsError(err) {
-		return err
-	}
-	if tc.Status == nil {
-		return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "tool call status is nil; can't cancel")
-	}
 	switch *tc.Status {
 	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 	}
 
-	tc.ElicitationRequest, tc.Error, tc.Result, tc.Status = nil, nil, nil, svrcore.Ptr(toolcall.StatusCanceled)
-	if err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
-		return err
+	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = svrcore.Ptr(toolcall.StatusCanceled), nil, nil, nil, nil
+	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
+		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-// TODO: this belongs on v20250808.httpOperations or at least in v20250808 but can't be there now because
-// the phase manager needs to reference this function at construction; see GetPhaseManager above. Overall
-// this arrangement is awkward because the phase manager is nominally version-independent but in practice
-// needs to know about specific tool calls
-func (c *countToolCaller) ProcessPhase(_ context.Context, tc *toolcall.ToolCall, _ toolcall.PhaseProcessor) error {
-	phase, err := strconv.Atoi(*tc.Phase)
-	if aids.IsError(err) {
-		return fmt.Errorf("invalid phase %q", *tc.Phase)
-	}
-
+// ProcessPhase advanced the tool call's current phase to its next phase.
+// Return nil to have the updated tc persisted to the tool call Store.
+func (c *countToolCaller) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
 	time.Sleep(17 * time.Millisecond) // Simulate doing work
-	phase--
-	tc.Phase = svrcore.Ptr(strconv.Itoa(phase))
-	// TODO: if we needed data from the client request e.g. CountToolCallRequest here, we'd have to unmarshal it again
-	if phase <= 0 {
-		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
-		tc.Result = aids.Must(json.Marshal(struct{ N int }{N: 42}))
+	startPhase := aids.Must(strconv.Atoi(*tc.Phase))
+	tc.Phase = svrcore.Ptr(strconv.Itoa(startPhase - 1))
+	// If you need the request data: request := aids.Unmarshal[CountToolCallRequest](tc.Request)
+
+	result := aids.Unmarshal[CountToolCallResult](tc.Result) // Update the result
+	result.Text = append(result.Text, fmt.Sprintf("Phase advanced at %s", time.Now().Format(time.DateTime)))
+	if startPhase <= 0 {
+		tc.Status, tc.Phase, result.N = svrcore.Ptr(toolcall.StatusSuccess), nil, 42
 	}
+	tc.Result = aids.Marshal(result)
 	return nil
 }

@@ -16,7 +16,7 @@ type ToolCaller interface {
 	Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error
 	Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error
 	Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error
-	ProcessPhase(ctx context.Context, tc *toolcall.ToolCall, pp toolcall.PhaseProcessor) error
+	ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) error
 }
 type defaultToolCaller struct{}
 
@@ -33,7 +33,7 @@ func (*defaultToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r 
 func (*defaultToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "NotAllowed", "POST /cancel not implemented for tool '%s'", *tc.ToolName)
 }
-func (*defaultToolCaller) ProcessPhase(ctx context.Context, tc *toolcall.ToolCall, pp toolcall.PhaseProcessor) error {
+func (*defaultToolCaller) ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
 	return fmt.Errorf("ProcessPhase not implemented for tool '%s'", *tc.ToolName)
 }
 

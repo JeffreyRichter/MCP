@@ -16,7 +16,7 @@ import (
 )
 
 type addToolCaller struct {
-	//defaultToolCaller
+	defaultToolCaller
 	ops *mcpPolicies
 }
 type AddToolCallRequest struct {
@@ -103,11 +103,6 @@ func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 }
 
 func (c *addToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
-	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	// TODO: Fix up 304-Not Modified
-	if aids.IsError(err) {
-		return err
-	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
@@ -159,25 +154,4 @@ func (c *addToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	*/
 	body := any(nil)
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: c.ops.etag()}, nil, body)
-}
-
-/////////////////////////////////////////////////////////////////////////
-
-func (c *addToolCaller) ProcessPhase(ctx context.Context, tc *toolcall.ToolCall, pp toolcall.PhaseProcessor) error {
-	switch *tc.Phase {
-	case "submitted":
-		// Do work
-		tc.Phase = svrcore.Ptr("one")
-		tc.Status = svrcore.Ptr(toolcall.StatusRunning)
-		return nil
-
-	case "one":
-		// Do work
-		pp.ExtendTime(ctx, time.Millisecond*300)
-		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
-		tc.Phase = (*string)(tc.Status) // No more phases
-		return nil
-	}
-	// TODO: Fix the error
-	panic(fmt.Sprintf("Unknown phase: %s", *tc.Phase))
 }

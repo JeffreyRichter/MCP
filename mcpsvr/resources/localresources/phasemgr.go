@@ -32,7 +32,7 @@ func (pm *phaseMgr) StartPhase(ctx context.Context, tc *toolcall.ToolCall) error
 		// Lookup PhaseProcessor for this ToolName
 		tnpp, _ := pm.config.ToolNameToProcessPhaseFunc(*tc.ToolName) // Error can't happen here because tool call was validated earlier
 		for *tc.Status == toolcall.StatusRunning {                    // Loop while tool call is running
-			tnpp(ctx, tc, pm) // Transition tool call from current phase to next phase
+			tnpp(ctx, pm, tc) // Transition tool call from current phase to next phase
 		}
 	}()
 	return nil

@@ -5,14 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "client",
+            "name": "MCP Host CLI",
             "type": "go",
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/mcpcli"
         },
         {
-            "name": "integration tests",
+            "name": "MCP Server Integration Tests",
             "type": "go",
             "request": "launch",
             "mode": "debug",
@@ -22,7 +22,7 @@
             ],
         },
         {
-            "name": "Local MCP",
+            "name": "MCP Server",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -32,27 +32,15 @@
             ],
             "envFile": "${workspaceFolder}/mcpsvr/.env"
         },
-        {
-            "name": "Remote MCP",
+             {
+            "name": "Text Streamer",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/mcpsvr",
+            "program": "${workspaceFolder}/zstream",
             "buildFlags": [
-                "-tags=remote,goexperiment.jsonv2"
-            ],
-            "envFile": "${workspaceFolder}/mcpsvr/.env"
-        },
-        {
-            "name": "Local & Remote MCP",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceFolder}/mcpsvr",
-            "buildFlags": [
-                "-tags=local,remote,goexperiment.jsonv2"
-            ],
-            "envFile": "${workspaceFolder}/mcpsvr/.env"
+                "-tags=local,goexperiment.jsonv2"
+            ]
         }
     ]
 }

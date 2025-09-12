@@ -89,7 +89,7 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 					return
 				}
 				pp := pm.newPhaseProcessor(*m.MessageID, *m.PopReceipt)
-				pm.continuePhaseProcessing(ctx, &tc, pp)
+				pm.continuePhaseProcessing(ctx, pp, &tc)
 			}()
 		}
 	}
@@ -105,14 +105,14 @@ func (pm *PhaseMgr) StartPhase(ctx context.Context, tc *toolcall.ToolCall) error
 	return err
 }
 
-func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, tc *toolcall.ToolCall, pp *phaseProcessor) error {
+func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, pp *phaseProcessor, tc *toolcall.ToolCall) error {
 	// Lookup PhaseProcessor for this ToolName
 	tnpp, err := pm.config.ToolNameToProcessPhaseFunc(*tc.ToolName)
 	if aids.IsError(err) {
 		return err // unrecognized tool name; log?
 	}
 	for *tc.Status == toolcall.StatusRunning { // Loop while tool call is running
-		err := tnpp(ctx, tc, pp) // Transition tool call from current phase to next phase
+		err := tnpp(ctx, pp, tc) // Transition tool call from current phase to next phase
 		if aids.IsError(err) {
 			return err
 		}

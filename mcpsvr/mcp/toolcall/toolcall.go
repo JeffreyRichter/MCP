@@ -83,7 +83,7 @@ type PhaseProcessor interface {
 	ExtendTime(ctx context.Context, phaseExecutionTime time.Duration) error
 }
 
-type ProcessPhaseFunc func(context.Context, *ToolCall, PhaseProcessor) error
+type ProcessPhaseFunc func(context.Context, PhaseProcessor, *ToolCall) error
 
 type ToolNameToProcessPhaseFunc func(toolName string) (ProcessPhaseFunc, error)
 
