@@ -21,7 +21,6 @@ func testServer(t *testing.T) *httptest.Server {
 
 	policies := []svrcore.Policy{
 		policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewPolicy(),
-		policies.NewRequestLogPolicy(logger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(""),
 		policies.NewMetricsPolicy(logger),

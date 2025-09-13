@@ -26,7 +26,6 @@ import (
 
 var (
 	errorLogger   = slog.Default()
-	requestLogger = slog.Default()
 	metricsLogger = slog.Default()
 	shutdownMgr   = policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: errorLogger, HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
 )
@@ -61,7 +60,6 @@ func main() {
 	policies := []svrcore.Policy{
 		shutdownMgr.NewPolicy(),
 		newApiVersionSimulatorPolicy(),
-		policies.NewRequestLogPolicy(requestLogger),
 		policies.NewThrottlingPolicy(100),
 		policies.NewAuthorizationPolicy(sharedKey),
 		policies.NewMetricsPolicy(metricsLogger),

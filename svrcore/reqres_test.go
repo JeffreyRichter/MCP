@@ -2,6 +2,7 @@ package svrcore
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,7 +16,7 @@ func TestNewReqRes(t *testing.T) {
 	if aids.IsError(err) {
 		t.Fatal(err)
 	}
-	if rr, err := newReqRes(nil, r, nil); aids.IsError(err) || rr == nil {
+	if rr, err := newReqRes(nil, slog.New(slog.DiscardHandler), r, nil); aids.IsError(err) || rr == nil {
 		t.Fatal(err)
 	}
 }
@@ -512,7 +513,7 @@ func TestValidatePreconditions(t *testing.T) {
 				req.Header.Set(k, v)
 			}
 			rw := httptest.NewRecorder()
-			rr, _ := newReqRes(nil, req, rw)
+			rr, _ := newReqRes(nil, slog.New(slog.DiscardHandler), req, rw)
 			err = rr.CheckPreconditions(tt.resourceValues)
 			// ValidatePreconditions is responsible for the status code only in error
 			// cases and when preconditions aren't met as stipulated in RFC 7232

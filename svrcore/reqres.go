@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"reflect"
 	"slices"
@@ -27,10 +28,12 @@ type ReqRes struct {
 	// Prefer using [ReqRes.WriteError], [ReqRes.WriteServerError], or [ReqRes.WriteSuccess] instead of using RW directly.
 	RW http.ResponseWriter
 	p  []Policy // The slice of policies to execute for this request
+	l  *slog.Logger
 }
 
 // responseWriterWrapper is a custom http.ResponseWriter that captures the status code.
 type responseWriterWrapper struct {
+	rr *ReqRes
 	http.ResponseWriter
 	statusCode          int
 	numWriteHeaderCalls int // When done request processing, this must be 1 or an error occurred
@@ -41,11 +44,16 @@ func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
 	rww.statusCode = statusCode
 	rww.numWriteHeaderCalls++
 	rww.ResponseWriter.WriteHeader(statusCode)
+	rr := rww.rr
+	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "<- ", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
+		slog.Int("StatusCode", rww.statusCode))
 }
 
 // newReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
-func newReqRes(p []Policy, r *http.Request, rw http.ResponseWriter) (*ReqRes, error) {
-	rr := &ReqRes{ID: time.Now().Unix(), p: p, R: r, H: &RequestHeader{}, RW: &responseWriterWrapper{ResponseWriter: rw}}
+func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, error) {
+	rr := &ReqRes{ID: time.Now().Unix(), p: p, l: l, R: r, H: &RequestHeader{}, RW: &responseWriterWrapper{ResponseWriter: rw}}
+	rr.RW.(*responseWriterWrapper).rr = rr
+	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "->", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
 	if err := unmarshalHeaderToStruct(r.Header, rr.H); aids.IsError(err) { // Deserialize standard HTTP request headers into this struct
 		return nil, rr.WriteError(http.StatusBadRequest, nil, nil, "UnparsableHeaders", "The request has some invalid headers: %s", err.Error())
 	}

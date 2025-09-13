@@ -91,10 +91,10 @@ func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *
 	if err := r.UnmarshalBody(&request); aids.IsError(err) {
 		return err
 	}
-	tc.Request = aids.Marshal(request)
+	tc.Request = aids.MustMarshal(request)
 	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 	tc.Phase = svrcore.Ptr(strconv.Itoa(request.Increments))
-	tc.Result = aids.Marshal(CountToolCallResult{
+	tc.Result = aids.MustMarshal(CountToolCallResult{
 		N:    request.Start,
 		Text: []string{fmt.Sprintf("Starting at %d", request.Start)},
 	})
@@ -134,11 +134,11 @@ func (c *countToolCaller) ProcessPhase(_ context.Context, _ toolcall.PhaseProces
 	tc.Phase = svrcore.Ptr(strconv.Itoa(startPhase - 1))
 	// If you need the request data: request := aids.Unmarshal[CountToolCallRequest](tc.Request)
 
-	result := aids.Unmarshal[CountToolCallResult](tc.Result) // Update the result
+	result := aids.MustUnmarshal[CountToolCallResult](tc.Result) // Update the result
 	result.Text = append(result.Text, fmt.Sprintf("Phase advanced at %s", time.Now().Format(time.DateTime)))
 	if startPhase <= 0 {
 		tc.Status, tc.Phase, result.N = svrcore.Ptr(toolcall.StatusSuccess), nil, 42
 	}
-	tc.Result = aids.Marshal(result)
+	tc.Result = aids.MustMarshal(result)
 	return nil
 }

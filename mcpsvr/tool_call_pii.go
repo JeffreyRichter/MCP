@@ -66,7 +66,7 @@ func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "key is required")
 	}
 
-	tc.Request = aids.Marshal(request)
+	tc.Request = aids.MustMarshal(request)
 	tc.ElicitationRequest = &toolcall.ElicitationRequest{
 		Message: "The requested data contains personal information (PII). Please approve access to this data.",
 		RequestedSchema: struct {
@@ -124,7 +124,7 @@ func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 	tc.Status = svrcore.Ptr(toolcall.StatusCanceled)
 	if approved {
 		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
-		tc.Result = aids.Marshal(PIIToolCallResult{Data: "here's your PII"})
+		tc.Result = aids.MustMarshal(PIIToolCallResult{Data: "here's your PII"})
 	}
 	// Drop the elicitation request because it's been processed
 	tc.ElicitationRequest = nil

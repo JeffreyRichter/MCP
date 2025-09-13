@@ -1,8 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"time"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 // StreamTextSimple streams text character by character at a constant rate
@@ -15,7 +19,22 @@ func StreamTextSimple(text string, charsPerSecond int) {
 	fmt.Println()
 }
 
+func f1(n string) { f2(len(n)) }
+func f2(i int)    { _ = i; f3([]string{"key", "value"}) }
+func f3(args []string) {
+	_ = args
+	aids.WriteStack(os.Stderr, aids.ParseStack(1))
+	panic(errors.New("help me"))
+}
+
 func main() {
+	defer func() {
+		if v := recover(); v != nil {
+			fmt.Fprintf(os.Stderr, "Panic \"%v\":\n", v)
+			aids.WriteStack(os.Stderr, aids.ParseStack(2))
+		}
+	}()
+	f1("Jeff")
 	text, done := []string{}, false
 	go func() {
 		for t := range 10 {

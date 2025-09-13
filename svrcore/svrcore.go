@@ -81,31 +81,41 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 	apiVersionToServeMuxPolicy := newApiVersionToServeMuxPolicy(c.ApiVersionInfos, c.ApiVersionKeyName, c.ApiVersionKeyLocation)
 	policies := append(c.Policies, apiVersionToServeMuxPolicy)
 
-	// Return the http.Handler that will be called for each request by http.(ListenAnd)Serve(TLS)
+	// Return the http.Handler called for each request by http.(ListenAnd)Serve(TLS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This is the 1st function called when an HTTP request comes into the service
-		rr, err := newReqRes(policies, r, w)
-		if !aids.IsError(err) { // No error, start the policies
-			err = rr.Next(rr.R.Context())
-		}
-		if rr.StatusCode() == 0 { // No response was ever sent back to the client; send one now
-			c.Logger.Error("Request never responded to client",
-				slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
-			rr.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "")
-		}
-		if aids.IsError(err) { // Some error occurreed
-			if _, ok := err.(*ServerError); ok {
-				// An HTTP error occured which is normal. If it wasn't sent to the client, then it was logged above.
-			} else { // A non-HTTP error occured, log it
-				c.Logger.Error("A non-HTTP error occurred during request processing",
-					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
-					slog.Int("StatusCode", rr.StatusCode()), slog.String("err", err.Error()))
+		rr, err := (*ReqRes)(nil), error(nil)
+		rr, err = newReqRes(policies, c.Logger, r, w)
+
+		defer func() { // This guarantees we log any errors that occured during request processing and send some response to the client
+			if v := recover(); v != nil { // Panic: log it & make sure client gets http.StatusInternalServerError if they got nothing else
+				sb := &strings.Builder{}
+				aids.WriteStack(sb, aids.ParseStack(2))
+				c.Logger.Error("Non-HTTP panic", slog.String("Value", fmt.Sprintf("%v", v)), slog.String("Stack", sb.String()))
 			}
-		}
-		if rr.numWriteHeaderCalls() != 1 {
-			c.Logger.Error("Attempt to send multiple client responses during request processing",
-				slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
-				slog.Int("1st StatusCode", rr.StatusCode()), slog.Int("numWriteHeaderCalls", rr.numWriteHeaderCalls()))
+			if rr.StatusCode() == 0 { // No response was ever sent back to the client; send one now
+				c.Logger.Error("Request never responded to client",
+					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
+				rr.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "")
+			}
+			if aids.IsError(err) { // Some error occurreed
+				if _, ok := err.(*ServerError); ok {
+					// An HTTP error occured which is normal. If it wasn't sent to the client, then it was logged above.
+				} else { // A non-HTTP error occured, log it
+					c.Logger.Error("Non-HTTP error",
+						slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
+						slog.Int("StatusCode", rr.StatusCode()), slog.String("err", err.Error()))
+				}
+			}
+			if rr.numWriteHeaderCalls() != 1 {
+				c.Logger.Error("Attempt to send multiple responses to client",
+					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
+					slog.Int("1st StatusCode", rr.StatusCode()), slog.Int("numWriteHeaderCalls", rr.numWriteHeaderCalls()))
+			}
+		}()
+
+		if !aids.IsError(err) { // No error, start policies; defer above does any error logging & ensures a client response
+			err = rr.Next(rr.R.Context())
 		}
 	})
 }
