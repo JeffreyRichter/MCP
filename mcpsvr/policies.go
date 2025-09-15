@@ -78,19 +78,43 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 	if aids.IsError(err) {
 		return err
 	}
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: tc.ETag}); aids.IsError(err) {
+	// PUT does not support any conditional headers; return error if client specifies them
+	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone}); aids.IsError(err) {
 		return err
 	}
+	// if client passed an IdempotencyKey & tool call ID exists:
+	//    if IdempotencyKeys match, return existing resource (200-OK)
+	//    if IdempotencyKeys don't match, return 409-Conflict
 
-	// Calculate idempotency key based on something in the request that should be stable across retries
-	// For example, the Date header (which must be present per RFC 7231)
-	if tc.IdempotencyKey != nil { // PUT on an existing tool call ID
-		if (tc.IdempotencyKey != nil) && (*tc.IdempotencyKey != *r.H.IdempotencyKey) { // Not a retry
-			return r.WriteError(http.StatusConflict, nil, nil, "Conflict", "Tool call ID already exists")
+	toolCallIDFound := true
+	err = p.store.Get(ctx, tc, svrcore.AccessConditions{})
+	if aids.IsError(err) {
+		if err.(*svrcore.ServerError).StatusCode == http.StatusNotFound {
+			toolCallIDFound, err = false, nil // Not found is OK; this is a new tool call ID
+		} else {
+			return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "Failed to get tool call")
 		}
 	}
-	tc.IdempotencyKey = r.H.IdempotencyKey
-	return ti.Caller.Create(ctx, tc, r, p.pm)
+
+	switch {
+	case !toolCallIDFound:
+		// If tool call ID doesn't already exist, create it
+		tc.IdempotencyKey = r.H.IdempotencyKey
+		return ti.Caller.Create(ctx, tc, r, p.pm) // TODO: Use if-none-match: *?
+
+	case r.H.IdempotencyKey == nil: // Tool call ID exists & no IdempotencyKey passed, return 409-Conflict
+		return r.WriteError(http.StatusConflict, nil, nil, "Conflict", "Tool call ID already exists; IdempotencyKey required for retries")
+
+	case r.H.IdempotencyKey != nil: // Tool call ID exists & IdempotencyKey passed
+		// If passed IdempotencyKey == existing IdempotencyKey, this is a retry; return existing resource (200-OK)
+		if *tc.IdempotencyKey == *r.H.IdempotencyKey { // A retry
+			return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+		}
+		return r.WriteError(http.StatusConflict, nil, nil, "Conflict", "Tool call ID already exists with different IdempotencyKey")
+
+	default:
+		panic("unreachable") // Should never get here
+	}
 }
 
 // preambleToolCallResource retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant),

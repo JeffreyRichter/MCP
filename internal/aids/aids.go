@@ -11,9 +11,6 @@ import (
 	"strings"
 )
 
-// IsError returns true if err is nil
-func IsError(err error) bool { return err != nil }
-
 // Iif is "inline if"
 func Iif[T any](expression bool, trueVal, falseVal T) T {
 	if expression {
@@ -22,6 +19,9 @@ func Iif[T any](expression bool, trueVal, falseVal T) T {
 	return falseVal
 }
 
+// IsError returns true if err is nil
+func IsError(err error) bool { return err != nil }
+
 // Assert panics if condition is false
 func Assert(condition bool, v any) {
 	if !condition {
@@ -29,8 +29,8 @@ func Assert(condition bool, v any) {
 	}
 }
 
-// AssertSuccess panics if err != nil
-func AssertSuccess(err error) {
+// Must0 panics if err != nil
+func Must0(err error) {
 	Assert(!IsError(err), err)
 }
 
@@ -44,7 +44,7 @@ func MustMarshal(v any) jsontext.Value { return Must(json.Marshal(v)) }
 
 func MustUnmarshal[T any](data []byte) T {
 	var t T
-	AssertSuccess(json.Unmarshal(data, &t))
+	Must0(json.Unmarshal(data, &t))
 	return t
 }
 

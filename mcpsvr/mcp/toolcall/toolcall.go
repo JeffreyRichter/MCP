@@ -50,7 +50,7 @@ func (tc *ToolCall) Copy() ToolCall {
 	aids.Assert(tc != nil, "ToolCall.Copy: tc is nil")
 	b := aids.Must(json.Marshal(tc))
 	cp := ToolCall{}
-	aids.AssertSuccess(json.Unmarshal(b, &cp))
+	aids.Must0(json.Unmarshal(b, &cp))
 	return cp
 }
 
@@ -68,8 +68,16 @@ const (
 
 // Store manages persistent storage of ToolCalls
 type Store interface {
+	// Put creates or updates the specified tool call in storage from the passed-in ToolCall struct.
+	// On success, the ToolCall.ETag field is updated from the response ETag. Returns a
+	// [svrcore.ServerError] if an error occurs.
 	Put(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+
+	// Get retrieves the specified tool call from storage into the passed-in ToolCall struct or a
+	// [svrcore.ServerError] if an error occurs.
 	Get(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+
+	// Delete deletes the specified tool call from storage or returns a [svrcore.ServerError] if an error occurs.
 	Delete(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
 }
 

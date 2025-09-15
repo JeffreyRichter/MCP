@@ -117,7 +117,7 @@ func newLocalMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger) 
 func newAzureMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *mcpPolicies {
 	ops := &mcpPolicies{errorLogger: errorLogger, store: azresources.NewToolCallStore(blobClient)}
 	pm, err := azresources.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
-	aids.AssertSuccess(err)
+	aids.Must0(err)
 	ops.pm = pm
 	ops.buildToolInfos()
 	return ops

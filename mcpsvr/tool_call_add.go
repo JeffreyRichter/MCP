@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -84,11 +83,9 @@ func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	if err := r.UnmarshalBody(&trequest); aids.IsError(err) {
 		return err
 	}
-	tc.Request = aids.Must(json.Marshal(trequest))
-
+	tc.Request = aids.MustMarshal(trequest)
 	tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
-	tresult := &AddToolCallResult{Sum: trequest.X + trequest.Y}
-	tc.Result = aids.Must(json.Marshal(tresult))
+	tc.Result = aids.MustMarshal(&AddToolCallResult{Sum: trequest.X + trequest.Y})
 
 	// simulate this tool call requiring some effort
 	d := time.Duration(5 + rand.Intn(1500))

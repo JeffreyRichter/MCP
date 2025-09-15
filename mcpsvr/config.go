@@ -17,7 +17,7 @@ type Configuration struct {
 
 func (c *Configuration) Load() {
 	b, err := os.ReadFile(".env")
-	aids.AssertSuccess(err)
+	aids.Must0(err)
 
 	// read lines froma buffer:
 	for _, line := range strings.Split(string(b), "\r\n") {
