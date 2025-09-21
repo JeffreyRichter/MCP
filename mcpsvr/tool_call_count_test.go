@@ -18,7 +18,9 @@ func TestToolCallCount(t *testing.T) {
 	os.Setenv("MCPSVR_AZURE_QUEUE_URL", "https://samfzqhbrdlxlsm.queue.core.windows.net/mcpsvr")
 	os.Setenv("MCPSVR_AZURE_BLOB_URL", "https://samfzqhbrdlxlsm.blob.core.windows.net/")
 	client := newTestClient(t)
-	resp := client.Put("/mcp/tools/count/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"start":40,"increments":2}`))
+	resp := client.Put("/mcp/tools/count/calls/"+t.Name(),
+		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+		strings.NewReader(`{"start":40,"increments":2}`))
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	tc := toolcall.ToolCall{}

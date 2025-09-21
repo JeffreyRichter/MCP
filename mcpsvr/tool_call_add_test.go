@@ -24,6 +24,7 @@ func TestToolCallAdd(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", time.Now().Format(time.RFC3339Nano))
 
 	resp, err := http.DefaultClient.Do(req)
 	if aids.IsError(err) {
@@ -44,7 +45,7 @@ func TestToolCallAdd(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	add := struct{ Result AddToolCallResult }{}
+	add := struct{ Result addToolCallResult }{}
 	err = json.Unmarshal(b, &add)
 	if aids.IsError(err) {
 		t.Fatal(err)

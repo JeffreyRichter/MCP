@@ -10,20 +10,12 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-type piiToolCaller struct {
-	defaultToolCaller
+type piiToolInfo struct {
+	defaultToolInfo
 	ops *mcpPolicies
 }
 
-type PIIToolCallRequest struct {
-	Key string `json:"key"`
-}
-
-type PIIToolCallResult struct {
-	Data string `json:"data"`
-}
-
-func (c *piiToolCaller) Tool() *mcp.Tool {
+func (c *piiToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "pii",
@@ -56,8 +48,19 @@ func (c *piiToolCaller) Tool() *mcp.Tool {
 	}
 }
 
+// This type block defines the tool-specific tool call resource types
+type (
+	PIIToolCallRequest struct {
+		Key string `json:"key"`
+	}
+
+	PIIToolCallResult struct {
+		Data string `json:"data"`
+	}
+)
+
 // TODO: client must specify elicitation capability
-func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
 	var request PIIToolCallRequest
 	if err := r.UnmarshalBody(&request); aids.IsError(err) {
 		return err
@@ -87,18 +90,17 @@ func (c *piiToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	}
 	tc.Status = svrcore.Ptr(toolcall.StatusAwaitingElicitationResult)
 
-	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if aids.IsError(err) {
+	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); aids.IsError(err) {
 		return err
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *piiToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+func (c *piiToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	if *tc.Status != toolcall.StatusAwaitingElicitationResult {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "not expecting an elicitation result for call with status %q", *tc.Status)
 	}
@@ -135,15 +137,15 @@ func (c *piiToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
 }
 
-func (c *piiToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	switch *tc.Status {
 	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
-		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 	}
 
 	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = svrcore.Ptr(toolcall.StatusCanceled), nil, nil, nil, nil
 	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
 		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }

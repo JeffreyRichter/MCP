@@ -34,6 +34,37 @@ type ToolCall struct {
 	Progress           jsontext.Value      `json:"progress,omitempty"`
 	Result             jsontext.Value      `json:"result,omitempty"`
 	Error              jsontext.Value      `json:"error,omitempty"`
+	Internal           jsontext.Value      `json:"internal,omitempty"` // Tool-specific internal data, never returned to clients
+}
+
+// ClientToolCall is the version of ToolCall returned to clients.
+// It omits internal fields: Tenant, IdempotencyKey, Phase, Internal
+func (tc *ToolCall) ToClient() any {
+	return struct {
+		ToolName           *string             `json:"toolname"`
+		ID                 *string             `json:"id"` // Scoped within tenant & tool name
+		Expiration         *time.Time          `json:"expiration,omitempty"`
+		ETag               *svrcore.ETag       `json:"etag"`
+		Status             *Status             `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
+		Request            jsontext.Value      `json:"request,omitempty"`
+		SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
+		ElicitationRequest *ElicitationRequest `json:"elicitationRequest,omitempty"`
+		Progress           jsontext.Value      `json:"progress,omitempty"`
+		Result             jsontext.Value      `json:"result,omitempty"`
+		Error              jsontext.Value      `json:"error,omitempty"`
+	}{
+		ToolName:           tc.ToolName,
+		ID:                 tc.ID,
+		Expiration:         tc.Expiration,
+		ETag:               tc.ETag,
+		Status:             tc.Status,
+		Request:            tc.Request,
+		SamplingRequest:    tc.SamplingRequest,
+		ElicitationRequest: tc.ElicitationRequest,
+		Progress:           tc.Progress,
+		Result:             tc.Result,
+		Error:              tc.Error,
+	}
 }
 
 // New creates a new ToolCall with the specified tenant, tool name, and tool call ID.

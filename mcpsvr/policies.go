@@ -25,18 +25,19 @@ type mcpPolicies struct {
 	errorLogger *slog.Logger
 	store       toolcall.Store
 	pm          toolcall.PhaseMgr
-	toolInfos   map[string]*ToolInfo
+	toolInfos   map[string]ToolInfo // ToolName to ToolCaller implementation
 }
 
 func (p *mcpPolicies) buildToolInfos() {
-	p.toolInfos = map[string]*ToolInfo{}
-	for _, tc := range []ToolCaller{
-		&addToolCaller{ops: p},
-		&countToolCaller{ops: p},
-		&piiToolCaller{ops: p},
+	p.toolInfos = map[string]ToolInfo{}
+	for _, tc := range []ToolInfo{
+		&addToolInfo{ops: p},
+		&countToolInto{ops: p},
+		&piiToolInfo{ops: p},
+		&streamToolInfo{ops: p},
 	} {
 		if t := tc.Tool(); t != nil {
-			p.toolInfos[t.Name] = &ToolInfo{Tool: t, Caller: tc}
+			p.toolInfos[t.Name] = tc
 		}
 	}
 }
@@ -46,7 +47,7 @@ func (p *mcpPolicies) etag() *svrcore.ETag { return svrcore.Ptr(svrcore.ETag("v2
 
 // lookupToolCall retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
-func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (*ToolInfo, *toolcall.ToolCall, error) {
+func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.ToolCall, error) {
 	tenant := "sometenant"
 	toolName, toolCallID := r.R.PathValue("toolName"), r.R.PathValue("toolCallID")
 	if toolName == "" {
@@ -68,7 +69,7 @@ func (p *mcpPolicies) toolNameToProcessPhaseFunc(toolName string) (toolcall.Proc
 	if !ok {
 		return nil, fmt.Errorf("tool '%s' not found", toolName)
 	}
-	return ti.Caller.ProcessPhase, nil
+	return ti.ProcessPhase, nil
 }
 
 // putToolCallResource creates a new tool call resource (idempotently if a retry occurs).
@@ -82,10 +83,11 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone}); aids.IsError(err) {
 		return err
 	}
-	// if client passed an IdempotencyKey & tool call ID exists:
-	//    if IdempotencyKeys match, return existing resource (200-OK)
-	//    if IdempotencyKeys don't match, return 409-Conflict
+	if r.H.IdempotencyKey == nil {
+		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "IdempotencyKey header required for PUT")
+	}
 
+	// Does the tool call ID already exist?
 	toolCallIDFound := true
 	err = p.store.Get(ctx, tc, svrcore.AccessConditions{})
 	if aids.IsError(err) {
@@ -96,25 +98,16 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 		}
 	}
 
-	switch {
-	case !toolCallIDFound:
-		// If tool call ID doesn't already exist, create it
+	if !toolCallIDFound { // If tool call ID doesn't already exist, create it
 		tc.IdempotencyKey = r.H.IdempotencyKey
-		return ti.Caller.Create(ctx, tc, r, p.pm) // TODO: Use if-none-match: *?
-
-	case r.H.IdempotencyKey == nil: // Tool call ID exists & no IdempotencyKey passed, return 409-Conflict
-		return r.WriteError(http.StatusConflict, nil, nil, "Conflict", "Tool call ID already exists; IdempotencyKey required for retries")
-
-	case r.H.IdempotencyKey != nil: // Tool call ID exists & IdempotencyKey passed
-		// If passed IdempotencyKey == existing IdempotencyKey, this is a retry; return existing resource (200-OK)
-		if *tc.IdempotencyKey == *r.H.IdempotencyKey { // A retry
-			return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
-		}
-		return r.WriteError(http.StatusConflict, nil, nil, "Conflict", "Tool call ID already exists with different IdempotencyKey")
-
-	default:
-		panic("unreachable") // Should never get here
+		return ti.Create(ctx, tc, r, p.pm) // Create method must use "if-none-match: *"
 	}
+
+	// Tool call already exists
+	if *tc.IdempotencyKey == *r.H.IdempotencyKey { // This is a retry, return existing resource & 200-OK via GET
+		return ti.Get(ctx, tc, r)
+	}
+	return r.WriteError(http.StatusConflict, nil, nil, "Conflict", "Tool call ID already exists with different IdempotencyKey")
 }
 
 // preambleToolCallResource retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant),
@@ -122,7 +115,7 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid,
 // the ToolCall resource is not found, or preconditions are not met.
 // This method is used is called by GET & POST (not PUT) because it assumes the resource must already exist.
-func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (*ToolInfo, *toolcall.ToolCall, error) {
+func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (ToolInfo, *toolcall.ToolCall, error) {
 	ti, tc, err := p.lookupToolCall(r)
 	if aids.IsError(err) {
 		return nil, nil, err
@@ -143,7 +136,7 @@ func (p *mcpPolicies) getToolCallResource(ctx context.Context, r *svrcore.ReqRes
 	if aids.IsError(err) {
 		return err
 	}
-	return ti.Caller.Get(ctx, tc, r)
+	return ti.Get(ctx, tc, r)
 }
 
 // postToolCallAdvance advances the state of a tool call using r's body (CreateMessageResult or ElicitResult)
@@ -152,7 +145,7 @@ func (p *mcpPolicies) postToolCallResourceAdvance(ctx context.Context, r *svrcor
 	if aids.IsError(err) {
 		return err
 	}
-	return ti.Caller.Advance(ctx, tc, r)
+	return ti.Advance(ctx, tc, r)
 }
 
 // postToolCallCancelResource cancels a tool call.
@@ -161,7 +154,7 @@ func (p *mcpPolicies) postToolCallCancelResource(ctx context.Context, r *svrcore
 	if aids.IsError(err) {
 		return err
 	}
-	return ti.Caller.Cancel(ctx, tc, r)
+	return ti.Cancel(ctx, tc, r)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,7 +166,7 @@ func (p *mcpPolicies) getToolList(ctx context.Context, r *svrcore.ReqRes) error 
 	}
 	result := mcp.ListToolsResult{Tools: make([]mcp.Tool, 0, len(p.toolInfos))}
 	for _, ti := range p.toolInfos {
-		result.Tools = append(result.Tools, *ti.Tool)
+		result.Tools = append(result.Tools, *ti.Tool())
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: p.etag()}, nil, result)
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
@@ -15,7 +16,9 @@ import (
 func TestToolCallPIICreate(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(),
+		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+		strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
 	}
@@ -44,7 +47,9 @@ func TestToolCallPIICreate(t *testing.T) {
 func TestToolCallPIIGet(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(),
+		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+		strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
@@ -73,7 +78,9 @@ func TestToolCallPIIGet(t *testing.T) {
 func TestToolCallPIIElicitationApproved(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(),
+		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+		strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
@@ -119,7 +126,9 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 		t.Run(action, func(t *testing.T) {
 			client := newTestClient(t)
 			id := strings.ReplaceAll(t.Name(), "/", "-")
-			resp := client.Put("/mcp/tools/pii/calls/"+id, http.Header{}, strings.NewReader(`{"key":"test"}`))
+			resp := client.Put("/mcp/tools/pii/calls/"+id,
+				http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+				strings.NewReader(`{"key":"test"}`))
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Create failed with status %d", resp.StatusCode)
 			}
@@ -154,7 +163,9 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 	t.Run("disapprove", func(t *testing.T) {
 		client := newTestClient(t)
 		id := strings.ReplaceAll(t.Name(), "/", "-")
-		resp := client.Put("/mcp/tools/pii/calls/"+id, http.Header{}, strings.NewReader(`{"key":"test"}`))
+		resp := client.Put("/mcp/tools/pii/calls/"+id,
+			http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+			strings.NewReader(`{"key":"test"}`))
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("Create failed with status %d", resp.StatusCode)
 		}
@@ -189,7 +200,9 @@ func TestToolCallPIIElicitationRejected(t *testing.T) {
 func TestToolCallPIICancel(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(),
+		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+		strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}
@@ -226,7 +239,9 @@ func TestToolCallPIICancel(t *testing.T) {
 func TestToolCallPIICancelAlreadyCompleted(t *testing.T) {
 	client := newTestClient(t)
 
-	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(), http.Header{}, strings.NewReader(`{"key":"test"}`))
+	resp := client.Put("/mcp/tools/pii/calls/"+t.Name(),
+		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
+		strings.NewReader(`{"key":"test"}`))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Create failed with status %d", resp.StatusCode)
 	}

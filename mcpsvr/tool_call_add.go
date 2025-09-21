@@ -2,11 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"math/rand"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp"
@@ -14,29 +10,12 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-type addToolCaller struct {
-	defaultToolCaller
+type addToolInfo struct {
+	defaultToolInfo
 	ops *mcpPolicies
 }
-type AddToolCallRequest struct {
-	X int `json:"x,omitempty"`
-	Y int `json:"y,omitempty"`
-}
 
-type AddToolCallProgress struct {
-	Count int `json:"count,omitempty"`
-	Max   int `json:"max,omitempty"`
-}
-
-type AddToolCallResult struct {
-	Sum int `json:"sum,omitempty"`
-}
-
-type AddToolCallError struct {
-	Overflow bool `json:"overflowcode,omitempty"`
-}
-
-func (c *addToolCaller) Tool() *mcp.Tool {
+func (c *addToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "add",
@@ -78,32 +57,42 @@ func (c *addToolCaller) Tool() *mcp.Tool {
 	}
 }
 
-func (c *addToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
-	var trequest AddToolCallRequest
+// This type block defines the tool-specific tool call resource types
+type (
+	addToolCallRequest struct {
+		X int `json:"x,omitempty"`
+		Y int `json:"y,omitempty"`
+	}
+
+	addToolCallResult struct {
+		Sum int `json:"sum,omitempty"`
+	}
+)
+
+// Create creates a brand new tool call ID resource.
+// It must ensure that an existing resource does not already exist (for HTTP, use "if-none-match: *")
+// If a resource already exists, return 409-Conflict
+func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+	var trequest addToolCallRequest
 	if err := r.UnmarshalBody(&trequest); aids.IsError(err) {
 		return err
 	}
 	tc.Request = aids.MustMarshal(trequest)
 	tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
-	tc.Result = aids.MustMarshal(&AddToolCallResult{Sum: trequest.X + trequest.Y})
+	tc.Result = aids.MustMarshal(&addToolCallResult{Sum: trequest.X + trequest.Y})
 
-	// simulate this tool call requiring some effort
-	d := time.Duration(5 + rand.Intn(1500))
-	fmt.Fprintf(os.Stderr, "[%s] blocking for %dms\n", *tc.ID, d)
-	time.Sleep(d * time.Millisecond)
-
-	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Create/replace the resource
-	if aids.IsError(err) {
-		return err
+	// Create the resource; on success, the ToolCall.ETag field is updated from the response ETag
+	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); aids.IsError(err) {
+		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *addToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *addToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if aids.IsError(err) {
 		return err
@@ -136,10 +125,10 @@ func (c *addToolCaller) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 	if aids.IsError(err) {
 		return err
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *addToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	/*
 		1.	GET ToolCall resource/etag from client-passed ID
 		2.	If status==terminal, return

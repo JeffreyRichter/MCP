@@ -13,32 +13,12 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-type countToolCaller struct {
-	defaultToolCaller
+type countToolInto struct {
+	defaultToolInfo
 	ops *mcpPolicies
 }
 
-type CountToolCallRequest struct {
-	Start      int `json:"start,omitempty"`
-	Increments int `json:"increments,omitempty"`
-}
-
-// TODO
-type CountToolCallProgress struct {
-	Count int `json:"count,omitempty"`
-	Max   int `json:"max,omitempty"`
-}
-
-type CountToolCallResult struct {
-	N    int      `json:"n,omitempty"`
-	Text []string `json:"text,omitempty"`
-}
-
-type CountToolCallError struct {
-	Overflow bool `json:"overflowcode,omitempty"`
-}
-
-func (c *countToolCaller) Tool() *mcp.Tool {
+func (c *countToolInto) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "count",
@@ -86,34 +66,47 @@ func (c *countToolCaller) Tool() *mcp.Tool {
 	}
 }
 
-func (c *countToolCaller) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
-	var request CountToolCallRequest
+// This type block defines the tool-specific tool call resource types
+type (
+	countToolCallRequest struct {
+		Start      int `json:"start,omitempty"`
+		Increments int `json:"increments,omitempty"`
+	}
+
+	countToolCallResult struct {
+		N    int      `json:"n,omitempty"`
+		Text []string `json:"text,omitempty"`
+	}
+)
+
+func (c *countToolInto) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+	var request countToolCallRequest
 	if err := r.UnmarshalBody(&request); aids.IsError(err) {
 		return err
 	}
 	tc.Request = aids.MustMarshal(request)
 	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 	tc.Phase = svrcore.Ptr(strconv.Itoa(request.Increments))
-	tc.Result = aids.MustMarshal(CountToolCallResult{
+	tc.Result = aids.MustMarshal(countToolCallResult{
 		N:    request.Start,
 		Text: []string{fmt.Sprintf("Starting at %d", request.Start)},
 	})
-	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr})
 	if aids.IsError(err) {
 		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
 	if err := pm.StartPhase(ctx, tc); aids.IsError(err) {
 		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *countToolCaller) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+func (c *countToolInto) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
 // Cancel the tool call if it is running; otherwise, do nothing
-func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *countToolInto) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
 	switch *tc.Status {
 	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -123,18 +116,18 @@ func (c *countToolCaller) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *
 	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
 		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
-func (c *countToolCaller) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
+func (c *countToolInto) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
 	time.Sleep(17 * time.Millisecond) // Simulate doing work
 	startPhase := aids.Must(strconv.Atoi(*tc.Phase))
 	tc.Phase = svrcore.Ptr(strconv.Itoa(startPhase - 1))
 	// If you need the request data: request := aids.Unmarshal[CountToolCallRequest](tc.Request)
 
-	result := aids.MustUnmarshal[CountToolCallResult](tc.Result) // Update the result
+	result := aids.MustUnmarshal[countToolCallResult](tc.Result) // Update the result
 	result.Text = append(result.Text, fmt.Sprintf("Phase advanced at %s", time.Now().Format(time.DateTime)))
 	if startPhase <= 0 {
 		tc.Status, tc.Phase, result.N = svrcore.Ptr(toolcall.StatusSuccess), nil, 42
