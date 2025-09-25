@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"strings"
 	"time"
 
@@ -101,6 +102,7 @@ func main() {
 		startMsg = fmt.Sprintf(`{"port":%s, "key":%q}`, port, sharedKey)
 	}
 	fmt.Println(startMsg)
+	os.Stdout.Sync()
 
 	if err := s.Serve(ln); aids.IsError(err) && !errors.Is(err, http.ErrServerClosed) {
 		panic(err)
@@ -135,25 +137,25 @@ func noApiVersionRoutes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionR
 			"GET": {Policy: shutdownMgr.HealthProbe},
 		},
 		"/debug/pprof": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) error { pprof.Index(rr.RW, rr.R); return nil }},
+			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Index(rr.RW, rr.R); return false }},
 		},
 		"/debug/cmdline": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) error { pprof.Cmdline(rr.RW, rr.R); return nil }},
+			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Cmdline(rr.RW, rr.R); return false }},
 		},
 		"/debug/profile": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) error { pprof.Profile(rr.RW, rr.R); return nil }},
+			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Profile(rr.RW, rr.R); return false }},
 		},
 		"/debug/symbol": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) error { pprof.Symbol(rr.RW, rr.R); return nil }},
+			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Symbol(rr.RW, rr.R); return false }},
 		},
 		"/debug/trace": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) error { pprof.Trace(rr.RW, rr.R); return nil }},
+			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Trace(rr.RW, rr.R); return false }},
 		},
 	}
 }
 
 func newApiVersionSimulatorPolicy() svrcore.Policy {
-	return func(ctx context.Context, r *svrcore.ReqRes) error {
+	return func(ctx context.Context, r *svrcore.ReqRes) bool {
 		if !strings.HasPrefix(r.R.URL.Path, "/debug/") {
 			r.R.Header.Set("api-version", "2025-08-08")
 		}

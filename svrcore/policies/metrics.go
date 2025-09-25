@@ -17,7 +17,7 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 	requestServiceFailuresPerMinute := newRateCounter(time.Minute)
 	lastUpdate := time.Now()
 
-	return func(ctx context.Context, r *svrcore.ReqRes) error {
+	return func(ctx context.Context, r *svrcore.ReqRes) bool {
 		// Add support for https://shopify.engineering/building-resilient-payment-systems (See "4. Add Monitoring and Alerting")
 		// Google’s site reliability engineering (SRE) book lists four golden signals a user-facing system should be monitored for:
 		requestCountPerMinute.Add(1) // Traffic: the rate in which new work comes into the system, typically expressed in requests per minute.
@@ -42,7 +42,6 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 			}
 
 		}()
-		err = r.Next(ctx)
-		return err
+		return r.Next(ctx)
 	}
 }

@@ -16,7 +16,7 @@ func TestNewReqRes(t *testing.T) {
 	if aids.IsError(err) {
 		t.Fatal(err)
 	}
-	if rr, err := newReqRes(nil, slog.New(slog.DiscardHandler), r, nil); aids.IsError(err) || rr == nil {
+	if rr, stop := newReqRes(nil, slog.New(slog.DiscardHandler), r, nil); stop || rr == nil {
 		t.Fatal(err)
 	}
 }
@@ -513,8 +513,11 @@ func TestValidatePreconditions(t *testing.T) {
 				req.Header.Set(k, v)
 			}
 			rw := httptest.NewRecorder()
-			rr, _ := newReqRes(nil, slog.New(slog.DiscardHandler), req, rw)
-			err = rr.CheckPreconditions(tt.resourceValues)
+			rr, stop := newReqRes(nil, slog.New(slog.DiscardHandler), req, rw)
+			if stop {
+				t.Fatal("newReqRes failed")
+			}
+			stop = rr.CheckPreconditions(tt.resourceValues)
 			// ValidatePreconditions is responsible for the status code only in error
 			// cases and when preconditions aren't met as stipulated in RFC 7232
 			if tt.expectedCode == 0 {
@@ -525,12 +528,12 @@ func TestValidatePreconditions(t *testing.T) {
 				case http.StatusNotModified, http.StatusPreconditionFailed:
 					t.Errorf("expected preconditions to hold but ValidatePreconditions set status code %q", http.StatusText(rw.Code))
 				}
-				if aids.IsError(err) {
-					t.Error(err)
+				if stop {
+					t.Error(stop)
 				}
 				return
 			}
-			if !aids.IsError(err) {
+			if !stop {
 				t.Error("expected an error because preconditions failed")
 			}
 			if rw.Code != tt.expectedCode {

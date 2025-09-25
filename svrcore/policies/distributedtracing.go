@@ -7,5 +7,5 @@ import (
 )
 
 func NewDistributedTracing() svrcore.Policy {
-	return func(ctx context.Context, r *svrcore.ReqRes) error { return r.Next(ctx) }
+	return func(ctx context.Context, r *svrcore.ReqRes) bool { return r.Next(ctx) }
 }

@@ -24,9 +24,13 @@ func IsError(err error) bool { return err != nil }
 
 // Assert panics if condition is false
 func Assert(condition bool, v any) {
-	if !condition {
-		panic(v)
+	if condition {
+		return
 	}
+	if err, ok := v.(error); ok {
+		panic(err)
+	}
+	panic(fmt.Errorf("%#v", v))
 }
 
 // Must0 panics if err != nil

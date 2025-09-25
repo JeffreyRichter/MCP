@@ -13,12 +13,12 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-type countToolInto struct {
+type countToolInfo struct {
 	defaultToolInfo
 	ops *mcpPolicies
 }
 
-func (c *countToolInto) Tool() *mcp.Tool {
+func (c *countToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "count",
@@ -79,10 +79,10 @@ type (
 	}
 )
 
-func (c *countToolInto) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+func (c *countToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	var request countToolCallRequest
-	if err := r.UnmarshalBody(&request); aids.IsError(err) {
-		return err
+	if stop := r.UnmarshalBody(&request); stop {
+		return stop
 	}
 	tc.Request = aids.MustMarshal(request)
 	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
@@ -101,12 +101,12 @@ func (c *countToolInto) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *countToolInto) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *countToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
 // Cancel the tool call if it is running; otherwise, do nothing
-func (c *countToolInto) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *countToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	switch *tc.Status {
 	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
@@ -121,12 +121,11 @@ func (c *countToolInto) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *sv
 
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
-func (c *countToolInto) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
+func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
 	time.Sleep(17 * time.Millisecond) // Simulate doing work
 	startPhase := aids.Must(strconv.Atoi(*tc.Phase))
 	tc.Phase = svrcore.Ptr(strconv.Itoa(startPhase - 1))
-	// If you need the request data: request := aids.Unmarshal[CountToolCallRequest](tc.Request)
-
+	// If you need the request data: request := aids.Unmarshal[countToolCallRequest](tc.Request)
 	result := aids.MustUnmarshal[countToolCallResult](tc.Result) // Update the result
 	result.Text = append(result.Text, fmt.Sprintf("Phase advanced at %s", time.Now().Format(time.DateTime)))
 	if startPhase <= 0 {

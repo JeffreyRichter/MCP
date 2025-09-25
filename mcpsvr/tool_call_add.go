@@ -72,10 +72,10 @@ type (
 // Create creates a brand new tool call ID resource.
 // It must ensure that an existing resource does not already exist (for HTTP, use "if-none-match: *")
 // If a resource already exists, return 409-Conflict
-func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	var trequest addToolCallRequest
-	if err := r.UnmarshalBody(&trequest); aids.IsError(err) {
-		return err
+	if stop := r.UnmarshalBody(&trequest); stop {
+		return stop
 	}
 	tc.Request = aids.MustMarshal(trequest)
 	tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
@@ -88,33 +88,31 @@ func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if aids.IsError(err) {
-		return err
+		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
-	if err := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); aids.IsError(err) {
-		return err
+	if stop := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); stop {
+		return stop
 	}
 	switch *tc.Status {
 	case toolcall.StatusAwaitingElicitationResult:
 		var er toolcall.ElicitationResult
-		err := r.UnmarshalBody(&er)
-		if aids.IsError(err) {
-			return err
+		if stop := r.UnmarshalBody(&er); stop {
+			return stop
 		}
 		// TODO: Process the er, update progress?, update status, update result/error
 		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
 
 	case toolcall.StatusAwaitingSamplingResult:
 		var sr toolcall.SamplingResult
-		err := r.UnmarshalBody(&sr)
-		if aids.IsError(err) {
-			return err
+		if stop := r.UnmarshalBody(&sr); stop {
+			return stop
 		}
 		// TODO: Process the sr, update progress?, update status, update result/error
 	default:
@@ -123,12 +121,12 @@ func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 
 	err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
 	if aids.IsError(err) {
-		return err
+		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *addToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *addToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	/*
 		1.	GET ToolCall resource/etag from client-passed ID
 		2.	If status==terminal, return

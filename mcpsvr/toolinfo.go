@@ -17,16 +17,16 @@ type ToolInfo interface {
 
 	// Create creates a brand new tool call ID resource (if-none-match: *),
 	// optionally starts phase processing, and writes success/error to the client.
-	Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error
+	Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool
 
 	// Get retrieves the tool call ID resource and writes success/error to the client.
-	Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error
+	Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool
 
 	// Advance advances the tool call to the next phase and writes success/error to the client.
-	Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error
+	Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool
 
 	// Cancel cancels the tool call and writes success/error to the client.
-	Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error
+	Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool
 
 	// ProcessPhase processes the tool call resources's current phase; there is no client to write success/error to.
 	ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) error
@@ -36,16 +36,16 @@ type ToolInfo interface {
 type defaultToolInfo struct{}
 
 func (*defaultToolInfo) Tool() *mcp.Tool { return nil }
-func (*defaultToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+func (*defaultToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "NotAllowed", "PUT not implemented for tool '%s'", *tc.ToolName)
 }
-func (*defaultToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (*defaultToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "NotAllowed", "GET not implemented for tool '%s'", *tc.ToolName)
 }
-func (*defaultToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (*defaultToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "NotAllowed", "POST /advance not implemented for tool '%s'", *tc.ToolName)
 }
-func (*defaultToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (*defaultToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "NotAllowed", "POST /cancel not implemented for tool '%s'", *tc.ToolName)
 }
 func (*defaultToolInfo) ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {

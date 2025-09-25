@@ -60,10 +60,10 @@ type (
 )
 
 // TODO: client must specify elicitation capability
-func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) error {
+func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	var request PIIToolCallRequest
-	if err := r.UnmarshalBody(&request); aids.IsError(err) {
-		return err
+	if stop := r.UnmarshalBody(&request); stop {
+		return stop
 	}
 	if request.Key == "" {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "key is required")
@@ -91,23 +91,23 @@ func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 	tc.Status = svrcore.Ptr(toolcall.StatusAwaitingElicitationResult)
 
 	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); aids.IsError(err) {
-		return err
+		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *piiToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *piiToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	if *tc.Status != toolcall.StatusAwaitingElicitationResult {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "not expecting an elicitation result for call with status %q", *tc.Status)
 	}
 
 	var er toolcall.ElicitationResult
-	if err := r.UnmarshalBody(&er); aids.IsError(err) {
-		return err
+	if stop := r.UnmarshalBody(&er); stop {
+		return stop
 	}
 	// All responses must specify an action; "content" is required only for "action": "accept"
 	if er.Action == "" {
@@ -132,12 +132,12 @@ func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 	tc.ElicitationRequest = nil
 
 	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
-		return err
+		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc)
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
-func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) error {
+func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	switch *tc.Status {
 	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())

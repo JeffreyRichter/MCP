@@ -34,7 +34,8 @@ type MethodInfo struct {
 }
 
 // Policy specifies the function signature for a policy.
-type Policy func(context.Context, *ReqRes) error
+// Returning true if [ReqRes.WriteError] was called and futher processing of the HTTP request should stop.
+type Policy func(context.Context, *ReqRes) bool
 
 type ApiVersionKeyLocation int
 
@@ -84,8 +85,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 	// Return the http.Handler called for each request by http.(ListenAnd)Serve(TLS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This is the 1st function called when an HTTP request comes into the service
-		rr, err := (*ReqRes)(nil), error(nil)
-		rr, err = newReqRes(policies, c.Logger, r, w)
+		rr, stop := newReqRes(policies, c.Logger, r, w)
 
 		defer func() { // This guarantees we log any errors that occured during request processing and send some response to the client
 			if v := recover(); v != nil { // Panic: log it & make sure client gets http.StatusInternalServerError if they got nothing else
@@ -98,7 +98,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
 				rr.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "")
 			}
-			if aids.IsError(err) { // Some error occurreed
+			/*if stop { // Some error response was already written to the client
 				if _, ok := err.(*ServerError); ok {
 					// An HTTP error occured which is normal. If it wasn't sent to the client, then it was logged above.
 				} else { // A non-HTTP error occured, log it
@@ -106,7 +106,8 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 						slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
 						slog.Int("StatusCode", rr.StatusCode()), slog.String("err", err.Error()))
 				}
-			}
+			}*/
+			// If we get here, a response was sent to the client; if multiple responses were sent, log it
 			if rr.numWriteHeaderCalls() != 1 {
 				c.Logger.Error("Attempt to send multiple responses to client",
 					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
@@ -114,8 +115,8 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 			}
 		}()
 
-		if !aids.IsError(err) { // No error, start policies; defer above does any error logging & ensures a client response
-			err = rr.Next(rr.R.Context())
+		if !stop { // No error, start policies; defer above does any error logging & ensures a client response
+			stop = rr.Next(rr.R.Context())
 		}
 	})
 }
@@ -176,9 +177,9 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 					s := w.(*smuggler)
 					hackPostActionForServeHTTP(r, false)
 					s.r.R = r // Replace old R with new 'r' which has PathValues set
-					s.err = s.r.ValidateHeader(policyInfo.ValidHeader)
-					if !aids.IsError(s.err) {
-						s.err = policyInfo.Policy(s.ctx, s.r) // Smuggle any error back to our caller
+					s.stop = s.r.ValidateHeader(policyInfo.ValidHeader)
+					if !s.stop {
+						s.stop = policyInfo.Policy(s.ctx, s.r) // Smuggle the continue/stop flag  back to our caller
 					}
 				}))
 			}
@@ -188,7 +189,7 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 }
 
 // next (last policy) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
-func (p *apiVersionToServeMuxPolicy) next(ctx context.Context, r *ReqRes) error {
+func (p *apiVersionToServeMuxPolicy) next(ctx context.Context, r *ReqRes) bool {
 	requestApiVersions := []string{}
 	location := ""
 	switch p.apiVersionKeyLocation {
@@ -246,7 +247,7 @@ func (p *apiVersionToServeMuxPolicy) next(ctx context.Context, r *ReqRes) error 
 	// Wrap reqRes inside a ResponseWriter and smuggle it through the ServeMux via ServeHTTP (which sets PathValues).
 	s := &smuggler{ctx: ctx, r: r}
 	avi.serveMux.ServeHTTP(s, r.R)
-	return s.err // Return the unsmuggled error
+	return s.stop // Return the unsmuggled error
 }
 
 func hackPostActionForServeHTTP(r *http.Request, forServeHTTP bool) {
@@ -266,7 +267,7 @@ type smuggler struct {
 	http.ResponseWriter                 // Makes a smuggler an http.ResponseWriter so we can pass it to ServeMux.ServeHTTP (which sets PathValues)
 	ctx                 context.Context // Used to smuggle the passed-in ReqRes
 	r                   *ReqRes         // Used to smuggle the passed-in ReqRes
-	err                 error           // Used to smuggle the returning error
+	stop                bool            // Used to smuggle the returning continue/stop flag
 }
 
 // Ptr converts a value to a pointer-to-value typically used when setting structure fields to be marshaled.

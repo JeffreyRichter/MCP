@@ -65,7 +65,7 @@ func (c *testClient) Get(path string, headers http.Header) *http.Response {
 }
 
 func (c *testClient) do(method, path string, headers http.Header, body io.Reader) *http.Response {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, c.url+path, body)

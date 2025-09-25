@@ -50,18 +50,18 @@ func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
 }
 
 // newReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
-func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, error) {
+func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
 	rr := &ReqRes{ID: time.Now().Unix(), p: p, l: l, R: r, H: &RequestHeader{}, RW: &responseWriterWrapper{ResponseWriter: rw}}
 	rr.RW.(*responseWriterWrapper).rr = rr
 	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "->", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
 	if err := unmarshalHeaderToStruct(r.Header, rr.H); aids.IsError(err) { // Deserialize standard HTTP request headers into this struct
 		return nil, rr.WriteError(http.StatusBadRequest, nil, nil, "UnparsableHeaders", "The request has some invalid headers: %s", err.Error())
 	}
-	return rr, nil
+	return rr, false
 }
 
 // Next sends the ReqRes to the next policy.
-func (r *ReqRes) Next(ctx context.Context) error {
+func (r *ReqRes) Next(ctx context.Context) bool {
 	nextPolicy := r.p[0]
 	r.p = r.p[1:]
 	return nextPolicy(ctx, r)
@@ -74,7 +74,7 @@ func (r *ReqRes) Next(ctx context.Context) error {
 // WriteError logs any write errors and returns a ServerError.
 // Callers should ensure no further writes are done to the ReqRes or its RW.
 // For more control over a response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
-func (r *ReqRes) WriteError(statusCode int, rh *ResponseHeader, customHeader any, errorCode, messageFmt string, a ...any) error {
+func (r *ReqRes) WriteError(statusCode int, rh *ResponseHeader, customHeader any, errorCode, messageFmt string, a ...any) bool {
 	return r.WriteServerError(NewServerError(statusCode, errorCode, messageFmt, a...), rh, customHeader)
 }
 
@@ -85,10 +85,10 @@ func (r *ReqRes) WriteError(statusCode int, rh *ResponseHeader, customHeader any
 // WriteServerError logs any write errors and returns the passed-in ServerError (for convenience).
 // Callers should ensure no further writes are done to the ReqRes or its RW.
 // For more control over a response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
-func (r *ReqRes) WriteServerError(se *ServerError, rh *ResponseHeader, customHeader any) error {
+func (r *ReqRes) WriteServerError(se *ServerError, rh *ResponseHeader, customHeader any) bool {
 	// Azure only: rh.XMSErrorCode = &se.ErrorCode
 	r.WriteSuccess(se.StatusCode, rh, customHeader, se.Error())
-	return se
+	return true
 }
 
 // WriteSuccess completes an HTTP response using the passed-in statusCode, response headers, customer headers (a struct
@@ -97,17 +97,13 @@ func (r *ReqRes) WriteServerError(se *ServerError, rh *ResponseHeader, customHea
 // *string, *int, *int8, *int16, *int32, *int64, *float32, *float64, *time.Time, *svrcore.ETag, []string
 // If an error occurs, WriteSuccess logs it and always returns nil (for convenience).
 // For more control over the response, use ReqRes's RW (ResponseWriter) field directly instead of this method.
-func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader any, bodyStruct any) error { // customHeader must be *struct
+func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader any, bodyStruct any) bool { // customHeader must be *struct
 	if rh == nil {
 		rh = &ResponseHeader{}
 	}
 	body, err := []byte{}, error(nil)
 	if bodyStruct != nil {
-		body, err = json.Marshal(bodyStruct)
-		if aids.IsError(err) {
-			// TODO: Log error
-			return nil
-		}
+		body = aids.MustMarshal(bodyStruct)
 		// If bodyStruct passed, automatically set these response headers
 		rh.ContentLength, rh.ContentType = Ptr(len(body)), Ptr("application/json")
 	}
@@ -155,11 +151,9 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 	fields2Header(r.RW.Header(), rh)
 	fields2Header(r.RW.Header(), customHeader)
 	r.RW.WriteHeader(statusCode)
-	if _, err = r.RW.Write(body); errors.Is(err, http.ErrBodyNotAllowed) {
-		// See RFC 7230, section 3.3. statusCodes 1xx/204/304 must not have a body
-		// TODO: Log error
-	}
-	return nil
+	_, err = r.RW.Write(body)
+	aids.Assert(!errors.Is(err, http.ErrBodyNotAllowed), "RFC 7230, section 3.3. statusCodes 1xx/204/304 must not have a body")
+	return false
 }
 
 func (rr *ReqRes) StatusCode() int { return rr.RW.(*responseWriterWrapper).statusCode }
@@ -242,7 +236,7 @@ type ValidHeader struct {
 
 // ValidateHeader compares the RequestHeaders with ValidHeader and returns an
 // ServiceError if the request is invalid; else nil
-func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
+func (r *ReqRes) ValidateHeader(vh *ValidHeader) bool {
 	// https://www.loggly.com/blog/http-status-code-diagram/
 	// Webpages about ignoring optional headers:
 	//    https://github.com/microsoft/api-guidelines/pull/461/files
@@ -296,14 +290,14 @@ func (r *ReqRes) ValidateHeader(vh *ValidHeader) error {
 		// Also check accept language, accept charset, accept encoding - in this order? If any fail, 406-Not Acceptable
 		return r.WriteError(http.StatusNotAcceptable, nil, nil, "Unsupported Accept", "accept must be one of: %s", strings.Join(vh.Accept, ", "))
 	}
-	return nil
+	return false
 }
 
 // CheckPreconditions checks the passed-in ETag & LastModified (for the current resource) against the request's
 // If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, CheckPreconditions returns nil; else, it
 // writes an appropriate ServerError to the HTTP response (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]) and returns the *ServerError.
-func (r *ReqRes) CheckPreconditions(rv ResourceValues) error {
+func (r *ReqRes) CheckPreconditions(rv ResourceValues) bool {
 	se := CheckPreconditions(rv, r.R.Method, AccessConditions{
 		IfMatch:           r.H.IfMatch,
 		IfNoneMatch:       r.H.IfNoneMatch,
@@ -313,12 +307,12 @@ func (r *ReqRes) CheckPreconditions(rv ResourceValues) error {
 	if se != nil {
 		return r.WriteServerError(se.(*ServerError), nil, nil)
 	}
-	return se
+	return false
 }
 
 // UnmarshalQuery unmarshals the request's URL query parameters into the specified struct. If any query parameters
 // are unrecognized, it writes an appropriate ServerError (BadRequest) to the HTTP response and returns the *ServerError.
-func (r *ReqRes) UnmarshalQuery(s any) error {
+func (r *ReqRes) UnmarshalQuery(s any) bool {
 	values := r.R.URL.Query() // Each call to Query re-parses so we CAN mutate values
 	if err := unmarshalQueryToStruct(values, s); aids.IsError(err) {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "Invalid query parameters", "%s", err.Error())
@@ -327,12 +321,12 @@ func (r *ReqRes) UnmarshalQuery(s any) error {
 	if len(uf) > 0 { // if any unrecognized query parameters, 400-BadRequest
 		return r.WriteError(http.StatusBadRequest, nil, nil, "", "Unrecognized query parameters: %s", strings.Join(uf, ", "))
 	}
-	return nil
+	return false
 }
 
 // UnmarshalBody unmarshals the request's body into the specified struct. If the JSON is ill-formed, it writes
 // an appropriate ServerError (BadRequest) to the HTTP response and returns the *ServerError.
-func (r *ReqRes) UnmarshalBody(s any) error {
+func (r *ReqRes) UnmarshalBody(s any) bool {
 	body, err := io.ReadAll(r.R.Body) // Ensure body is fully read
 	defer r.R.Body.Close()
 	if aids.IsError(err) {
@@ -341,5 +335,5 @@ func (r *ReqRes) UnmarshalBody(s any) error {
 	if err := json.Unmarshal(body, &s); aids.IsError(err) { // NOTE: jsonv2 errors if unrecognized fields are found
 		return r.WriteError(http.StatusBadRequest, nil, nil, "Invalid JSON body", "%s", err.Error())
 	}
-	return nil
+	return false
 }
