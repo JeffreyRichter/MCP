@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	errorLogger   = slog.Default()
-	metricsLogger = slog.Default()
+	errorLogger   = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	metricsLogger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	shutdownMgr   = policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: errorLogger, HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
 )
 
@@ -82,7 +82,7 @@ func main() {
 			ApiVersionInfos:       avis,
 			ApiVersionKeyName:     "api-version",
 			ApiVersionKeyLocation: svrcore.ApiVersionKeyLocationHeader,
-			Logger:                slog.Default(),
+			Logger:                slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		}),
 		DisableGeneralOptionsHandler: true,
 		MaxHeaderBytes:               http.DefaultMaxHeaderBytes,

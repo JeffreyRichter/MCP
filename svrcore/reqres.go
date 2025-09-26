@@ -45,7 +45,7 @@ func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
 	rww.numWriteHeaderCalls++
 	rww.ResponseWriter.WriteHeader(statusCode)
 	rr := rww.rr
-	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "<- ", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
+	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "<-", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
 		slog.Int("StatusCode", rww.statusCode))
 }
 

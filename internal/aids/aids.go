@@ -101,11 +101,13 @@ func ParseStack(framesToSkip int) Stack {
 				break
 			}
 			f := &Frame{}
-			// Parse the line into package & function name
-			parts := strings.SplitN(line, ".", 2)
-			f.Package = parts[0]
-			paren := strings.Index(strings.TrimSpace(parts[1]), "(") // Find the opening parenthesis for arguments
-			f.Function, f.Arguments = parts[1][:paren], parts[1][paren:]
+			// Parse the line into package (between last "/" and before "."), function (after "." & before "("), parameters (from "(" to end)
+			slash := strings.LastIndex(line, "/") // Find the last / in the path
+			period := strings.Index(line[slash+1:], ".")
+			paren := strings.LastIndex(line[slash+1:], "(")
+			f.Package = line[slash+1 : slash+1+period]
+			f.Function = line[slash+1+period+1 : slash+1+paren]
+			f.Arguments = line[slash+1+paren:]
 			l++
 			if f.Function == "panicStack" {
 				continue

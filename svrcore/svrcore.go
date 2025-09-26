@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -91,6 +92,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 			if v := recover(); v != nil { // Panic: log it & make sure client gets http.StatusInternalServerError if they got nothing else
 				sb := &strings.Builder{}
 				aids.WriteStack(sb, aids.ParseStack(2))
+				fmt.Fprint(os.Stderr, sb.String()) // Also write stack to stdout so it shows up in container logs
 				c.Logger.Error("Non-HTTP panic", slog.String("Value", fmt.Sprintf("%v", v)), slog.String("Stack", sb.String()))
 			}
 			if rr.StatusCode() == 0 { // No response was ever sent back to the client; send one now
