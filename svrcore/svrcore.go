@@ -118,7 +118,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 		}()
 
 		if !stop { // No error, start policies; defer above does any error logging & ensures a client response
-			stop = rr.Next(rr.R.Context())
+			rr.Next(rr.R.Context())
 		}
 	})
 }

@@ -3,7 +3,7 @@ go 1.25.0
 use (
 	./mcpcli
 	./mcpsvr
+	./mcptui
 	./svrcore
 	./internal
-	./zstream
 )

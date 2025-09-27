@@ -70,7 +70,7 @@ func (s *localToolCallStore) Put(_ context.Context, tc *toolcall.ToolCall, ac sv
 
 	key := s.key(*tc.Tenant, *tc.ToolName, *tc.ID)
 	if stored, ok := s.data[key]; ok {
-		err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsNone, ETag: stored.ETag}, http.MethodPut, ac)
+		err := svrcore.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: stored.ETag}, http.MethodPut, ac)
 		if aids.IsError(err) {
 			return err
 		}

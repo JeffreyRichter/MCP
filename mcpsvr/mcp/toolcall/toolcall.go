@@ -31,28 +31,32 @@ type ToolCall struct {
 	Request            jsontext.Value      `json:"request,omitempty"`
 	SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
 	ElicitationRequest *ElicitationRequest `json:"elicitationRequest,omitempty"`
+	ServerState        *string             `json:"serverState,omitempty"` // Opaque ToolCall-specific state for round-tripping; allows some servers to avoid a durable state store
 	Progress           jsontext.Value      `json:"progress,omitempty"`
 	Result             jsontext.Value      `json:"result,omitempty"`
 	Error              jsontext.Value      `json:"error,omitempty"`
 	Internal           jsontext.Value      `json:"internal,omitempty"` // Tool-specific internal data, never returned to clients
 }
 
+type ToolCallClient struct {
+	ToolName           *string             `json:"toolname"`
+	ID                 *string             `json:"id"` // Scoped within tenant & tool name
+	Expiration         *time.Time          `json:"expiration,omitempty"`
+	ETag               *svrcore.ETag       `json:"etag"`
+	Status             *Status             `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
+	Request            jsontext.Value      `json:"request,omitempty"`
+	SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
+	ElicitationRequest *ElicitationRequest `json:"elicitationRequest,omitempty"`
+	ServerState        *string             `json:"serverState,omitempty"`
+	Progress           jsontext.Value      `json:"progress,omitempty"`
+	Result             jsontext.Value      `json:"result,omitempty"`
+	Error              jsontext.Value      `json:"error,omitempty"`
+}
+
 // ClientToolCall is the version of ToolCall returned to clients.
 // It omits internal fields: Tenant, IdempotencyKey, Phase, Internal
 func (tc *ToolCall) ToClient() any {
-	return struct {
-		ToolName           *string             `json:"toolname"`
-		ID                 *string             `json:"id"` // Scoped within tenant & tool name
-		Expiration         *time.Time          `json:"expiration,omitempty"`
-		ETag               *svrcore.ETag       `json:"etag"`
-		Status             *Status             `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
-		Request            jsontext.Value      `json:"request,omitempty"`
-		SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
-		ElicitationRequest *ElicitationRequest `json:"elicitationRequest,omitempty"`
-		Progress           jsontext.Value      `json:"progress,omitempty"`
-		Result             jsontext.Value      `json:"result,omitempty"`
-		Error              jsontext.Value      `json:"error,omitempty"`
-	}{
+	return ToolCallClient{
 		ToolName:           tc.ToolName,
 		ID:                 tc.ID,
 		Expiration:         tc.Expiration,
@@ -61,6 +65,7 @@ func (tc *ToolCall) ToClient() any {
 		Request:            tc.Request,
 		SamplingRequest:    tc.SamplingRequest,
 		ElicitationRequest: tc.ElicitationRequest,
+		ServerState:        tc.ServerState,
 		Progress:           tc.Progress,
 		Result:             tc.Result,
 		Error:              tc.Error,
@@ -86,6 +91,14 @@ func (tc *ToolCall) Copy() ToolCall {
 }
 
 type Status string
+
+func (s Status) Processing() bool {
+	return s == StatusSubmitted || s == StatusRunning
+}
+
+func (s Status) Terminated() bool {
+	return s == StatusSuccess || s == StatusFailed || s == StatusCanceled
+}
 
 const (
 	StatusSubmitted                 Status = "submitted"

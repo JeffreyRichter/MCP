@@ -31,8 +31,9 @@ func (pm *phaseMgr) StartPhase(ctx context.Context, tc *toolcall.ToolCall) error
 	go func() { // Run each toolcall in its own goroutine to parallelize the work
 		// Lookup PhaseProcessor for this ToolName
 		tnpp, _ := pm.config.ToolNameToProcessPhaseFunc(*tc.ToolName) // Error can't happen here because tool call was validated earlier
-		for *tc.Status == toolcall.StatusRunning {                    // Loop while tool call is running
-			tnpp(ctx, pm, tc) // Transition tool call from current phase to next phase
+		for (*tc.Status).Processing() {                               // Loop while tool call is server processing
+			err := tnpp(ctx, pm, tc) // Transition tool call from current phase to next phase
+			_ = err                  // TODO: Log?
 		}
 	}()
 	return nil

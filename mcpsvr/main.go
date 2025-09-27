@@ -35,34 +35,34 @@ func main() {
 	var c Configuration
 	c.Load()
 
-	var p *mcpPolicies
+	var routes *mcpPolicies
 	port, sharedKey := "8080", ""
 	switch {
 	case c.Local:
-		p = newLocalMcpPolicies(shutdownMgr.Context, errorLogger)
+		routes = newLocalMcpPolicies(shutdownMgr.Context, errorLogger)
 		b := [16]byte{}
 		_, _ = rand.Read(b[:]) // guaranteed to return len(b), nil
-		port, sharedKey = "0", fmt.Sprintf("%x", b)
+		//port, sharedKey = "0", fmt.Sprintf("%x", b)
 
 	case c.AzuriteAccount != "":
 		blobCred := aids.Must(azblob.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
 		blobClient := aids.Must(azblob.NewClientWithSharedKeyCredential(c.AzureBlobURL, blobCred, nil))
 		queueCred := aids.Must(azqueue.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
 		queueClient := aids.Must(azqueue.NewQueueClientWithSharedKeyCredential(c.AzureQueueURL, queueCred, nil))
-		p = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+		routes = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 
 	default:
 		cred := aids.Must(azidentity.NewDefaultAzureCredential(nil))
 		blobClient := aids.Must(azblob.NewClient(c.AzureBlobURL, cred, nil))
 		queueClient := aids.Must(azqueue.NewQueueClient(c.AzureQueueURL, cred, nil))
-		p = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+		routes = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 	}
 
 	policies := []svrcore.Policy{
 		shutdownMgr.NewPolicy(),
 		newApiVersionSimulatorPolicy(),
 		policies.NewThrottlingPolicy(100),
-		policies.NewAuthorizationPolicy(sharedKey),
+		//policies.NewAuthorizationPolicy(sharedKey),
 		policies.NewMetricsPolicy(metricsLogger),
 		policies.NewDistributedTracing(),
 	}
@@ -73,14 +73,14 @@ func main() {
 	// 3. Retire old preview/GA version
 	avis := []*svrcore.ApiVersionInfo{
 		{ApiVersion: "", BaseApiVersion: "", GetRoutes: noApiVersionRoutes},
-		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: p.Routes20250808},
+		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: routes.Routes20250808},
 	}
 
 	s := &http.Server{
 		Handler: svrcore.BuildHandler(svrcore.BuildHandlerConfig{
 			Policies:              policies,
 			ApiVersionInfos:       avis,
-			ApiVersionKeyName:     "api-version",
+			ApiVersionKeyName:     "Api-Version", // Must be canonicalized HTTP header key
 			ApiVersionKeyLocation: svrcore.ApiVersionKeyLocationHeader,
 			Logger:                slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		}),
@@ -99,7 +99,7 @@ func main() {
 	}
 	startMsg := fmt.Sprintf("Listening on port: %s", port)
 	if c.Local {
-		startMsg = fmt.Sprintf(`{"port":%s, "key":%q}`, port, sharedKey)
+		startMsg = fmt.Sprintf(`{"port":%q, "key":%q}`, port, sharedKey)
 	}
 	fmt.Println(startMsg)
 	os.Stdout.Sync()

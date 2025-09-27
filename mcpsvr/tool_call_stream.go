@@ -53,8 +53,8 @@ type (
 )
 
 func (c *streamToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
-	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 	tc.Result = aids.MustMarshal(streamToolCallResult{Text: []string{}})
+	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
 	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); aids.IsError(err) {
 		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
 	}
@@ -71,35 +71,40 @@ func (c *streamToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
 func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
-	time.Sleep(500 * time.Millisecond)                            // Simulate doing work
+	time.Sleep(10 * time.Second)                                  // Simulate doing work
 	result := aids.MustUnmarshal[streamToolCallResult](tc.Result) // Update the result
 	result.Text = append(result.Text, text[len(result.Text)])
+	tc.Result = aids.MustMarshal(result)
 	if len(result.Text) == len(text) {
 		tc.Status, tc.Phase = svrcore.Ptr(toolcall.StatusSuccess), nil
 	}
-	tc.Result = aids.MustMarshal(result)
-	return nil
+	return c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 }
 
-var text = []string{
-	`Artificial Intelligence (AI) refers to computer systems designed to perform tasks that typically require
-	human intelligence, such as learning, reasoning, problem-solving, and decision-making. Modern AI
-	encompasses various approaches, from rule-based systems to machine learning models that improve through
-	experience and training on large datasets. Machine learning, particularly deep learning using artificial
-	neural networks, has driven recent breakthroughs by allowing computers to identify complex patterns in
-	data and generalize to handle new information without being explicitly programmed for every task.`,
+var text = []string{`
+Artificial Intelligence (AI) refers to computer systems designed to perform tasks that typically require
+human intelligence, such as learning, reasoning, problem-solving, and decision-making. Modern AI
+encompasses various approaches, from rule-based systems to machine learning models that improve through
+experience and training on large datasets. Machine learning, particularly deep learning using artificial
+neural networks, has driven recent breakthroughs by allowing computers to identify complex patterns in
+data and generalize to handle new information without being explicitly programmed for every task.
+`,
 
-	`AI applications have become increasingly integrated into daily life and industry. From recommendation 
-	systems on streaming platforms to virtual assistants, autonomous vehicles, and medical diagnostic tools,
-	AI powers countless services we use regularly. In business, it enables fraud detection, predictive
-	maintenance, search engines, and translation services. The technology has even shown remarkable 
-	capabilities in creative domains, generating art, writing, and music while excelling at tasks like
-	image recognition and natural language processing.`,
+	`
+AI applications have become increasingly integrated into daily life and industry. From recommendation 
+systems on streaming platforms to virtual assistants, autonomous vehicles, and medical diagnostic tools,
+AI powers countless services we use regularly. In business, it enables fraud detection, predictive
+maintenance, search engines, and translation services. The technology has even shown remarkable 
+capabilities in creative domains, generating art, writing, and music while excelling at tasks like
+image recognition and natural language processing.
+`,
 
-	`Despite rapid advancement, AI faces significant challenges and limitations. Current systems typically
-	excel in narrow domains but lack the general intelligence and contextual understanding humans possess
-	naturally. Ongoing concerns include bias in AI systems, potential job displacement, privacy issues,
-	and ethical implications of autonomous decision-making. As the field progresses, researchers and
-	policymakers are working to ensure AI development remains safe, reliable, and beneficial to 
-	society while addressing these complex challenges.`,
+	`
+Despite rapid advancement, AI faces significant challenges and limitations. Current systems typically
+excel in narrow domains but lack the general intelligence and contextual understanding humans possess
+naturally. Ongoing concerns include bias in AI systems, potential job displacement, privacy issues,
+and ethical implications of autonomous decision-making. As the field progresses, researchers and
+policymakers are working to ensure AI development remains safe, reliable, and beneficial to 
+society while addressing these complex challenges.
+`,
 }

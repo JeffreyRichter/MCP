@@ -54,9 +54,9 @@ func MustUnmarshal[T any](data []byte) T {
 
 // WriteStack captures the calling goroutine's stack and writes formatted output to w.
 func WriteStack(w io.Writer, fi Stack) {
-	format := fmt.Sprintf("%%-%ds   %%-%ds   %%s:%%d\n", fi.LongestPackage, fi.LongestFunction)
 	for _, f := range fi.Frames {
-		fmt.Fprintf(w, format, f.Package, f.Function, path.Join(f.FilePath, f.FileName), f.Line)
+		fmt.Fprintf(w, "%-*s   %-*s   %s:%d\n", fi.LongestPackage, f.Package,
+			fi.LongestFunction, f.Function, path.Join(f.FilePath, f.FileName), f.Line)
 	}
 }
 
