@@ -90,12 +90,12 @@ func (c *countToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	}
 	tc.Phase = svrcore.Ptr(fmt.Sprintf("Phase-%c", 'A'+result.Count))
 	tc.Result = aids.MustMarshal(result)
-	err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr})
-	if aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
+	se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr})
+	if se != nil {
+		return r.WriteServerError(se, nil, nil)
 	}
-	if err := pm.StartPhase(ctx, tc); aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
+	if se := pm.StartPhase(ctx, tc); se != nil {
+		return r.WriteServerError(se, nil, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
@@ -112,15 +112,15 @@ func (c *countToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	}
 
 	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = svrcore.Ptr(toolcall.StatusCanceled), nil, nil, nil, nil
-	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
+	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
+		return r.WriteServerError(se, nil, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
 
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
-func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
+func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) {
 	time.Sleep(150 * time.Millisecond) // Simulate doing work
 
 	request := aids.MustUnmarshal[countToolCallRequest](tc.Request)
@@ -132,5 +132,6 @@ func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcesso
 	if result.Count >= request.CountTo {
 		tc.Status, tc.Phase = svrcore.Ptr(toolcall.StatusSuccess), nil
 	}
-	return c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
+	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
+	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))
 }

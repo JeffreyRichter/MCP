@@ -10,7 +10,11 @@ a specific day/time, the completion of a task from another service, a stock pric
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
@@ -38,13 +42,29 @@ type PhaseMgr struct {
 
 // NewPhaseMgr creates a new Mgr.
 // queueUrl must look like: https://myaccount.queue.core.windows.net/<queuename>
-func NewPhaseMgr(ctx context.Context, queueClient *azqueue.QueueClient, tcs toolcall.Store, o PhaseMgrConfig) (toolcall.PhaseMgr, error) {
+func NewPhaseMgr(ctx context.Context, queueClient *azqueue.QueueClient, tcs toolcall.Store, o PhaseMgrConfig) (toolcall.PhaseMgr, *svrcore.ServerError) {
 	if _, err := queueClient.Create(ctx, nil); aids.IsError(err) { // Make sure the queue exists
-		return nil, err
+		return nil, svrcore.NewServerError(http.StatusInternalServerError, "", "Failed to create phase manager queue")
 	}
-	mgr := &PhaseMgr{queueClient: queueClient, tcs: tcs, config: o}
-	go mgr.processor(ctx)
-	return mgr, nil
+	pm := &PhaseMgr{queueClient: queueClient, tcs: tcs, config: o}
+	go func() {
+		for { // If the goroutine dies, create a new one
+			if ctx.Err() != nil {
+				return // Context cancelled; exit goroutine
+			}
+			defer func() {
+				if v := recover(); v != nil { // Panic: Capture error & stack trace
+					stack := &strings.Builder{}
+					stack.WriteString(fmt.Sprintf("Error: %v\n", v))
+					aids.WriteStack(stack, aids.ParseStack(2))
+					fmt.Fprint(os.Stderr, stack.String()) // Also write stack to stdout so it shows up in container logs
+					pm.config.ErrorLogger.LogAttrs(ctx, slog.LevelError, "PhaseMgr error", slog.String("stack", stack.String()))
+				}
+			}()
+			pm.processor(ctx)
+		}
+	}()
+	return pm, nil
 }
 
 // DeleteQueue delete the queue. This is most useful for debugging/testing.
@@ -61,28 +81,27 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 		NumberOfMessages:  svrcore.Ptr(int32(10)),
 		VisibilityTimeout: svrcore.Ptr(int32(pm.config.PhaseExecutionTime.Seconds())),
 	}
-	for {
+	for ctx.Err() == nil {
 		time.Sleep(time.Millisecond * 200)
 		// TODO: If CPU Usage > 90%, continue
 		resp, err := pm.queueClient.DequeueMessages(ctx, o)
-		if aids.IsError(err) {
-			pm.config.ErrorLogger.Error("DequeueMessages", slog.String("error", err.Error()))
-			continue // Maybe exponential delay for time.Sleep if service is down?
-		}
+		aids.Assert(!aids.IsError(err), "DequeueMessages: "+err.Error()) // Maybe exponential delay for time.Sleep if service is down?
+
 		for _, m := range resp.Messages {
 			if *m.DequeueCount > 3 { // Poison Message
 				pm.config.ErrorLogger.Error("PoisonMessage", slog.String("messageID", *m.MessageID))
+				pm.queueClient.DeleteMessage(ctx, *m.MessageID, *m.PopReceipt, nil) // Ignore any failure
 				continue
 			}
 			go func() { // Each tool call runs in a separate goroutine for parallelism
+				// TODO: Add defer & recover here
 				var tc toolcall.ToolCall
 				if err := json.Unmarshal(([]byte)(*m.MessageText), &tc); aids.IsError(err) {
 					pm.config.ErrorLogger.Error("UnexpectedMessageFormat", slog.String("messageID", *m.MessageID), slog.String("error", err.Error()))
 					return
 				}
-				// TODO: use the ToolCallStore singleton (it's a sync.OnceValue)
-				err := pm.tcs.Get(ctx, &tc, svrcore.AccessConditions{})
-				if aids.IsError(err) { // ToolCallID not expired/not found
+				se := pm.tcs.Get(ctx, &tc, svrcore.AccessConditions{})
+				if se != nil { // ToolCallID not expired/not found
 					// No more phases to execute; delete the queue message (or let it become a poison message)
 					// continuePhaseProcessing will delete the message if Status != toolcall.ToolCallStatusRunning
 					// TODO: log; maybe not
@@ -96,36 +115,27 @@ func (pm *PhaseMgr) processor(ctx context.Context) {
 }
 
 // StartPhaseProcessing: enqueues a new tool call phase with tool name & tool call id.
-func (pm *PhaseMgr) StartPhase(ctx context.Context, tc *toolcall.ToolCall) error {
-	data, err := json.Marshal(tc.Identity)
+// It must succeed or panic due to internal server error
+func (pm *PhaseMgr) StartPhase(ctx context.Context, tc *toolcall.ToolCall) *svrcore.ServerError {
+	data := aids.MustMarshal(tc.Identity)
+	_, err := pm.queueClient.EnqueueMessage(ctx, string(data), nil)
 	if aids.IsError(err) {
-		return err
+		return svrcore.NewServerError(http.StatusInternalServerError, "", "Failed to enqueue tool call phase")
 	}
-	_, err = pm.queueClient.EnqueueMessage(ctx, string(data), nil)
-	return err
+	return nil
 }
 
-func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, pp *phaseProcessor, tc *toolcall.ToolCall) error {
+func (pm *PhaseMgr) continuePhaseProcessing(ctx context.Context, pp *phaseProcessor, tc *toolcall.ToolCall) {
 	// Lookup PhaseProcessor for this ToolName
-	tnpp, err := pm.config.ToolNameToProcessPhaseFunc(*tc.ToolName)
-	if aids.IsError(err) {
-		return err // unrecognized tool name; log?
-	}
-	for *tc.Status == toolcall.StatusRunning { // Loop while tool call is running
-		err := tnpp(ctx, pp, tc) // Transition tool call from current phase to next phase
-		if aids.IsError(err) {
-			return err
-		}
+	tnpp := pm.config.ToolNameToProcessPhaseFunc(*tc.ToolName) // panics if tool name unrecgnized
+	for (*tc.Status).Processing() {                            // Loop while tool call is running
+		tnpp(ctx, pp, tc) // Transition tool call from current phase to next phase
 		// Persists new state of tool call resource (etag must match)
-		err = pm.tcs.Put(ctx, tc, svrcore.AccessConditions{IfMatch: tc.ETag})
-		if aids.IsError(err) {
-			return err // log?
-		}
+		aids.Must0(pm.tcs.Put(ctx, tc, svrcore.AccessConditions{IfMatch: tc.ETag}))
 	}
 
 	// When no longer "running", phase processing is complete, so delete the queue message
 	pm.queueClient.DeleteMessage(ctx, pp.messageID, pp.popReceipt, nil) // Ignore any failure
-	return nil
 }
 
 func (pm *PhaseMgr) newPhaseProcessor(messageID, popReceipt string) *phaseProcessor {
@@ -138,12 +148,9 @@ type phaseProcessor struct {
 	popReceipt string
 }
 
-func (pp *phaseProcessor) ExtendTime(ctx context.Context, phaseExecutionTime time.Duration) error {
+func (pp *phaseProcessor) ExtendTime(ctx context.Context, phaseExecutionTime time.Duration) {
 	resp, err := pp.mgr.queueClient.UpdateMessage(ctx, pp.messageID, pp.popReceipt, "",
 		&azqueue.UpdateMessageOptions{VisibilityTimeout: svrcore.Ptr(int32(phaseExecutionTime.Seconds()))})
-	if aids.IsError(err) {
-		return nil
-	}
+	aids.Assert(!aids.IsError(err), err)
 	pp.popReceipt = *resp.PopReceipt
-	return nil
 }

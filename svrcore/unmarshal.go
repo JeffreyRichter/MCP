@@ -158,6 +158,9 @@ func verifyStructFields(s any) error {
 
 	fieldInfos := getFieldInfos(structType)
 	for _, fi := range fieldInfos {
+		if fi.jsonName == "-" {
+			continue // Ignore fields named "_"
+		}
 		fieldValue := structValue.FieldByName(fi.fieldName) // Find structure's field value (should be a *T)
 		switch v := fieldValue.Interface().(type) {
 		case *bool, bool:

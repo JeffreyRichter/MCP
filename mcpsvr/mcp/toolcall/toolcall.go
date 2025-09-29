@@ -115,29 +115,36 @@ type Store interface {
 	// Put creates or updates the specified tool call in storage from the passed-in ToolCall struct.
 	// On success, the ToolCall.ETag field is updated from the response ETag. Returns a
 	// [svrcore.ServerError] if an error occurs.
-	Put(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+	Put(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) *svrcore.ServerError
 
 	// Get retrieves the specified tool call from storage into the passed-in ToolCall struct or a
 	// [svrcore.ServerError] if an error occurs.
-	Get(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+	Get(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) *svrcore.ServerError
 
 	// Delete deletes the specified tool call from storage or returns a [svrcore.ServerError] if an error occurs.
-	Delete(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) error
+	Delete(ctx context.Context, tc *ToolCall, ac svrcore.AccessConditions) *svrcore.ServerError
 }
 
 /********************* Types for Phase Processing ***************/
 type PhaseMgr interface {
 	// StartPhaseProcessing: enqueues a new tool call phase with tool name & tool call id.
-	StartPhase(ctx context.Context, tc *ToolCall) error
+	// It must succeed or panic due to internal server error.
+	StartPhase(ctx context.Context, tc *ToolCall) *svrcore.ServerError
 }
 
 type PhaseProcessor interface {
-	ExtendTime(ctx context.Context, phaseExecutionTime time.Duration) error
+	// ExtendTime extends the allowed execution time for the current phase.
+	// It must succeed or panic due to internal server error.
+	ExtendTime(ctx context.Context, phaseExecutionTime time.Duration)
 }
 
-type ProcessPhaseFunc func(context.Context, PhaseProcessor, *ToolCall) error
+// ProcessPhaseFunc is the function signature for processing a tool call's current phase to its next phase.
+// It panics if phase processing fails.
+type ProcessPhaseFunc func(context.Context, PhaseProcessor, *ToolCall)
 
-type ToolNameToProcessPhaseFunc func(toolName string) (ProcessPhaseFunc, error)
+// ToolNameToProcessPhaseFunc maps a tool name to its ProcessPhaseFunc.
+// It must succeed or panic due to unrecognized tool name.
+type ToolNameToProcessPhaseFunc func(toolName string) ProcessPhaseFunc
 
 type SamplingRequest struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L986
 	Messages []mcp.SamplingMessage `json:"messages"`

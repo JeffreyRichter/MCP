@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,29 +13,30 @@ import (
 )
 
 func TestToolCallCount(t *testing.T) {
-	t.Skip("finish the feature then write this test; need in-memory queue implementation")
-	os.Setenv("MCPSVR_AZURE_QUEUE_URL", "https://samfzqhbrdlxlsm.queue.core.windows.net/mcpsvr")
-	os.Setenv("MCPSVR_AZURE_BLOB_URL", "https://samfzqhbrdlxlsm.blob.core.windows.net/")
 	client := newTestClient(t)
-	resp := client.Put("/mcp/tools/count/calls/"+t.Name(),
-		http.Header{"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)}},
-		strings.NewReader(`{"start":40,"increments":2}`))
+	urlPath := "/mcp/tools/count/calls/" + t.Name()
+	resp := client.Put(urlPath,
+		http.Header{
+			"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)},
+			"Content-Type":    []string{"application/json"},
+			"Accept":          []string{"application/json"},
+		},
+		strings.NewReader(`{"countto":40}`))
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	tc := toolcall.ToolCall{}
+	var tc toolcall.ToolCall
 	for {
-		resp = client.Get("/mcp/tools/count/calls/"+t.Name(), http.Header{})
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		b, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		err = json.Unmarshal(b, &tc)
+		jsonBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		require.NotNil(t, tc.Status)
-		if *tc.Status != toolcall.StatusRunning {
+		err = json.Unmarshal(jsonBody, &tc)
+		require.NoError(t, err)
+		if *tc.Status == toolcall.StatusSuccess {
 			break
 		}
+
+		resp = client.Get(urlPath, http.Header{"Accept": []string{"application/json"}})
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 		time.Sleep(50 * time.Millisecond)
 	}
 	require.Equal(t, toolcall.StatusSuccess, *tc.Status)

@@ -90,8 +90,8 @@ func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 	}
 	tc.Status = svrcore.Ptr(toolcall.StatusAwaitingElicitationResult)
 
-	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
+	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
+		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
@@ -131,8 +131,8 @@ func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 	// Drop the elicitation request because it's been processed
 	tc.ElicitationRequest = nil
 
-	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
+	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
+		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
@@ -144,8 +144,8 @@ func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 	}
 
 	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = svrcore.Ptr(toolcall.StatusCanceled), nil, nil, nil, nil
-	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
+	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
+		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }

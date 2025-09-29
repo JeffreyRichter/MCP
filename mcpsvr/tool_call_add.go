@@ -82,8 +82,8 @@ func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 	tc.Result = aids.MustMarshal(&addToolCallResult{Sum: trequest.X + trequest.Y})
 
 	// Create the resource; on success, the ToolCall.ETag field is updated from the response ETag
-	if err := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), nil, nil)
+	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
+		return r.WriteServerError(se, nil, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }
@@ -93,9 +93,9 @@ func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore
 }
 
 func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
-	err := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
+	se := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	if se != nil {
+		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	if stop := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); stop {
 		return stop
@@ -119,9 +119,9 @@ func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "tool call status is '%s'; not expecting a result", *tc.Status)
 	}
 
-	err = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
-	if aids.IsError(err) {
-		return r.WriteServerError(err.(*svrcore.ServerError), &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
+	se = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
+	if se != nil {
+		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 }

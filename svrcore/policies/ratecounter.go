@@ -15,11 +15,11 @@ type rateCounter struct {
 	duration    time.Duration // This field is immutable
 	mu          sync.Mutex
 	windowStart time.Time
-	count       int64
+	count       int
 }
 
 // Add increments the count
-func (rc *rateCounter) Add(delta int64) {
+func (rc *rateCounter) Add(delta int) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
@@ -31,7 +31,7 @@ func (rc *rateCounter) Add(delta int64) {
 }
 
 // Rate returns the count in the current time window
-func (rc *rateCounter) Rate() int64 {
+func (rc *rateCounter) Rate() int {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if now := time.Now(); now.Sub(rc.windowStart) >= rc.duration {

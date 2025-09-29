@@ -18,42 +18,56 @@ import (
 
 // ReqRes encapsulates the incoming http.Requests and the outgoing http.ResponseWriter and is passed through the set of policies.
 type ReqRes struct {
-	// ID is a unique ID for this ReqRes (useful for logging, etc.)
-	ID int64 // TODO: change to guid?
+	// id is a unique ID for this ReqRes (useful for logging, etc.)
+	id string // TODO: change to guid?
 	// R identifies the incoming HTTP request
 	R *http.Request
 	// H identifies the deserialized standard HTTP headers
 	H *RequestHeader
 	// RW is the http.ResponseWriter used to write the HTTP response; it implements io.Writer.
 	// Prefer using [ReqRes.WriteError], [ReqRes.WriteServerError], or [ReqRes.WriteSuccess] instead of using RW directly.
-	RW http.ResponseWriter
+	RW *ResponseWriter
 	p  []Policy // The slice of policies to execute for this request
 	l  *slog.Logger
+	_  struct{} // Forces use of field names in composite literals
 }
 
-// responseWriterWrapper is a custom http.ResponseWriter that captures the status code.
-type responseWriterWrapper struct {
-	rr *ReqRes
+// ResponseWriter is a custom http.ResponseWriter that captures the status code.
+type ResponseWriter struct {
 	http.ResponseWriter
-	statusCode          int
+	StatusCode          int
 	numWriteHeaderCalls int // When done request processing, this must be 1 or an error occurred
+	rr                  *ReqRes
+	_                   struct{} // Forces use of field names in composite literals
 }
 
 // WriteHeader overwrites http.ResponseWriter's WriteHeader method in order to capture the status code.
-func (rww *responseWriterWrapper) WriteHeader(statusCode int) {
-	rww.statusCode = statusCode
+func (rww *ResponseWriter) WriteHeader(statusCode int) {
+	rww.StatusCode = statusCode
 	rww.numWriteHeaderCalls++
 	rww.ResponseWriter.WriteHeader(statusCode)
 	rr := rww.rr
-	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "<-", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
-		slog.Int("StatusCode", rww.statusCode))
+	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "<-", slog.String("id", rr.id),
+		slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
+		slog.Int("StatusCode", rww.StatusCode))
 }
 
 // newReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
 func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
-	rr := &ReqRes{ID: time.Now().Unix(), p: p, l: l, R: r, H: &RequestHeader{}, RW: &responseWriterWrapper{ResponseWriter: rw}}
-	rr.RW.(*responseWriterWrapper).rr = rr
-	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "->", slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
+	rr := &ReqRes{
+		id: strconv.FormatInt(time.Now().Unix(), 10),
+		p:  p,
+		l:  l,
+		R:  r,
+		H:  &RequestHeader{},
+		RW: &ResponseWriter{ResponseWriter: rw},
+	}
+	rr.RW.rr = rr
+	rw.Header().Set("x-ms-server-id", rr.id) // Set this header now guaranteeing its return to the client
+
+	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "->", slog.String("id", rr.id),
+		slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
+
 	if err := unmarshalHeaderToStruct(r.Header, rr.H); aids.IsError(err) { // Deserialize standard HTTP request headers into this struct
 		return nil, rr.WriteError(http.StatusBadRequest, nil, nil, "UnparsableHeaders", "The request has some invalid headers: %s", err.Error())
 	}
@@ -116,6 +130,9 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 		for i := range v.NumField() { // Iterate over the struct's fields
 			f := v.Field(i)
 			jsonFieldName := strings.Split(reflect.TypeOf(ptrToStruct).Elem().Field(i).Tag.Get("json"), ",")[0]
+			if jsonFieldName == "-" {
+				continue // Skip fields with json:"-"
+			}
 			switch f.Kind() { // Field type kind
 			case reflect.Pointer:
 				if f.IsNil() {
@@ -151,15 +168,15 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 	fields2Header(r.RW.Header(), rh)
 	fields2Header(r.RW.Header(), customHeader)
 	r.RW.WriteHeader(statusCode)
-	_, err = r.RW.Write(body)
-	aids.Assert(!errors.Is(err, http.ErrBodyNotAllowed), "RFC 7230, section 3.3. statusCodes 1xx/204/304 must not have a body")
+	if body != nil {
+		_, err = r.RW.Write(body)
+		aids.Assert(!errors.Is(err, http.ErrBodyNotAllowed), "RFC 7230, section 3.3. statusCodes 1xx/204/304 must not have a body")
+	}
 	return false
 }
 
-func (rr *ReqRes) StatusCode() int { return rr.RW.(*responseWriterWrapper).statusCode }
-
 func (rr *ReqRes) numWriteHeaderCalls() int {
-	return rr.RW.(*responseWriterWrapper).numWriteHeaderCalls
+	return rr.RW.numWriteHeaderCalls
 }
 
 // https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
@@ -188,6 +205,7 @@ type RequestHeader struct { // HTTP/2 requires 'json' field names be lowercase
 	AcceptEncoding []string `json:"accept-encoding"`
 	AcceptLanguage []string `json:"accept-language"`
 	AcceptRanges   *string  `json:"accept-ranges"`
+	_              struct{} `json:"-"` // Forces use of field names in composite literals
 }
 
 type ResponseHeader struct { // HTTP/2 requires 'json' field names be lowercase
@@ -222,6 +240,7 @@ type ResponseHeader struct { // HTTP/2 requires 'json' field names be lowercase
 	*/
 	// Azure-only: XMSErrorCode     *string `json:"x-ms-error-code"`
 	// Azure-only: AzureDeprecating *string `json:"azure-deprecating"` // https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md#deprecating-behavior-notification
+	_ struct{} `json:"-"` // Forces use of field names in composite literals
 }
 
 // ValidHeader are static values indicating the header values
@@ -232,11 +251,12 @@ type ValidHeader struct {
 	ContentEncodings     []string
 	Accept               []string
 	PreconditionRequired bool
+	_                    struct{} // Forces use of field names in composite literals
 }
 
 // ValidateHeader compares the RequestHeaders with ValidHeader and returns an
 // ServiceError if the request is invalid; else nil
-func (r *ReqRes) ValidateHeader(vh *ValidHeader) bool {
+func (r *ReqRes) validateRequestHeader(vh *ValidHeader) bool {
 	// https://www.loggly.com/blog/http-status-code-diagram/
 	// Webpages about ignoring optional headers:
 	//    https://github.com/microsoft/api-guidelines/pull/461/files
@@ -304,10 +324,18 @@ func (r *ReqRes) CheckPreconditions(rv ResourceValues) bool {
 		IfModifiedSince:   r.H.IfModifiedSince,
 		IfUnmodifiedSince: r.H.IfUnmodifiedSince,
 	})
-	if se != nil {
-		return r.WriteServerError(se.(*ServerError), nil, nil)
+	if se == nil {
+		return false // Preconditions passed, don't stop processing
 	}
-	return false
+
+	switch se.StatusCode {
+	case http.StatusNotModified:
+		r.WriteSuccess(http.StatusNotModified, &ResponseHeader{ETag: rv.ETag, LastModified: rv.LastModified}, nil, nil)
+
+	default: //  http.StatusPreconditionFailed, http.StatusBadRequest
+		r.WriteSuccess(se.StatusCode, &ResponseHeader{ETag: rv.ETag, LastModified: rv.LastModified}, nil, se)
+	}
+	return true // Stop processing
 }
 
 // UnmarshalQuery unmarshals the request's URL query parameters into the specified struct. If any query parameters

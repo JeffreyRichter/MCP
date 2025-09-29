@@ -64,12 +64,10 @@ func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.Too
 }
 
 // toolNameToProcessPhaseFunc converts a toolname to a function that knows how to advance the tool call's phase/state
-func (p *mcpPolicies) toolNameToProcessPhaseFunc(toolName string) (toolcall.ProcessPhaseFunc, error) {
+func (p *mcpPolicies) toolNameToProcessPhaseFunc(toolName string) toolcall.ProcessPhaseFunc {
 	ti, ok := p.toolInfos[toolName]
-	if !ok {
-		return nil, fmt.Errorf("tool '%s' not found", toolName)
-	}
-	return ti.ProcessPhase, nil
+	aids.Assert(ok, fmt.Errorf("tool '%s' not found", toolName))
+	return ti.ProcessPhase
 }
 
 // putToolCallResource creates a new tool call resource (idempotently if a retry occurs).
@@ -88,14 +86,13 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 	}
 
 	// Does the tool call ID already exist?
-	toolCallIDFound := true
-	err := p.store.Get(ctx, tc, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		if err.(*svrcore.ServerError).StatusCode == http.StatusNotFound {
-			toolCallIDFound, err = false, nil // Not found is OK; this is a new tool call ID
-		} else {
-			return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "Failed to get tool call")
-		}
+	toolCallIDFound := false
+	if se := p.store.Get(ctx, tc, svrcore.AccessConditions{}); se == nil {
+		toolCallIDFound = true // Found is OK; this is an existing tool call ID
+	} else if se.StatusCode == http.StatusNotFound {
+		// Not found is OK; this is a new tool call ID
+	} else {
+		return r.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "Failed to get tool call")
 	}
 
 	if !toolCallIDFound { // If tool call ID doesn't already exist, create it
@@ -120,8 +117,8 @@ func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.R
 	if stop {
 		return nil, nil, stop
 	}
-	err := p.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if aids.IsError(err) {
+	se := p.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
+	if se != nil {
 		return nil, nil, r.WriteError(http.StatusNotFound, nil, nil, "NotFound", "Tool call not found")
 	}
 	if stop := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); stop {

@@ -2,12 +2,10 @@ package policies
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"runtime"
 	"time"
 
-	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -22,12 +20,10 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 		// Google’s site reliability engineering (SRE) book lists four golden signals a user-facing system should be monitored for:
 		requestCountPerMinute.Add(1) // Traffic: the rate in which new work comes into the system, typically expressed in requests per minute.
 		start := time.Now()
-		var err error // Used in defer func
 		defer func() {
 			duration := time.Since(start) // Latency: the amount of time it takes to process a unit of work, broken down between success and failures.
-			requestLatencyPerMinute.Add(duration.Milliseconds())
-			var se *svrcore.ServerError
-			if aids.IsError(err) && errors.As(err, &se) && (se.StatusCode >= 500 && se.StatusCode < 600) {
+			requestLatencyPerMinute.Add(int(duration.Milliseconds()))
+			if r.RW.StatusCode >= 500 && r.RW.StatusCode < 600 {
 				requestServiceFailuresPerMinute.Add(1) // Errors: the rate of unexpected service things (5xx) happening.
 			}
 
@@ -37,10 +33,10 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 				var latestMemStats runtime.MemStats
 				runtime.ReadMemStats(&latestMemStats)        // TODO: Log memory metrics
 				latestNumGoroutine := runtime.NumGoroutine() // TODO: Log # of goroutines?
-				logger.Info("Server Stats", "Alloc", latestMemStats.Alloc, "TotalAlloc", latestMemStats.TotalAlloc, "Sys", latestMemStats.Sys, "NumGC", latestMemStats.NumGC, "NumGoroutine", latestNumGoroutine)
-				logger.Info("Request Stats", "requests/minute", requestCountPerMinute.Rate(), "request ms/minute", requestLatencyPerMinute.Rate(), "5xx/minute", requestServiceFailuresPerMinute.Rate())
+				logger.LogAttrs(ctx, slog.LevelInfo, "Runtime", slog.Int("HeapMem", int(latestMemStats.Alloc)), slog.Int("GCs", int(latestMemStats.NumGC)), slog.Int("Goroutines", latestNumGoroutine))
+				logger.LogAttrs(ctx, slog.LevelInfo, "Requests", slog.Int("req/min", requestCountPerMinute.Rate()), slog.Int("req ms/min", requestLatencyPerMinute.Rate()),
+					slog.Int("5xx/min", requestServiceFailuresPerMinute.Rate()))
 			}
-
 		}()
 		return r.Next(ctx)
 	}

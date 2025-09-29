@@ -38,7 +38,7 @@ type AccessConditions struct {
 // If(None)Match & If(Un)ModifiedSince headers. If preconditions pass, CheckPreconditions returns nil; else,
 // it returns an appropriate ServierError (BadRequest, NotModified [for a safe method],
 // PreconditionFailed [for an unsafe method]).
-func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) error {
+func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) *ServerError {
 	if !rv.AllowedConditionals.Check(AllowedConditionalsMatch) && (c.IfMatch != nil || c.IfNoneMatch != nil) {
 		return NewServerError(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
 	}

@@ -31,7 +31,7 @@ func testServer(t *testing.T) *httptest.Server {
 		svrcore.BuildHandlerConfig{
 			Policies:              policies,
 			ApiVersionInfos:       avis,
-			ApiVersionKeyName:     "api-version",
+			ApiVersionKeyName:     "Api-Version",
 			ApiVersionKeyLocation: svrcore.ApiVersionKeyLocationHeader,
 			Logger:                slog.Default(),
 		})
@@ -74,6 +74,7 @@ func (c *testClient) do(method, path string, headers http.Header, body io.Reader
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
 	}
 	for k, v := range headers {
 		for _, val := range v {

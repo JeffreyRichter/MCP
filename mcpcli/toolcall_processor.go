@@ -25,14 +25,14 @@ type appToolCallProcessor struct {
 
 func (tcp *appToolCallProcessor) ShowProgress(tc toolcall.ToolCallClient) {
 	if tc.Progress != nil {
-		fmt.Printf("Progress: %v\n", tc.Progress)
+		FgYellow.Printf("Progress: %v\n", tc.Progress)
 	}
 }
 
 func (tcp *appToolCallProcessor) ShowPartialResults(tc toolcall.ToolCallClient) {
 	if tc.Result != nil {
 		if !tcp.stream {
-			fmt.Printf("PartialResult: %v\n", tc.Result)
+			FgHiBlue.Printf("PartialResult: %v\n", tc.Result)
 			return
 		}
 		type streamToolCallResult struct {
@@ -49,13 +49,13 @@ func (tcp *appToolCallProcessor) ShowPartialResults(tc toolcall.ToolCallClient) 
 func (tcp *appToolCallProcessor) StreamText(text string, charsPerSecond int) {
 	delay := time.Second / time.Duration(charsPerSecond)
 	for _, char := range text {
-		fmt.Print(string(char))
+		FgHiCyan.Print(string(char))
 		time.Sleep(delay)
 	}
 }
 
 func (tcp *appToolCallProcessor) Sample(tc toolcall.ToolCallClient) any {
-	fmt.Printf("SamplingRequest: %v\n", tc.SamplingRequest)
+	FgHiGreen.Printf("SamplingRequest: %v\n", tc.SamplingRequest)
 	return nil
 }
 
@@ -64,9 +64,11 @@ var actions = map[string]string{"a": "accept", "d": "decline", "c": "cancel"}
 // Elicit handles this part of the MCP spec: https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation
 func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
 	// fmt.Printf("ElicitationRequest: %v\n", tc.ElicitationRequest)
-	fmt.Printf("Elicitation request: %s\n", tc.ElicitationRequest.Message)
-	fmt.Print("Do you [A]ccept, [D]ecline, or [C]ancel? ")
+	prompt, answer := FgYellow, FgHiWhite
+	prompt.Printf("Elicitation request: %s\n", tc.ElicitationRequest.Message)
+	prompt.Print("Do you [A]ccept, [D]ecline, or [C]ancel? ")
 	var action string // Action: accept, decline, cancel
+	answer.Print()
 	fmt.Scan(&action)
 	action = strings.ToLower(strings.TrimSpace(action))[0:1]
 	result := mcp.ElicitResult{Action: actions[action], Content: &map[string]any{}}
@@ -78,16 +80,18 @@ func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
 		required := slices.Contains(tc.ElicitationRequest.RequestedSchema.Required, propName)
 		switch s := schema.(type) {
 		case mcp.BooleanSchema:
-			fmt.Printf("%s-%s (%s%s): ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""))
+			prompt.Printf("%s-%s (%s%s): ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""))
+			answer.Print()
 			var boolean bool
 			fmt.Scan(&boolean)
 			(*result.Content)[propName] = boolean
 
 		case mcp.EnumSchema:
-			fmt.Printf("%s-%s (%s%s): ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""))
+			prompt.Printf("%s-%s (%s%s): ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""))
 			for i, v := range s.EnumNames {
-				fmt.Printf("    %d: %s\n", i+1, v)
+				prompt.Printf("    %d: %s\n", i+1, v)
 			}
+			answer.Print()
 			index := 0
 			fmt.Scan(&index)
 			(*result.Content)[propName] = s.Enum[index-1]
@@ -95,17 +99,19 @@ func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
 		case mcp.NumberSchema:
 			switch s.Type {
 			case "integer":
-				fmt.Printf("%s-%s (%s%s) [%d-%d]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
+				prompt.Printf("%s-%s (%s%s) [%d-%d]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
 					aids.Iif(s.Minimum == nil, math.MinInt, int(*s.Minimum)),
 					aids.Iif(s.Maximum == nil, math.MaxInt, int(*s.Maximum)))
+				answer.Print()
 				var number int
 				fmt.Scan(&number)
 				(*result.Content)[propName] = number
 
 			case "number":
-				fmt.Printf("%s-%s (%s%s) [%f-%f]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
+				prompt.Printf("%s-%s (%s%s) [%f-%f]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
 					aids.Iif(s.Minimum == nil, math.SmallestNonzeroFloat64, *s.Minimum),
 					aids.Iif(s.Maximum == nil, math.MaxFloat64, *s.Maximum))
+				answer.Print()
 				var number float64
 				fmt.Scan(&number)
 				(*result.Content)[propName] = number
@@ -115,7 +121,7 @@ func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
 			}
 
 		case mcp.StringSchema:
-			fmt.Printf("%s-%s (%s%s) [%s, %d-%d characters]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
+			prompt.Printf("%s-%s (%s%s) [%s, %d-%d characters]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
 				*s.Format, aids.Iif(s.MinLength == nil, 0, *s.MinLength),
 				aids.Iif(s.MaxLength == nil, 1000, *s.MaxLength))
 			line := aids.Must(bufio.NewReader(os.Stdin).ReadString('\n'))
@@ -131,12 +137,12 @@ func (tcp *appToolCallProcessor) Terminated(tc toolcall.ToolCallClient) {
 		if tcp.stream {
 			tcp.ShowPartialResults(tc)
 		} else {
-			fmt.Printf("%v\n", tc.Result)
+			FgHiMagenta.Printf("%v\n", tc.Result)
 		}
 	case "failed":
-		fmt.Printf("%v\n", tc.Error)
+		FgWhite.And(BgYellow).Printf("%v\n", tc.Error)
 		// TODO: Process failure using response.error
 	case "canceled":
-		fmt.Printf("Canceled\n")
+		FgYellow.And(BgBlue).Printf("Canceled\n")
 	}
 }

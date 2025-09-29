@@ -48,7 +48,10 @@ func MustMarshal(v any) jsontext.Value { return Must(json.Marshal(v)) }
 
 func MustUnmarshal[T any](data []byte) T {
 	var t T
-	Must0(json.Unmarshal(data, &t))
+	err := json.Unmarshal(data, &t)
+	if err != nil {
+		Must0(fmt.Errorf("json.Unmarshal error: %w\n%T <-- %q", err, t, data))
+	}
 	return t
 }
 

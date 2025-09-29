@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
@@ -29,7 +30,7 @@ type ToolInfo interface {
 	Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool
 
 	// ProcessPhase processes the tool call resources's current phase; there is no client to write success/error to.
-	ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) error
+	ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall)
 }
 
 // defaultToolInfo provides default implementations of ToolCaller methods that all return "NotAllowed" errors.
@@ -48,8 +49,8 @@ func (*defaultToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *s
 func (*defaultToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
 	return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "NotAllowed", "POST /cancel not implemented for tool '%s'", *tc.ToolName)
 }
-func (*defaultToolInfo) ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) error {
-	return fmt.Errorf("ProcessPhase not implemented for tool '%s'", *tc.ToolName)
+func (*defaultToolInfo) ProcessPhase(ctx context.Context, pp toolcall.PhaseProcessor, tc *toolcall.ToolCall) {
+	aids.Assert(false, fmt.Errorf("ProcessPhase not implemented for tool '%s'", *tc.ToolName))
 }
 
 var _ ToolInfo = (*defaultToolInfo)(nil)

@@ -25,6 +25,7 @@ func TestToolCallAdd(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", time.Now().Format(time.RFC3339Nano))
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if aids.IsError(err) {

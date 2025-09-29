@@ -88,32 +88,23 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 		// This is the 1st function called when an HTTP request comes into the service
 		rr, stop := newReqRes(policies, c.Logger, r, w)
 
-		defer func() { // This guarantees we log any errors that occured during request processing and send some response to the client
-			if v := recover(); v != nil { // Panic: log it & make sure client gets http.StatusInternalServerError if they got nothing else
-				sb := &strings.Builder{}
-				aids.WriteStack(sb, aids.ParseStack(2))
-				fmt.Fprint(os.Stderr, sb.String()) // Also write stack to stdout so it shows up in container logs
-				c.Logger.Error("Non-HTTP panic", slog.String("Value", fmt.Sprintf("%v", v)), slog.String("Stack", sb.String()))
+		defer func() { // Guarantees logging errors during request processing & client gets a response
+			stack := &strings.Builder{}
+			if v := recover(); v != nil { // Panic: Capture error & stack trace
+				stack.WriteString(fmt.Sprintf("Error: %v\n", v))
+				aids.WriteStack(stack, aids.ParseStack(2))
+				fmt.Fprint(os.Stderr, stack.String()) // Also write stack to stdout so it shows up in container logs
 			}
-			if rr.StatusCode() == 0 { // No response was ever sent back to the client; send one now
-				c.Logger.Error("Request never responded to client",
-					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))
+			if stack.Len() == 0 && rr.numWriteHeaderCalls() == 1 {
+				return // No panic & exactly 1 response sent to the client; all went as expected
+			}
+			c.Logger.LogAttrs(rr.R.Context(), slog.LevelError, "Request error", slog.String("id", rr.id),
+				slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
+				slog.Int("numWriteHeaderCalls", rr.numWriteHeaderCalls()),
+				slog.String("stack", aids.Iif(stack.Len() == 0, "(no panic)", stack.String())))
+
+			if rr.numWriteHeaderCalls() == 0 { // Send client response if none sent due to panic or missing WriteError/WriteSuccess call
 				rr.WriteError(http.StatusInternalServerError, nil, nil, "InternalServerError", "")
-			}
-			/*if stop { // Some error response was already written to the client
-				if _, ok := err.(*ServerError); ok {
-					// An HTTP error occured which is normal. If it wasn't sent to the client, then it was logged above.
-				} else { // A non-HTTP error occured, log it
-					c.Logger.Error("Non-HTTP error",
-						slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
-						slog.Int("StatusCode", rr.StatusCode()), slog.String("err", err.Error()))
-				}
-			}*/
-			// If we get here, a response was sent to the client; if multiple responses were sent, log it
-			if rr.numWriteHeaderCalls() != 1 {
-				c.Logger.Error("Attempt to send multiple responses to client",
-					slog.Int64("id", rr.ID), slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()),
-					slog.Int("1st StatusCode", rr.StatusCode()), slog.Int("numWriteHeaderCalls", rr.numWriteHeaderCalls()))
 			}
 		}()
 
@@ -175,11 +166,11 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 					pattern += url
 				}
 				avi.serveMux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// This function is called by http.ServeMux.ServeHTTP
+					// FIRST FUNCTION called by http.ServeMux.ServeHTTP
 					s := w.(*smuggler)
 					hackPostActionForServeHTTP(r, false)
 					s.r.R = r // Replace old R with new 'r' which has PathValues set
-					s.stop = s.r.ValidateHeader(policyInfo.ValidHeader)
+					s.stop = s.r.validateRequestHeader(policyInfo.ValidHeader)
 					if !s.stop {
 						s.stop = policyInfo.Policy(s.ctx, s.r) // Smuggle the continue/stop flag  back to our caller
 					}

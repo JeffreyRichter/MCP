@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
@@ -22,16 +21,12 @@ func TestLocalToolCallStore_Get_NotFound(t *testing.T) {
 			ID:       svrcore.Ptr("test-id"),
 		},
 	}
-	err := store.Get(ctx, tc, svrcore.AccessConditions{})
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError, got %T", err)
+	se := store.Get(ctx, tc, svrcore.AccessConditions{})
+	if se.StatusCode != 404 {
+		t.Errorf("Expected status code 404, got %d", se.StatusCode)
 	}
-	if serverError.StatusCode != 404 {
-		t.Errorf("Expected status code 404, got %d", serverError.StatusCode)
-	}
-	if serverError.ErrorCode != "NotFound" {
-		t.Errorf("Expected error code 'NotFound', got %s", serverError.ErrorCode)
+	if se.ErrorCode != "NotFound" {
+		t.Errorf("Expected error code 'NotFound', got %s", se.ErrorCode)
 	}
 }
 
@@ -50,9 +45,9 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 	}
 
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put failed: %v", err)
+	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put failed: %v", se)
 	}
 
 	if putResult.ETag == nil {
@@ -76,9 +71,9 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 	}
 
 	getResult := getToolCall.Copy()
-	err = store.Get(ctx, &getResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Get failed: %v", err)
+	se = store.Get(ctx, &getResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Get failed: %v", se)
 	}
 
 	if *getResult.ToolName != *originalToolCall.ToolName {
@@ -100,7 +95,7 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	ctx := context.Background()
 
-	originalToolCall := &toolcall.ToolCall{
+	tc1 := &toolcall.ToolCall{
 		Identity: toolcall.Identity{
 			Tenant:   svrcore.Ptr("test-tenant"),
 			ToolName: svrcore.Ptr("test-tool"),
@@ -109,13 +104,12 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
-	putResult1 := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult1, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("First put failed: %v", err)
+	se := store.Put(ctx, tc1, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("First put failed: %v", se)
 	}
 
-	updatedToolCall := &toolcall.ToolCall{
+	tc2 := &toolcall.ToolCall{
 		Identity: toolcall.Identity{
 			Tenant:   svrcore.Ptr("test-tenant"),
 			ToolName: svrcore.Ptr("test-tool"),
@@ -123,22 +117,14 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 		},
 		Status: svrcore.Ptr(toolcall.StatusSuccess),
 	}
-
-	accessConditions := svrcore.AccessConditions{IfMatch: putResult1.ETag}
-
-	putResult2 := updatedToolCall.Copy()
-	err = store.Put(ctx, &putResult2, accessConditions)
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError, got %T", err)
+	accessConditions := svrcore.AccessConditions{IfMatch: svrcore.Ptr(svrcore.ETag("NoMatch"))}
+	se = store.Put(ctx, tc2, accessConditions)
+	if se == nil || se.StatusCode != 412 {
+		t.Fatalf("Second put with if-match should give 412, got %d", se.StatusCode)
 	}
 
-	if serverError.StatusCode != 400 {
-		t.Fatalf("Second put with if-match should give 400, got %d", serverError.StatusCode)
-	}
-
-	if *putResult2.Status != toolcall.StatusSuccess {
-		t.Errorf("Expected status to be updated to success, got %s", *putResult2.Status)
+	if *tc2.Status != toolcall.StatusSuccess {
+		t.Errorf("Expected status to be updated to success, got %s", *tc2.Status)
 	}
 }
 
@@ -155,9 +141,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put failed: %v", err)
+	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put failed: %v", se)
 	}
 
 	getToolCall := &toolcall.ToolCall{
@@ -171,9 +157,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	accessConditions := svrcore.AccessConditions{IfMatch: putResult.ETag}
 
 	getResult := getToolCall.Copy()
-	err = store.Get(ctx, getToolCall, accessConditions)
-	if aids.IsError(err) {
-		t.Fatalf("Get with correct ETag failed: %v", err)
+	se = store.Get(ctx, getToolCall, accessConditions)
+	if se != nil {
+		t.Fatalf("Get with correct ETag failed: %v", se)
 	}
 
 	if *getResult.ToolName != *originalToolCall.ToolName {
@@ -183,14 +169,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 	wrongETag := svrcore.ETag("wrong-etag")
 	accessConditions.IfMatch = &wrongETag
 
-	err = store.Get(ctx, getToolCall, accessConditions)
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError, got %T", err)
-	}
-
-	if serverError.StatusCode != 412 {
-		t.Errorf("Expected status code 412, got %d", serverError.StatusCode)
+	se = store.Get(ctx, getToolCall, accessConditions)
+	if se.StatusCode != 412 {
+		t.Errorf("Expected status code 412, got %d", se.StatusCode)
 	}
 }
 
@@ -208,9 +189,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 	}
 
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put failed: %v", err)
+	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put failed: %v", se)
 	}
 
 	getToolCall := &toolcall.ToolCall{
@@ -223,14 +204,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 
 	accessConditions := svrcore.AccessConditions{IfNoneMatch: putResult.ETag}
 
-	err = store.Get(ctx, getToolCall, accessConditions)
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError, got %T", err)
-	}
-
-	if serverError.StatusCode != 304 {
-		t.Errorf("Expected status code 304, got %d", serverError.StatusCode)
+	se = store.Get(ctx, getToolCall, accessConditions)
+	if se.StatusCode != 304 {
+		t.Errorf("Expected status code 304, got %d", se.StatusCode)
 	}
 }
 
@@ -247,24 +223,19 @@ func TestLocalToolCallStore_Delete(t *testing.T) {
 		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
-	err := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put failed: %v", err)
+	se := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put failed: %v", se)
 	}
 
-	err = store.Delete(ctx, originalToolCall, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Delete failed: %v", err)
+	se = store.Delete(ctx, originalToolCall, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Delete failed: %v", se)
 	}
 
-	err = store.Get(ctx, originalToolCall, svrcore.AccessConditions{})
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError after delete, got %T", err)
-	}
-
-	if serverError.StatusCode != 404 {
-		t.Errorf("Expected status code 404 after delete, got %d", serverError.StatusCode)
+	se = store.Get(ctx, originalToolCall, svrcore.AccessConditions{})
+	if se.StatusCode != 404 {
+		t.Errorf("Expected status code 404 after delete, got %d", se.StatusCode)
 	}
 }
 
@@ -281,27 +252,22 @@ func TestLocalToolCallStore_Delete_AccessConditions(t *testing.T) {
 		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put failed: %v", err)
+	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put failed: %v", se)
 	}
 
 	wrongETag := svrcore.ETag("wrong-etag")
 	accessConditions := svrcore.AccessConditions{IfMatch: &wrongETag}
-	err = store.Delete(ctx, originalToolCall, accessConditions)
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError, got %T", err)
-	}
-
-	if serverError.StatusCode != 412 {
-		t.Errorf("Expected status code 412, got %d", serverError.StatusCode)
+	se = store.Delete(ctx, originalToolCall, accessConditions)
+	if se.StatusCode != 412 {
+		t.Errorf("Expected status code 412, got %d", se.StatusCode)
 	}
 
 	accessConditions.IfMatch = putResult.ETag
-	err = store.Delete(ctx, originalToolCall, accessConditions)
-	if aids.IsError(err) {
-		t.Fatalf("Delete with correct ETag failed: %v", err)
+	se = store.Delete(ctx, originalToolCall, accessConditions)
+	if se != nil {
+		t.Fatalf("Delete with correct ETag failed: %v", se)
 	}
 }
 
@@ -317,9 +283,9 @@ func TestLocalToolCallStore_Delete_NonExistent(t *testing.T) {
 		},
 	}
 
-	err := store.Delete(ctx, toolCall, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Delete of non-existent item should not fail, got: %v", err)
+	se := store.Delete(ctx, toolCall, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Delete of non-existent item should not fail, got: %v", se)
 	}
 }
 
@@ -339,26 +305,21 @@ func TestLocalToolCallStore_TenantIsolation(t *testing.T) {
 		Status: svrcore.Ptr(toolcall.StatusRunning),
 	}
 
-	err := store.Put(ctx, toolCall, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put to tenant1 failed: %v", err)
+	se := store.Put(ctx, toolCall, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put to tenant1 failed: %v", se)
 	}
 
 	toolCall.Tenant = &tenant2
-	err = store.Get(ctx, toolCall, svrcore.AccessConditions{})
-	serverError, ok := err.(*svrcore.ServerError)
-	if !ok {
-		t.Fatalf("Expected ServerError, got %T", err)
-	}
-
-	if serverError.StatusCode != 404 {
-		t.Errorf("Expected status code 404 for different tenant, got %d", serverError.StatusCode)
+	se = store.Get(ctx, toolCall, svrcore.AccessConditions{})
+	if se.StatusCode != 404 {
+		t.Errorf("Expected status code 404 for different tenant, got %d", se.StatusCode)
 	}
 
 	toolCall.Tenant = &tenant1
-	err = store.Get(ctx, toolCall, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Get from tenant1 should still work: %v", err)
+	se = store.Get(ctx, toolCall, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Get from tenant1 should still work: %v", se)
 	}
 }
 
@@ -376,9 +337,9 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 		Request: jsontext.Value(`{"param":"original"}`),
 	}
 	putResult := originalToolCall.Copy()
-	err := store.Put(ctx, &putResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Put failed: %v", err)
+	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Put failed: %v", se)
 	}
 
 	*originalToolCall.Status = toolcall.StatusSuccess
@@ -393,9 +354,9 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 	}
 
 	getResult := getToolCall.Copy()
-	err = store.Get(ctx, &getResult, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Get failed: %v", err)
+	se = store.Get(ctx, &getResult, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Get failed: %v", se)
 	}
 
 	if *getResult.Status != toolcall.StatusRunning {
@@ -410,9 +371,9 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 	getResult.Request = jsontext.Value(`{"param":"get-modified"}`)
 
 	getResult2 := getToolCall.Copy()
-	err = store.Get(ctx, &getResult2, svrcore.AccessConditions{})
-	if aids.IsError(err) {
-		t.Fatalf("Second get failed: %v", err)
+	se = store.Get(ctx, &getResult2, svrcore.AccessConditions{})
+	if se != nil {
+		t.Fatalf("Second get failed: %v", se)
 	}
 
 	if *getResult2.Status != toolcall.StatusRunning {

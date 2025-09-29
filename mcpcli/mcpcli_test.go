@@ -31,7 +31,7 @@ func TestToolCallEphemeral(t *testing.T) {
 }
 
 func TestToolCallServerProcessing(t *testing.T) {
-	tc := client.runToolCall("count", "ID-1", tcp, true, map[string]any{"countto": 5})
+	tc := client.runToolCall("count", "ID-2", tcp, true, map[string]any{"countto": 5})
 	_ = tc
 }
 

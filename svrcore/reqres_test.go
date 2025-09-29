@@ -16,7 +16,7 @@ func TestNewReqRes(t *testing.T) {
 	if aids.IsError(err) {
 		t.Fatal(err)
 	}
-	if rr, stop := newReqRes(nil, slog.New(slog.DiscardHandler), r, nil); stop || rr == nil {
+	if rr, stop := newReqRes(nil, slog.New(slog.DiscardHandler), r, httptest.NewRecorder()); stop || rr == nil {
 		t.Fatal(err)
 	}
 }
