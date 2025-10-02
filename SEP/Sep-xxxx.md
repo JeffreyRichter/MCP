@@ -1,0 +1,324 @@
+# [SEP](https://modelcontextprotocol.io/community/sep-guidelines)\-xxxx: HTTP REST Transport for  
+Model Context Protocol (MCP)
+
+**Status:** draft 
+
+**Type:** Standards Track 
+
+**Created:** 2025-10-02 
+
+**Author:**
+
+- Jeffrey Richter, Microsoft Partner Software Architect for Core AI & Azure
+- Fully-functioning code: [JeffreyRichter/MCP](https://github.com/JeffreyRichter/MCP)
+- Demo of code running: [HTTP REST MCP Transport demo](https://www.youtube.com/watch?v=ac2a6FNzPjk)
+
+**Sponsors:** 
+
+- Kurtis Van Gent, Google Staff Software Engineer
+- Shaun Smith, Hugging Face, MCP/Open Source Technical Staff
+
+Supporters:
+
+- Darrel Miller, Microsoft Partner API Architect for Office & M365
+- Mark Russinovich, Microsoft Azure CTO & Technical Fellow
+- Anthony Howe, Principal Engineer for AI for Azure Storage
+- Ilya Grebnov, Distinguished Engineer, Trust & Quality, Business & Industry Copilot
+- Tapan Chugh, PhD Candidate in the Systems Group @ University of Washington
+- Gabe Zimmerman, Principal Software Engineer, Microsoft Teams AI Productivity
+
+# Abstract
+
+It’s obvious that the MCP protocol got its inspiration from the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) which was designed to run as an Integrated Development Environment (IDE) sidecar communicating over one secure connection where failures only occur if a process terminates. This works extremely well when an application wants to talk to a single locally-deployed MCP Server.
+
+Unfortunately, the two attempts to enhance this architecture (HTTP+SSE and Streamable HTTP) to support remote MCP Servers do not provide what is required when moving to an architecture where connection failures are inevitable and therefore retries are necessary to provide customers with a reliable and fault-tolerant experience. In addition, an efficiently scalable cloud architecture mandates that a single application must establish a short-lived connection per request and each connection is to one of many remotely deployed MCP Servers selected by a load-balancer – sticky sessions do not scale.
+
+Current MCP transports make it impossible for cloud-based MCP Hosts (like Microsoft Office with ~350M monthly users) and MCP Servers (like GitHub & Microsoft Azure) to provide reliable customer experiences in a cost-effective way. In addition, MCP Hosts (like Visual Studio/Code and Claude Desktop) must be able to provide reliable customer experiences when communicating with remote MCP Servers.
+
+# Motivation
+
+This SEP proposes an HTTP REST transport which is simpler than the existing transports, fixes fault tolerance and efficient scaling issues while also providing many new features such as long-running tool calls, sending binary data, and streaming of data. In addition, this transport can be used for both local and remote MCP Servers.
+
+A video of working code demonstrating the features this SEP proposes is available here: [HTTP-REST MCP Demo](Https://youtu.be/ac2a6FNzPjk).
+
+The figure below visualizes a canonical cloud architecture consisting of clusters with many nodes all running the same MCP code: one cluster for MCP Hosts and a separate cluster for MCP Servers. The number of nodes in each cluster dynamically scales up/down based on the number of **_concurrent_** network requests into the cluster.
+
+Each cluster has a load-balancer whose job is to make the cluster “look like” a single node to its clients. Each app/browser request enters through a load-balancer which randomly selects an MCP Client node. Similarly, each MCP Client request enters through a different load-balancer which randomly selects an MCP Server node. The figure shows the most complicated scenario, but more common scenarios exist where the app contains the MCP Client and then talks directly to the MCP Server cluster via its load balancer.
+
+To enable efficient cluster scaling, clients must maintain short-lived network connections reducing the number of simultaneous connections into the cluster. Long-lived connections hold on to ports and when a node’s available ports are exhausted, more nodes must be added to the cluster even if the existing nodes have very low CPU utilization – this inefficient scale leads to very high costs.
+
+To enable reliable customer experiences, clients must retry operations that fail due to network disconnects which occur when a process terminates. Here are several reasons why processes terminate:
+
+- A node’s process crashes (ex: unhandled exception).
+- Upgrading the process’ s code on a node to a newer version.
+- Scaling down (removing a node) from the cluster.
+
+In addition, load balancers typically terminate long-lived connections after a few minutes to maintain even load, prevent resource exhaustion, cleanup “forgotten” connections, and facilitate maintenance/scaling. Load balancers monitor each node’s health and direct all incoming requests to healthy nodes. This ensures that customers **_are not_** impacted by ordinary and expected network disconnects (if clients retry failed operations).
+
+# Specification
+
+Here is the API proposed by the HTTP REST transport (**/mcp/** is just a placeholder):
+
+|     |     |
+| --- | --- |
+| MCP Operation | HTTP Route |
+| roots/list | PUT /mcp/roots |
+| completion/complete | POST /mcp/complete |
+| resources/list | GET /mcp/resources |
+| resource/templates/list | GET /mcp/resources-templates |
+| resources/read | GET /mcp/resources/{name} |
+| prompts/list | GET /mcp/prompts |
+| prompts/get | POST /mcp/prompts/{name} |
+| tools/list | GET /mcp/tools |
+| tools/call | PUT /mcp/tools/{toolName}/calls/{toolCallID} |
+| \* new \* | POST /mcp/tools/{toolName}/calls/{toolCallID}/advance |
+| notification/cancelled | POST /mcp/tools/{toolName}/calls/{toolCallID}/cancel |
+| \* new \* | GET /mcp/tools/{toolName}/calls |
+| \* new \* | GET /mcp/tools/{toolName}/calls/{toolCallID} |
+
+The HTTP REST transport provides many benefits over today’s MCP transports:
+
+- Efficient scaling for enterprise cloud-based MCP clients/servers. A client connects, the CPU executes code, & then the connection ends. Instead, polling is used just like many HTTP services use pervasively today (such as all Azure and M365 services).
+- Webhooks can also be used (like [Google’s A2A protocol](https://a2a-protocol.org/dev/specification/#95-push-notification-setup-and-usage)) to improve performance when a server wants to notify a client not behind a firewall and can also be used by a service to send push notifications to a mobile app. But the HTTP patterns shown in this SEP rarely have a need for a client to poll or accept a Webhook.
+- Fault-tolerance to network failures, timeouts, and client/server crashes using retries and idempotency.
+    - Clients/servers can change their features/capabilities dynamically as new client/server code is deployed without any downtime or re-establishing of connections/sessions.
+- HTTP is an industry standard since 1997 with very significant cross-language support easing learning curve and adoption of MCP. Other benefits of Pure HTTP:
+    - MCP SDKs are not required enabling MCP to be adopted by more languages quicker. SDKs can still be provided as a convenience for customers in some mainstream languages.
+    - The removal of JSON-RPC from MCP simplifes what developers need to learn & use.
+    - Existing MCP authorization solutions continue to work as-is since they already follow HTTP industry standards.
+    - Existing HTTP middleware services such as API Gateways, CDNs, SSL/TLS termination, front doors, metrics/logging collection, and distributed tracing can be used. The Streamable HTTP transport doesn’t allow this because the middleware service must crack open and parse the JSON-RPC in the HTTP request/response bodies to record methods like number of times each tool/prompt/resource got invoked, request failures, etc.
+- Improved performance by reducing client/server messages (such as list changed notifications) using HTTP's standard caching & optimistic concurrency patterns (etags).
+- Enables long-running and streaming-response tool calls allowing a tool call to act as an AI agent. Neither feature is supported by MCP today.
+- This SEP also enables one device (say a PC) to initiate a tool call and another device (say a mobile phone) to track the state of the tool call and continue a conversation with an LLM once the tool call completes on any device.
+- The HTTP REST transport can be used securely for both local and remote MCP Servers (I have this working too). The need to use a stdio transport for local and Streamable HTTP for remote becomes unnecessary. Migrating from a local MCP Server to a remote MCP Server (or vice versa) is trivial now. I also believe that the standard HTTP authentication can be made to work in this local mode which the current stdio transport doesn’t support at all.
+- Binary resources may be transmitted as binary bytes. Current MCP transports use base-64 string encoding for binary data, which results in lower efficiency. In fact, streaming a video feed can be done efficiently by streaming the bytes by doing an HTTP GET on the video stream resource. Today, MCP tools and resources have no way to return streaming data since JSON-RPC messages are always discreet.
+
+## Prompts, Resources, Resource Templates, Tools
+
+A client lists an MCP Server’s prompts, resources, resource templates, & tools by issuing a standard HTTP GET (see table above). The format of the HTTP response body is identical to what the MCP spec uses today. However, paging is not supported to avoid a torn list where one page is returned from one node, and another page is returned from a different node since each node may be running different versions of the MCP Server code (while an upgrade is in progress) and different versions might have slightly different lists.
+
+Server’s **_never_** send list changed notifications to clients when the list changes. Instead, clients issue more GET requests periodically to get the latest list. A client may use the standard HTTP [if-none-match](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/If-None-Match) header to avoid downloading the list again if it hasn’t changed on the server.
+
+This pattern enables new versions of an MCP Server to roll out with new tools whenever it chooses. Remember that all nodes within a cluster do not upgrade to a new version atomically and so some nodes will have an old version while some have the new version. A client may get a list from a node with a new version and then attempt to get/read/call an item (via HTTP GET, POST, or PUT; see table above) from a node with an old version. A client should expect a standard HTTP [404-Not Found](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404) and gracefully recover from this by either reporting an error or retrying the operation.
+
+Note that resources returned in a GET response (regardless of scheme or Content-Type) **_do not_** have to be base-64 encoded strings as they do with today’s MCP protocol.
+
+## Tool Call Processing
+
+Tool call processing is the most complex pattern in this proposal because the design is scalable and fault tolerant. In addition, it offers features such as durability, long-running tools, and streaming results enabling a tool call to act as an AI agent.
+
+### Initiating a Tool Call
+
+A client initiates a tool call via
+
+PUT /mcp/tools/{toolName}/calls/{toolCallID}
+
+where {toolName} is the name of a tool and {toolCallID} is a client-specified ID. The ID must be unique, but clients can use human-friendly names or [UUIDs](https://en.wikipedia.org/wiki/Universally_unique_identifier). The reason for allowing client-specified IDs is for fault-tolerance; if the client gets no response or times-out, it can retry the request using the same ID and the service will treat the request idempotently.
+
+The PUT response looks like this:
+
+{
+
+"toolname": "someToolName", // As passed in the URL
+
+"id": "someTollCallID", // As passed in the URL
+
+"etag": "\\"33a649d4\\"", // For caching & concurrency via if-match header
+
+"status": "submitted", // Or: running, awaitingSamplingResult,  
+// awaitingElicitationResult, success/failed/canceled
+
+"request": { … }, // PUT request body that started this tool call
+
+"samplingRequest": { … }, // Present if status=awaitingSamplingResult;  
+// see the params field in this [payload](https://modelcontextprotocol.io/specification/2025-06-18/client/sampling#creating-messages)
+
+"elicitationRequest": { … }, // Present if status=awaitingElicicationResult;  
+// see the params field in this [payload](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation#structured-data-request)
+
+"serverState": "&lt;state&gt;", // Opaque ToolCall-specific state for round-tripping;  
+// allows some servers to avoid a durable state store
+
+"progress": { … }, // Present if server wants to report on-going progress
+
+"result": { … }, // Present if server wants to report on-going results  
+// Immutable after status=success/failed/canceled
+
+"error": { … } // Present if status=failed
+
+}
+
+If the tool call is implemented as a fast-executing request/response, the PUT response status will be either success/failed and the client processes either result or error. The tool call is complete and no other tool-call-related HTTP operations are relevant. This is equivalent to what MCP supports today for tool calls.
+
+However, the tool call can be implemented as long running where the request comes in, more stuff happens (which can take a very long time) and ultimately a response becomes available. In this case, the PUT request first creates a durable tool call resource in the backend store (see figure). Then, if the tool call code wants the client to perform sampling or elicitation, the PUT response’s status field will be either awaitingSamplingResult or awaitingElicitationResult and the client processes either the samplingRequest or elicitationRequest bodies. The format of these properties match what’s described in the MCP spec today [here](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L988) (for sampling) and [here](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L1392) (for elicitation).
+
+### Advancing a Tool Call
+
+A client sends a sampling or elicitation result to advance the tool call via
+
+POST /mcp/tools/{toolName}/calls/{toolCallID}/advance
+
+The POST request body is either a sampling response (from [here](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L1023)) or an elicitation response (from [here](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L1458)).
+
+|     |     |
+| --- | --- |
+| Sampling Result | Elicitation Result |
+| {<br><br>"role": "assistant",<br><br>"content": {<br><br>"type": "text",<br><br>"text": "The capital of France is Paris."<br><br>},<br><br>"model": "claude-3-sonnet-20240307",<br><br>"stopReason": "endTurn"<br><br>} | {<br><br>"action": "accept",<br><br>"content": {<br><br>"name": "Monalisa Octocat",<br><br>"email": "octocat@github.com",<br><br>"age": 30<br><br>}  <br>} |
+
+This POST request can be sent to any node in the cluster which looks up the durable tool call resource, updates its state based on the POST body and persists the new state of the tool call resource. The POST response body is identical to the PUT response body shown earlier. By updating the status field, the tool call can request additional sampling/elicitation, update progress, or indicate that the tool call is complete via success/failed/canceled.
+
+When invoking this POST operation, the client should include an if-match:etag header to ensure that the tool call resource was not changed behind the client’s back (optimistic concurrency) or by itself if it is attempting a retry for fault tolerance.
+
+### Canceling a Tool Call
+
+A client may cancel a tool call via
+
+POST /mcp/tools/{toolName}/calls/{toolCallID}/cancel
+
+This POST request needs no body and can be sent to any node in the cluster. That node looks up the durable tool call resource, updates its state to canceled (if the tool call is not already in a terminal state) and persists the new state of the tool call resource. As usual, the POST response is identical to the PUT response body so the client can see the latest state of the tool call.
+
+### Getting a Tool Calls Current State
+
+A client gets a tool call’s latest state via
+
+GET /mcp/tools/{toolName}/calls/{toolCallID}
+
+This GET request is used for fault-tolerance (ex: the client crashed, or network disconnected) or allows the user to transition from one machine to another (ex: desktop PC to phone). At any time, a client can issue this GET operation to get the latest state of a tool call and then, based on the tool call’s status, continue processing the tool call as described above.
+
+In addition, a tool call may be long-running and not require sampling or elicitation. For example, imagine a tool instructed to sell 100 shares of MSFT when the stock price reaches $700. In this scenario, the original PUT operation creates the tool call resource and returns a status of submitted or running. The tool is now running is the background without any client interaction. The client periodically checks on the status of the tool call by issuing this GET request.
+
+When invoking this GET operation, the client may include an if-none-match:etag header to avoid downloading the tool call resource again if it has not changed since the last time the client obtained this tool call resource from a PUT/POST/GET response.
+
+Webhooks could also be offered to notify a client (not behind a firewall) whenever a tool call’s state changes.
+
+### Typical MCP Client Tool Call Processing
+
+The pseudo-code below shows how an MCP client processes tool calls. This one pattern works for all aspects of tool calling including short- or long-running, cancelation (immediate or delayed), progress reporting, partial/full results, failures, sampling and elicitation. Pieces of the pattern may be omitted if a client doesn’t want to support all these features. This pattern also ensures efficient scaling and fault tolerance.
+
+toolCallIDURL = /mcp/tools/{toolName}/calls/{toolCallID}  
+
+response = PUT toolCallIDURL pass (request)
+
+while response.status != success | failed | canceled {
+
+// Optional: Show user progress using response.progress
+
+// Optional: Show user partial results using response.result  
+
+switch response.status {
+
+case awaitingSamplingResult:
+
+// TODO: Perform sampling using response.samplingRequest
+
+response = POST toolCallIDURL/advance pass (if-match:etag, samplingResult)
+
+if response == 412 { GET toolCallIDURL }  
+
+case awaitingElicitationResult:
+
+// TODO: Elicit user using response.elicitationRequest
+
+response = POST toolCallIDURL/advance pass (if-match:etag, elicitationResult)
+
+if response == 412 { GET toolCallIDURL }  
+
+case submitted, running:
+
+// Optional: Pause execution
+
+response = GET toolCallIDURL
+
+}
+
+}
+
+switch response.status { // The tool call terminated
+
+case success:
+
+// TODO: Process success using response.result  
+
+case failed:
+
+// TODO: Process failure using response.error  
+
+case canceled:
+
+// TODO: Process cancelation (if cancelation supported by tool)
+
+}
+
+Fault tolerance notes:
+
+- PUT requests are retriable due to required [idempotency-key](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-06) request header:
+    - If an existing tool call resource doesn’t exist, create it.
+    - If an existing tool call exists:
+        - If the request’s idempotency-key matches it, return 200-OK.
+        - Else, return 409-Conflict
+- All PUT, POST, & GET responses include the tool call’s latest etag/state.
+- POST requests (except for cancelation) should include an [if-match:etag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/If-Match) request header. Retries return [412-PreconditionFailed](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/412) if the tool call was already updated. A new GET retrieves the current tool call state/etag so that processing continues.
+- Some MCP Servers may avoid the durable store by passing a serverState field (as shown in the JSON resource above) in all PUT/POST responses and passing it back in POST requests. The schema of serverState’s value is up to the MCP Server; the value should be treated as opaque to MCP Hosts/Clients. The value may be encrypted and/or base-64 encoded. MCP Servers should ensure that the content was not tampered with by an McP Host/Client.
+
+### Listing Durable Tool Calls
+
+A client may list all durable tool calls via
+
+GET /mcp/tools/{toolName}/calls
+
+At any time, a client can issue this GET operation to retrieve a list of all durable tool calls. The response is an array of tool calls where each tool call looks like the JSON shown above. However, we probably want to return a subset of the fields, perhaps just:
+
+{
+
+"toolname": "someToolName",
+
+"id": "someTollCallID",
+
+"status": "submitted", // Or: running, awaitingSamplingResult,  
+// awaitingElicitationResult, success/failed/canceled
+
+}
+
+With this toolname and id, the client could always use the GET /mcp/tools/{toolName}/calls/{toolCallID} operation to get the latest status of a specific tool call.
+
+There should probably be some query parameter(s) to enable filtering the list such as:
+
+?status=failed&createdAfter=2025-09-20
+
+A filter query parameter could also be used to include other JSON fields, and this operation should support paging of the list results.
+
+### Using the HTTP REST Transport for Local MCP Servers
+
+Everything described in this SEP can be used for local MCP Servers as well as Remote MCP Servers (and I have this already working). For this scenario, the MCP Host spawns the MCP Server executable and redirects stdout. The MCP Server listens on http://localhost on an OS-selected port. The server then generates a random shared key (I used 16 bytes) and then writes a JSON payload to stdout:
+
+{
+
+"port": 12345, // OS-selected port
+
+"key": "39fb7a70d31c55ff091fdbdbf8ffc2a3" // Per-instance random key
+
+}
+
+The MCP Host reads this JSON and uses the port to talk to the MCP Server and in every HTTP request a MCP-SharedKey header must be added with the “key” field’s value. The MCP Server checks every incoming HTTP request for this MCP-SharedKey header to make sure it has the value the MCP Server process originally generated.
+
+What I have just described is a simplified version of the industry standard Mutual TLS (mTLS). But this pattern is guaranteed to work in all programming languages, doesn’t require any certificate authorities, self-seigned certificates, etc. It works well in this scenario because the MCP Server is running as a sidecar and using http://localhost instead of being available on the public Internet.
+
+# Rationale
+
+Obviously, we wanted to try to tweak the current MCP JSON-RPC mechanisms to make them fault tolerant and scale efficiently. But this would have really been a large effort: How do you enhance JSON-RPC messages to retry? Each JSON-RPC message should have a unique ID. To retry, do you send the same ID multiple times? How can you know if there is a race condition? Many more issues exist.
+
+In the end, HTTP/REST already addresses all these issues, has been an industry standard since 1997, and has a vast amount of language and community support. Creating a messaging protocol using JSON-RPC so that the JSON-RPC could be tunneled through HTTP is not industry standard (proprietary) and just adds a phenomenal amount of complexity and overhead. In the end, it just doesn’t make sense to do it this way.
+
+# Backward Compatibility
+
+This HTTP REST Transport is a new transport that both MCP Clients & Servers could adopt over time. Because this is an additional transport layer, there are no backward compatibility concerns; the existing stdio and Streamable HTTP transports remain unchanged and fully functional.
+
+I suspect that over time, the older transports would no longer be used as the HTTP REST Transport is much simpler and provides so many more benefits.
+
+# Reference Implementation
+
+A full-featured reference implementation exists in Go. It is currently in a private repository and will be made publicly available once the SEP is finalized. A 3-minute video demonstrating the features is shown here: [HTTP-REST MCP Demo](Https://youtu.be/ac2a6FNzPjk).
+
+# Security Implications
+
+This SEP has no additional security implications.
