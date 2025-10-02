@@ -44,12 +44,17 @@ func Must[T any](val T, err error) T {
 	return val
 }
 
-func MustMarshal(v any) jsontext.Value { return Must(json.Marshal(v)) }
+func MustMarshal(v any) jsontext.Value {
+	data, err := json.Marshal(v)
+	Assert(!IsError(err), fmt.Sprintf("error: %v marshalling: %v", err, v))
+	return data
+}
 
-func MustUnmarshal[T any](data []byte) T {
+func MustUnmarshal[T any](data jsontext.Value) T {
 	var t T
 	err := json.Unmarshal(data, &t)
 	if err != nil {
+		data.Indent()
 		Must0(fmt.Errorf("json.Unmarshal error: %w\n%T <-- %q", err, t, data))
 	}
 	return t

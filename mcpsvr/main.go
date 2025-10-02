@@ -162,3 +162,29 @@ func newApiVersionSimulatorPolicy() svrcore.Policy {
 		return r.Next(ctx)
 	}
 }
+
+/* Set up the flight recorder: https://go.dev/blog/flight-recorder
+fr := trace.NewFlightRecorder(trace.FlightRecorderConfig{
+	MinAge:   200 * time.Millisecond,
+	MaxBytes: 1 << 20, // 1 MiB
+})
+fr.Start()*/
+
+// captureSnapshot captures a flight recorder snapshot.
+/*func captureSnapshot(fr *trace.FlightRecorder) {
+	f, err := os.Create("snapshot_" + time.Now().Format("20060102_150405") + ".trace")
+	if err != nil {
+		log.Printf("opening snapshot file %s failed: %s", f.Name(), err)
+		return
+	}
+	defer f.Close() // ignore error
+
+	_, err = fr.WriteTo(f)
+	if err != nil {
+		log.Printf("writing snapshot to file %s failed: %s", f.Name(), err)
+		return
+	}
+
+	fr.Stop() // Stop the flight recorder after the snapshot has been taken.
+	log.Printf("captured a flight recorder snapshot to %s", f.Name())
+}*/

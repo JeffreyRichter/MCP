@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json/jsontext"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 )
+
+var showJson = false
 
 func NewMCPClient(urlPrefix string, key string) *mcpClient {
 	return &mcpClient{
@@ -106,8 +109,14 @@ func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcess
 func unmarshalBody[T any](body io.ReadCloser) T {
 	defer body.Close()
 	jsonBody := aids.Must(io.ReadAll(body))
-	//fmt.Println(string(jsonBody))
+	printJson(jsonBody)
 	return aids.MustUnmarshal[T](jsonBody)
+}
+
+func printJson(body jsontext.Value) {
+	if showJson {
+		fmt.Println((&body).Indent())
+	}
 }
 
 type ToolCallProcessor interface {
