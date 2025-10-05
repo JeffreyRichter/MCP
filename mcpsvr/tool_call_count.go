@@ -21,19 +21,19 @@ func (c *countToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "count",
-			Title: svrcore.Ptr("Count up from an integer"),
+			Title: aids.New("Count up from an integer"),
 		},
-		Description: svrcore.Ptr("Count from a starting value, adding 1 to it for the specified number of increments"),
+		Description: aids.New("Count from a starting value, adding 1 to it for the specified number of increments"),
 		InputSchema: mcp.JSONSchema{
 			Type: "object",
 			Properties: &map[string]any{
 				"start": map[string]any{
 					"type":        "integer",
-					"Description": svrcore.Ptr("The starting value"),
+					"Description": aids.New("The starting value"),
 				},
 				"increments": map[string]any{
 					"type":        "integer",
-					"Description": svrcore.Ptr("The number of increments to perform"),
+					"Description": aids.New("The number of increments to perform"),
 				},
 			},
 			Required: []string{},
@@ -43,24 +43,24 @@ func (c *countToolInfo) Tool() *mcp.Tool {
 			Properties: &map[string]any{
 				"n": map[string]any{
 					"type":        "integer",
-					"Description": svrcore.Ptr("The final count"),
+					"Description": aids.New("The final count"),
 				},
 				"text": map[string]any{
 					"type": "array",
 					"items": map[string]any{
 						"type": "string",
 					},
-					"Description": svrcore.Ptr("The text output array"),
+					"Description": aids.New("The text output array"),
 				},
 			},
 			Required: []string{"n", "text"},
 		},
 		Annotations: &mcp.ToolAnnotations{
-			Title:           svrcore.Ptr("Count a specified number of increments"),
-			ReadOnlyHint:    svrcore.Ptr(false),
-			DestructiveHint: svrcore.Ptr(false),
-			IdempotentHint:  svrcore.Ptr(true),
-			OpenWorldHint:   svrcore.Ptr(true),
+			Title:           aids.New("Count a specified number of increments"),
+			ReadOnlyHint:    aids.New(false),
+			DestructiveHint: aids.New(false),
+			IdempotentHint:  aids.New(true),
+			OpenWorldHint:   aids.New(true),
 		},
 	}
 }
@@ -83,12 +83,12 @@ func (c *countToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 		return stop
 	}
 	tc.Request = aids.MustMarshal(request)
-	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
+	tc.Status = aids.New(toolcall.StatusRunning)
 	result := countToolCallResult{
 		Count:   0,
 		Updates: []string{fmt.Sprintf("Started: %s", time.Now().Format(time.DateTime))},
 	}
-	tc.Phase = svrcore.Ptr(fmt.Sprintf("Phase-%c", 'A'+result.Count))
+	tc.Phase = aids.New(fmt.Sprintf("Phase-%c", 'A'+result.Count))
 	tc.Result = aids.MustMarshal(result)
 	se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr})
 	if se != nil {
@@ -111,7 +111,7 @@ func (c *countToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *sv
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 	}
 
-	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = svrcore.Ptr(toolcall.StatusCanceled), nil, nil, nil, nil
+	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(toolcall.StatusCanceled), nil, nil, nil, nil
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
@@ -128,9 +128,9 @@ func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcesso
 	result.Count++
 	result.Updates = append(result.Updates, fmt.Sprintf("Incremented: %s", time.Now().Format(time.DateTime)))
 	tc.Result = aids.MustMarshal(result)
-	tc.Phase = svrcore.Ptr(fmt.Sprintf("Phase-%c", 'A'+result.Count))
+	tc.Phase = aids.New(fmt.Sprintf("Phase-%c", 'A'+result.Count))
 	if result.Count >= request.CountTo {
-		tc.Status, tc.Phase = svrcore.Ptr(toolcall.StatusSuccess), nil
+		tc.Status, tc.Phase = aids.New(toolcall.StatusSuccess), nil
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))

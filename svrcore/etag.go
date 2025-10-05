@@ -2,6 +2,8 @@ package svrcore
 
 import (
 	"strings"
+
+	"github.com/JeffreyRichter/internal/aids"
 )
 
 // ETag is a property used for optimistic concurrency during updates
@@ -12,7 +14,7 @@ type ETag string
 // ETagAny is an ETag that represents everything, the value is "*"
 const ETagAny ETag = "*"
 
-var ETagAnyPtr *ETag = Ptr(ETagAny)
+var ETagAnyPtr *ETag = aids.New(ETagAny)
 
 // Equals does a strong comparison of two ETags. Equals returns true when both
 // ETags are not weak and the values of the underlying strings are equal.

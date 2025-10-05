@@ -56,16 +56,16 @@ func TestRequestHeaderVerifyStructFields(t *testing.T) {
 		{
 			name: "all fields set",
 			rh: &RequestHeader{
-				Date:              Ptr(time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)),
-				Authorization:     Ptr("Bearer token123"),
-				UserAgent:         Ptr("test-agent/1.0"),
-				ContentLength:     Ptr(int64(100)),
-				ContentType:       Ptr("application/json"),
-				ContentEncoding:   Ptr("gzip"),
-				IfMatch:           Ptr(ETag(`W/"123"`)),
-				IfNoneMatch:       Ptr(ETag(`W/"456"`)),
-				IfModifiedSince:   Ptr(time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)),
-				IfUnmodifiedSince: Ptr(time.Date(2024, 1, 1, 11, 0, 0, 0, time.UTC)),
+				Date:              aids.New(time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)),
+				Authorization:     aids.New("Bearer token123"),
+				UserAgent:         aids.New("test-agent/1.0"),
+				ContentLength:     aids.New(int64(100)),
+				ContentType:       aids.New("application/json"),
+				ContentEncoding:   aids.New("gzip"),
+				IfMatch:           aids.New(ETag(`W/"123"`)),
+				IfNoneMatch:       aids.New(ETag(`W/"456"`)),
+				IfModifiedSince:   aids.New(time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)),
+				IfUnmodifiedSince: aids.New(time.Date(2024, 1, 1, 11, 0, 0, 0, time.UTC)),
 				Accept:            []string{"application/json"},
 				AcceptCharset:     []string{"utf-8"},
 				AcceptEncoding:    []string{"gzip", "deflate"},
@@ -103,7 +103,7 @@ func TestValidatePreconditions(t *testing.T) {
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsModified,
 				ETag:                nil,
-				LastModified:        Ptr(baseTime),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusBadRequest,
 		},
@@ -116,7 +116,7 @@ func TestValidatePreconditions(t *testing.T) {
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsModified,
 				ETag:                nil,
-				LastModified:        Ptr(baseTime),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusBadRequest,
 		},
@@ -128,7 +128,7 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch,
-				ETag:                Ptr(ETag("123")),
+				ETag:                aids.New(ETag("123")),
 				LastModified:        nil,
 			},
 			expectedCode: http.StatusBadRequest,
@@ -141,7 +141,7 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch,
-				ETag:                Ptr(ETag("123")),
+				ETag:                aids.New(ETag("123")),
 				LastModified:        nil,
 			},
 			expectedCode: http.StatusBadRequest,
@@ -156,8 +156,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -168,8 +168,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("456")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("456")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -184,8 +184,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified, // If-None-Match takes precedence when both match
 		},
@@ -198,8 +198,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -211,8 +211,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 
@@ -226,8 +226,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -239,8 +239,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -253,8 +253,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 
@@ -267,8 +267,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -279,8 +279,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -295,8 +295,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -309,8 +309,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -323,8 +323,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 
@@ -338,8 +338,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -351,8 +351,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -366,8 +366,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -379,8 +379,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -392,8 +392,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -404,8 +404,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -417,8 +417,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusPreconditionFailed,
 		},
@@ -432,8 +432,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 		{
@@ -444,8 +444,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -457,8 +457,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 
@@ -469,8 +469,8 @@ func TestValidatePreconditions(t *testing.T) {
 			headers: map[string]string{},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 		},
 
@@ -483,8 +483,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},
@@ -496,8 +496,8 @@ func TestValidatePreconditions(t *testing.T) {
 			},
 			resourceValues: ResourceValues{
 				AllowedConditionals: AllowedConditionalsMatch | AllowedConditionalsModified,
-				ETag:                Ptr(ETag("123")),
-				LastModified:        Ptr(baseTime),
+				ETag:                aids.New(ETag("123")),
+				LastModified:        aids.New(baseTime),
 			},
 			expectedCode: http.StatusNotModified,
 		},

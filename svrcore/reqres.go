@@ -119,7 +119,7 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 	if bodyStruct != nil {
 		body = aids.MustMarshal(bodyStruct)
 		// If bodyStruct passed, automatically set these response headers
-		rh.ContentLength, rh.ContentType = Ptr(len(body)), Ptr("application/json")
+		rh.ContentLength, rh.ContentType = aids.New(len(body)), aids.New("application/json")
 	}
 	fields2Header := func(rwh http.Header, ptrToStruct any) {
 		if ptrToStruct == nil {

@@ -43,7 +43,7 @@ func (p *mcpPolicies) buildToolInfos() {
 }
 
 // etag returns the ETag for this version's HTTP operations
-func (p *mcpPolicies) etag() *svrcore.ETag { return svrcore.Ptr(svrcore.ETag("v20250808")) }
+func (p *mcpPolicies) etag() *svrcore.ETag { return aids.New(svrcore.ETag("v20250808")) }
 
 // lookupToolCall retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.

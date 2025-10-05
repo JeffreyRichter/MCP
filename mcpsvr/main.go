@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net"
@@ -36,13 +37,20 @@ func main() {
 	c.Load()
 
 	var routes *mcpPolicies
-	port, sharedKey := "8080", ""
+	port, sharedKey := "0", "" // Default to OS-port & no sharedKey
 	switch {
 	case c.Local:
+		pid := flag.Int("pid", 0, "Parent process ID. This server shuts down when the parent process exits.")
+		flag.Parse()
+		if *pid != 0 { // Started by a parent process; shut down when the parent goes away
+			b := [16]byte{}
+			_, _ = rand.Read(b[:])           // guaranteed to return len(b), nil
+			sharedKey = fmt.Sprintf("%x", b) // Random port & sharedKey
+			go processWatchdog(*pid, time.Second*5)
+		} else {
+			port, sharedKey = "8080", "ForDebuggingOnly"
+		}
 		routes = newLocalMcpPolicies(shutdownMgr.Context, errorLogger)
-		b := [16]byte{}
-		_, _ = rand.Read(b[:]) // guaranteed to return len(b), nil
-		//port, sharedKey = "0", fmt.Sprintf("%x", b)
 
 	case c.AzuriteAccount != "":
 		blobCred := aids.Must(azblob.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
@@ -60,11 +68,11 @@ func main() {
 
 	policies := []svrcore.Policy{
 		shutdownMgr.NewPolicy(),
-		newApiVersionSimulatorPolicy(),
-		policies.NewThrottlingPolicy(100),
-		//policies.NewAuthorizationPolicy(sharedKey),
 		policies.NewMetricsPolicy(metricsLogger),
-		policies.NewDistributedTracing(),
+		newApiVersionSimulatorPolicy(),
+		policies.NewSharedKeyPolicy(sharedKey),
+		//policies.NewThrottlingPolicy(100),
+		//policies.NewDistributedTracing(),
 	}
 
 	// Supported scenarios:
@@ -160,6 +168,19 @@ func newApiVersionSimulatorPolicy() svrcore.Policy {
 			r.R.Header.Set("api-version", "2025-08-08")
 		}
 		return r.Next(ctx)
+	}
+}
+
+// processWatchdog periodically checks to see if the pid process is still alive; if not, it kills this process
+// processWatchdog should be started as its own goroutine; it never returns
+func processWatchdog(pid int, delayBetween time.Duration) {
+	for {
+		time.Sleep(delayBetween) // Check to see if parent is still alive periodically
+		if p, err := os.FindProcess(pid); aids.IsError(err) {
+			os.Exit(1) // Can't find parent process; exit
+		} else {
+			p.Release()
+		}
 	}
 }
 

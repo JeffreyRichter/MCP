@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,17 +19,17 @@ import (
 
 var showJson = false
 
-func NewMCPClient(urlPrefix string, key string) *mcpClient {
+func NewMCPClient(urlPrefix string, sharedKey string) *mcpClient {
 	return &mcpClient{
 		Client:    &http.Client{}, //Timeout: 10 * time.Second},
-		key:       key,
+		sharedKey: sharedKey,
 		urlPrefix: urlPrefix,
 	}
 }
 
 type mcpClient struct {
 	*http.Client
-	key       string
+	sharedKey string
 	urlPrefix string
 }
 
@@ -41,7 +43,7 @@ func (c *mcpClient) Do(method string, pathSuffix string, header http.Header, bod
 	}
 	r := aids.Must(http.NewRequest(method, c.appendPath(pathSuffix), bodyReader))
 	r.Header = header
-	r.Header.Add("SharedKey", c.key)
+	r.Header.Add("SharedKey", c.sharedKey)
 	return c.Client.Do(r)
 }
 
@@ -128,7 +130,7 @@ type ToolCallProcessor interface {
 }
 
 func SpawnMCPServer(path string) (McpServerPortAndKey, func() error) {
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, "-pid="+strconv.Itoa(os.Getpid()))
 	stdout, err := cmd.StdoutPipe()
 	if aids.IsError(err) {
 		panic(err)

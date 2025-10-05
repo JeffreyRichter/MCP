@@ -75,9 +75,9 @@ func (tc *ToolCall) ToClient() any {
 // New creates a new ToolCall with the specified tenant, tool name, and tool call ID.
 func New(tenant, toolName, toolCallID string) *ToolCall {
 	return &ToolCall{
-		Identity:   Identity{Tenant: svrcore.Ptr(tenant), ToolName: svrcore.Ptr(toolName), ID: svrcore.Ptr(toolCallID)},
-		Expiration: svrcore.Ptr(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
-		Status:     svrcore.Ptr(StatusSubmitted),
+		Identity:   Identity{Tenant: aids.New(tenant), ToolName: aids.New(toolName), ID: aids.New(toolCallID)},
+		Expiration: aids.New(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
+		Status:     aids.New(StatusSubmitted),
 	}
 }
 

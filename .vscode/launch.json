@@ -21,7 +21,10 @@
             "buildFlags": [
                 "-tags=local,goexperiment.jsonv2"
             ],
-            "envFile": "${workspaceFolder}/mcpsvr/.env"
+            "envFile": "${workspaceFolder}/mcpsvr/.env",
+            "args": [
+                "-pid=37500"
+            ]
         },
         {
             "name": "Server Integration Tests",

@@ -19,19 +19,19 @@ func (c *addToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "add",
-			Title: svrcore.Ptr("Add two numbers"),
+			Title: aids.New("Add two numbers"),
 		},
-		Description: svrcore.Ptr("Add two numbers"),
+		Description: aids.New("Add two numbers"),
 		InputSchema: mcp.JSONSchema{
 			Type: "object",
 			Properties: &map[string]any{
 				"x": map[string]any{
 					"type":        "integer",
-					"Description": svrcore.Ptr("The first number"),
+					"Description": aids.New("The first number"),
 				},
 				"y": map[string]any{
 					"type":        "integer",
-					"Description": svrcore.Ptr("The second number"),
+					"Description": aids.New("The second number"),
 				},
 			},
 			Required: []string{"x", "y"},
@@ -41,17 +41,17 @@ func (c *addToolInfo) Tool() *mcp.Tool {
 			Properties: &map[string]any{
 				"result": map[string]any{
 					"type":        "integer",
-					"Description": svrcore.Ptr("The result of the addition"),
+					"Description": aids.New("The result of the addition"),
 				},
 			},
 			Required: []string{"result"},
 		},
 		Annotations: &mcp.ToolAnnotations{
-			Title:           svrcore.Ptr("Add two numbers"),
-			ReadOnlyHint:    svrcore.Ptr(false),
-			DestructiveHint: svrcore.Ptr(false),
-			IdempotentHint:  svrcore.Ptr(true),
-			OpenWorldHint:   svrcore.Ptr(true),
+			Title:           aids.New("Add two numbers"),
+			ReadOnlyHint:    aids.New(false),
+			DestructiveHint: aids.New(false),
+			IdempotentHint:  aids.New(true),
+			OpenWorldHint:   aids.New(true),
 		},
 		Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
 	}
@@ -78,7 +78,7 @@ func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 		return stop
 	}
 	tc.Request = aids.MustMarshal(trequest)
-	tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
+	tc.Status = aids.New(toolcall.StatusSuccess)
 	tc.Result = aids.MustMarshal(&addToolCallResult{Sum: trequest.X + trequest.Y})
 
 	// Create the resource; on success, the ToolCall.ETag field is updated from the response ETag
@@ -107,7 +107,7 @@ func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 			return stop
 		}
 		// TODO: Process the er, update progress?, update status, update result/error
-		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
+		tc.Status = aids.New(toolcall.StatusSuccess)
 
 	case toolcall.StatusAwaitingSamplingResult:
 		var sr toolcall.SamplingResult

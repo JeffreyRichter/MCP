@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
@@ -76,7 +77,7 @@ func (s *localToolCallStore) Put(_ context.Context, tc *toolcall.ToolCall, ac sv
 		}
 	}
 	cp := tc.Copy() // storing a copy prevents mutating the caller's data
-	cp.ETag = svrcore.Ptr(svrcore.ETag(time.Now().Format("20060102150405.000000")))
+	cp.ETag = aids.New(svrcore.ETag(time.Now().Format("20060102150405.000000")))
 	s.data[key] = &cp
 	*tc = cp // except we want the caller to have the actual ETag
 	return nil

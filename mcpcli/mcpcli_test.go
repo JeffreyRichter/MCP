@@ -11,10 +11,15 @@ import (
 	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
 )
 
+func init() {
+	serverPortAndKey := McpServerPortAndKey{Port: "8080", Key: "ForDebuggingOnly"} // Default to debug the server
+	serverPortAndKey, _ = SpawnMCPServer("../mcpsvr/mcpsvr.exe")                   // Comment out to debug the server
+	client = NewMCPClient("http://"+net.JoinHostPort("localhost", serverPortAndKey.Port)+"/mcp", serverPortAndKey.Key)
+}
+
 var (
-	_serverPortAndKey = McpServerPortAndKey{Port: "8080", Key: "0123456789abcdef0123456789abcdef"}
-	client            = NewMCPClient("http://"+net.JoinHostPort("localhost", _serverPortAndKey.Port)+"/mcp", _serverPortAndKey.Key)
-	tcp               = NewAppToolCallProcessor(false)
+	client *mcpClient
+	tcp    = NewAppToolCallProcessor(false)
 )
 
 func TestToolsList(t *testing.T) {
@@ -31,7 +36,7 @@ func TestToolCallEphemeral(t *testing.T) {
 }
 
 func TestToolCallServerProcessing(t *testing.T) {
-	tc := client.runToolCall("count", "ID-2", tcp, true, map[string]any{"countto": 5})
+	tc := client.runToolCall("count", "ID-1", tcp, true, map[string]any{"countto": 5})
 	_ = tc
 }
 

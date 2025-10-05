@@ -262,6 +262,3 @@ type smuggler struct {
 	r                   *ReqRes         // Used to smuggle the passed-in ReqRes
 	stop                bool            // Used to smuggle the returning continue/stop flag
 }
-
-// Ptr converts a value to a pointer-to-value typically used when setting structure fields to be marshaled.
-func Ptr[T any](t T) *T { return &t }

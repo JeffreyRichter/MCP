@@ -21,26 +21,26 @@ func (c *streamToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "stream",
-			Title: svrcore.Ptr("Get Stream text"),
+			Title: aids.New("Get Stream text"),
 		},
-		Description: svrcore.Ptr("Get Stream text"),
+		Description: aids.New("Get Stream text"),
 		OutputSchema: &mcp.JSONSchema{
 			Type: "object",
 			Properties: &map[string]any{
 				"text": map[string]any{
 					"type":        "array",
 					"items":       map[string]any{"type": "string"},
-					"Description": svrcore.Ptr("The stream text"),
+					"Description": aids.New("The stream text"),
 				},
 			},
 			Required: []string{"text"},
 		},
 		Annotations: &mcp.ToolAnnotations{
-			Title:           svrcore.Ptr("Get Stream text"),
-			ReadOnlyHint:    svrcore.Ptr(true),
-			DestructiveHint: svrcore.Ptr(false),
-			IdempotentHint:  svrcore.Ptr(true),
-			OpenWorldHint:   svrcore.Ptr(false),
+			Title:           aids.New("Get Stream text"),
+			ReadOnlyHint:    aids.New(true),
+			DestructiveHint: aids.New(false),
+			IdempotentHint:  aids.New(true),
+			OpenWorldHint:   aids.New(false),
 		},
 		Meta: mcp.Meta{"sensitive": "true"},
 	}
@@ -55,7 +55,7 @@ type (
 
 func (c *streamToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	tc.Result = aids.MustMarshal(streamToolCallResult{Text: []string{}})
-	tc.Status = svrcore.Ptr(toolcall.StatusRunning)
+	tc.Status = aids.New(toolcall.StatusRunning)
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
@@ -77,7 +77,7 @@ func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcess
 	result.Text = append(result.Text, text[len(result.Text)])
 	tc.Result = aids.MustMarshal(result)
 	if len(result.Text) == len(text) {
-		tc.Status, tc.Phase = svrcore.Ptr(toolcall.StatusSuccess), nil
+		tc.Status, tc.Phase = aids.New(toolcall.StatusSuccess), nil
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))

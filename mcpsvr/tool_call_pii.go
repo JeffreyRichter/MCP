@@ -19,9 +19,9 @@ func (c *piiToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "pii",
-			Title: svrcore.Ptr("Get PII"),
+			Title: aids.New("Get PII"),
 		},
-		Description: svrcore.Ptr("Get PII data with client confirmation"),
+		Description: aids.New("Get PII data with client confirmation"),
 		InputSchema: mcp.JSONSchema{
 			Type:       "object",
 			Properties: &map[string]any{},
@@ -32,17 +32,17 @@ func (c *piiToolInfo) Tool() *mcp.Tool {
 			Properties: &map[string]any{
 				"data": map[string]any{
 					"type":        "string",
-					"Description": svrcore.Ptr("The PII data"),
+					"Description": aids.New("The PII data"),
 				},
 			},
 			Required: []string{"data"},
 		},
 		Annotations: &mcp.ToolAnnotations{
-			Title:           svrcore.Ptr("Get PII"),
-			ReadOnlyHint:    svrcore.Ptr(true),
-			DestructiveHint: svrcore.Ptr(false),
-			IdempotentHint:  svrcore.Ptr(true),
-			OpenWorldHint:   svrcore.Ptr(false),
+			Title:           aids.New("Get PII"),
+			ReadOnlyHint:    aids.New(true),
+			DestructiveHint: aids.New(false),
+			IdempotentHint:  aids.New(true),
+			OpenWorldHint:   aids.New(false),
 		},
 		Meta: mcp.Meta{"sensitive": "true"},
 	}
@@ -81,14 +81,14 @@ func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 			Properties: map[string]mcp.PrimitiveSchemaDefinition{
 				"approved": mcp.BooleanSchema{
 					Type:        "boolean",
-					Title:       svrcore.Ptr("Approval"),
-					Description: svrcore.Ptr("Whether to approve PII access"),
+					Title:       aids.New("Approval"),
+					Description: aids.New("Whether to approve PII access"),
 				},
 			},
 			Required: []string{"approved"},
 		},
 	}
-	tc.Status = svrcore.Ptr(toolcall.StatusAwaitingElicitationResult)
+	tc.Status = aids.New(toolcall.StatusAwaitingElicitationResult)
 
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
@@ -123,9 +123,9 @@ func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 			return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", `missing "approved" boolean in elicitation result content`)
 		}
 	}
-	tc.Status = svrcore.Ptr(toolcall.StatusCanceled)
+	tc.Status = aids.New(toolcall.StatusCanceled)
 	if approved {
-		tc.Status = svrcore.Ptr(toolcall.StatusSuccess)
+		tc.Status = aids.New(toolcall.StatusSuccess)
 		tc.Result = aids.MustMarshal(PIIToolCallResult{Data: "here's your PII"})
 	}
 	// Drop the elicitation request because it's been processed
@@ -143,7 +143,7 @@ func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
 	}
 
-	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = svrcore.Ptr(toolcall.StatusCanceled), nil, nil, nil, nil
+	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(toolcall.StatusCanceled), nil, nil, nil, nil
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}

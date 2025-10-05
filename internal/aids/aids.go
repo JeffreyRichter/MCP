@@ -11,6 +11,10 @@ import (
 	"strings"
 )
 
+// New converts a value to a pointer-to-value typically used when setting structure fields to be marshaled.
+// After Go 1.26, the built-in function `new` can be used instead.
+func New[T any](t T) *T { return &t }
+
 // Iif is "inline if"
 func Iif[T any](expression bool, trueVal, falseVal T) T {
 	if expression {
