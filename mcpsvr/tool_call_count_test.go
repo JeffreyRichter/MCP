@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,14 +25,14 @@ func TestToolCallCount(t *testing.T) {
 		strings.NewReader(`{"countto":40}`))
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var tc toolcall.ToolCall
+	var tc toolcall.Resource
 	for {
 		jsonBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
 		err = json.Unmarshal(jsonBody, &tc)
 		require.NoError(t, err)
-		if *tc.Status == toolcall.StatusSuccess {
+		if *tc.Status == mcp.StatusSuccess {
 			break
 		}
 
@@ -39,5 +40,5 @@ func TestToolCallCount(t *testing.T) {
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		time.Sleep(50 * time.Millisecond)
 	}
-	require.Equal(t, toolcall.StatusSuccess, *tc.Status)
+	require.Equal(t, mcp.StatusSuccess, *tc.Status)
 }

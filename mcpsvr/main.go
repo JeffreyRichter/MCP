@@ -20,8 +20,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/resources/azresources"
-	"github.com/JeffreyRichter/mcpsvr/resources/localresources"
+	"github.com/JeffreyRichter/mcpsvr/toolcall/azure"
+	"github.com/JeffreyRichter/mcpsvr/toolcall/local"
 	"github.com/JeffreyRichter/svrcore"
 	"github.com/JeffreyRichter/svrcore/policies"
 )
@@ -118,15 +118,15 @@ func main() {
 }
 
 func newLocalMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger) *mcpPolicies {
-	ops := &mcpPolicies{errorLogger: errorLogger, store: localresources.NewToolCallStore(shutdownCtx)}
-	ops.pm = localresources.NewPhaseMgr(shutdownCtx, localresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
+	ops := &mcpPolicies{errorLogger: errorLogger, store: local.NewToolCallStore(shutdownCtx)}
+	ops.pm = local.NewPhaseMgr(shutdownCtx, local.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
 	ops.buildToolInfos()
 	return ops
 }
 
 func newAzureMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *mcpPolicies {
-	ops := &mcpPolicies{errorLogger: errorLogger, store: azresources.NewToolCallStore(blobClient)}
-	pm, err := azresources.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azresources.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
+	ops := &mcpPolicies{errorLogger: errorLogger, store: azure.NewToolCallStore(blobClient)}
+	pm, err := azure.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azure.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
 	aids.Must0(err)
 	ops.pm = pm
 	ops.buildToolInfos()

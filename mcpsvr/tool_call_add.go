@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -72,27 +72,27 @@ type (
 // Create creates a brand new tool call ID resource.
 // It must ensure that an existing resource does not already exist (for HTTP, use "if-none-match: *")
 // If a resource already exists, return 409-Conflict
-func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
+func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	var trequest addToolCallRequest
 	if stop := r.UnmarshalBody(&trequest); stop {
 		return stop
 	}
 	tc.Request = aids.MustMarshal(trequest)
-	tc.Status = aids.New(toolcall.StatusSuccess)
+	tc.Status = aids.New(mcp.StatusSuccess)
 	tc.Result = aids.MustMarshal(&addToolCallResult{Sum: trequest.X + trequest.Y})
 
 	// Create the resource; on success, the ToolCall.ETag field is updated from the response ETag
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
+func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
 	se := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
 	if se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
@@ -101,16 +101,16 @@ func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 		return stop
 	}
 	switch *tc.Status {
-	case toolcall.StatusAwaitingElicitationResult:
-		var er toolcall.ElicitationResult
+	case mcp.StatusAwaitingElicitationResult:
+		var er mcp.ElicitationResult
 		if stop := r.UnmarshalBody(&er); stop {
 			return stop
 		}
 		// TODO: Process the er, update progress?, update status, update result/error
-		tc.Status = aids.New(toolcall.StatusSuccess)
+		tc.Status = aids.New(mcp.StatusSuccess)
 
-	case toolcall.StatusAwaitingSamplingResult:
-		var sr toolcall.SamplingResult
+	case mcp.StatusAwaitingSamplingResult:
+		var sr mcp.SamplingResult
 		if stop := r.UnmarshalBody(&sr); stop {
 			return stop
 		}
@@ -123,10 +123,10 @@ func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 	if se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *addToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
+func (c *addToolInfo) Cancel(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
 	/*
 		1.	GET ToolCall resource/etag from client-passed ID
 		2.	If status==terminal, return

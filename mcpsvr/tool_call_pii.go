@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -60,7 +60,7 @@ type (
 )
 
 // TODO: client must specify elicitation capability
-func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
+func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	var request PIIToolCallRequest
 	if stop := r.UnmarshalBody(&request); stop {
 		return stop
@@ -70,7 +70,7 @@ func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 	}
 
 	tc.Request = aids.MustMarshal(request)
-	tc.ElicitationRequest = &toolcall.ElicitationRequest{
+	tc.ElicitationRequest = &mcp.ElicitationRequest{
 		Message: "The requested data contains personal information (PII). Please approve access to this data.",
 		RequestedSchema: struct {
 			Type       string                                   `json:"type"`
@@ -88,24 +88,24 @@ func (c *piiToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrc
 			Required: []string{"approved"},
 		},
 	}
-	tc.Status = aids.New(toolcall.StatusAwaitingElicitationResult)
+	tc.Status = aids.New(mcp.StatusAwaitingElicitationResult)
 
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *piiToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+func (c *piiToolInfo) Get(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
-	if *tc.Status != toolcall.StatusAwaitingElicitationResult {
+func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
+	if *tc.Status != mcp.StatusAwaitingElicitationResult {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "not expecting an elicitation result for call with status %q", *tc.Status)
 	}
 
-	var er toolcall.ElicitationResult
+	var er mcp.ElicitationResult
 	if stop := r.UnmarshalBody(&er); stop {
 		return stop
 	}
@@ -123,9 +123,9 @@ func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 			return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", `missing "approved" boolean in elicitation result content`)
 		}
 	}
-	tc.Status = aids.New(toolcall.StatusCanceled)
+	tc.Status = aids.New(mcp.StatusCanceled)
 	if approved {
-		tc.Status = aids.New(toolcall.StatusSuccess)
+		tc.Status = aids.New(mcp.StatusSuccess)
 		tc.Result = aids.MustMarshal(PIIToolCallResult{Data: "here's your PII"})
 	}
 	// Drop the elicitation request because it's been processed
@@ -134,18 +134,18 @@ func (c *piiToolInfo) Advance(ctx context.Context, tc *toolcall.ToolCall, r *svr
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
+func (c *piiToolInfo) Cancel(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
 	switch *tc.Status {
-	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
-		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	case mcp.StatusSuccess, mcp.StatusFailed, mcp.StatusCanceled:
+		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 	}
 
-	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(toolcall.StatusCanceled), nil, nil, nil, nil
+	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(mcp.StatusCanceled), nil, nil, nil, nil
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }

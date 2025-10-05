@@ -9,8 +9,8 @@ import (
 	"net/http"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -47,7 +47,7 @@ func (p *mcpPolicies) etag() *svrcore.ETag { return aids.New(svrcore.ETag("v2025
 
 // lookupToolCall retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
-func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.ToolCall, bool) {
+func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.Resource, bool) {
 	tenant := "sometenant"
 	toolName, toolCallID := r.R.PathValue("toolName"), r.R.PathValue("toolCallID")
 	if toolName == "" {
@@ -112,7 +112,7 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid,
 // the ToolCall resource is not found, or preconditions are not met.
 // This method is used is called by GET & POST (not PUT) because it assumes the resource must already exist.
-func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (ToolInfo, *toolcall.ToolCall, bool) {
+func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (ToolInfo, *toolcall.Resource, bool) {
 	ti, tc, stop := p.lookupToolCall(r)
 	if stop {
 		return nil, nil, stop

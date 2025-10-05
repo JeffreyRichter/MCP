@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
 )
 
 func init() {
@@ -47,7 +46,7 @@ func TestToolCallServerProcessingAfterCrash(t *testing.T) {
 
 func TestToolCallServerProcessingCancel(t *testing.T) {
 	resp := aids.Must(client.Do("POST", fmt.Sprintf("/tools/%v/calls/%v/cancel", "count", "ID-1"), http.Header{"Accept": []string{"application/json"}}, nil))
-	tc := unmarshalBody[toolcall.ToolCallClient](resp.Body)
+	tc := unmarshalBody[mcp.ToolCall](resp.Body)
 	fmt.Printf("Cancel response: %v\n", tc)
 }
 

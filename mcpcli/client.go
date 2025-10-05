@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
 )
 
 var showJson = false
@@ -49,7 +49,7 @@ func (c *mcpClient) Do(method string, pathSuffix string, header http.Header, bod
 
 // runToolCall runs a tool call to completion, processing any requests along the way
 // If initiate is true, the tool call is initiated here; otherwise it is assumed to be already initiated (and request is ignored)
-func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcessor, initiate bool, request any) toolcall.ToolCallClient {
+func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcessor, initiate bool, request any) mcp.ToolCall {
 	toolCallIDURL := "/tools/" + toolName + "/calls/" + toolCallID
 
 	get := func() *http.Response {
@@ -68,7 +68,7 @@ func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcess
 	}
 	aids.Assert(response.StatusCode == http.StatusOK || response.StatusCode == http.StatusCreated,
 		fmt.Sprintf("Expected 200 or 201; got %d\n", response.StatusCode))
-	tc := unmarshalBody[toolcall.ToolCallClient](response.Body)
+	tc := unmarshalBody[mcp.ToolCall](response.Body)
 
 	for !tc.Status.Terminated() {
 		tcp.ShowProgress(tc)
@@ -79,29 +79,29 @@ func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcess
 			response = aids.Must(c.Do("POST", toolCallIDURL+"/advance", http.Header{
 				"Content-Type": []string{"application/json"},
 				"Accept":       []string{"application/json"},
-				"If-Match":     []string{tc.ETag.String()},
+				"If-Match":     []string{*tc.ETag},
 			}, result))
 			if response.StatusCode == 412 {
 				response = get()
 			}
-			tc = unmarshalBody[toolcall.ToolCallClient](response.Body)
+			tc = unmarshalBody[mcp.ToolCall](response.Body)
 		case "awaitingElicitationResult":
 			result := tcp.Elicit(tc)
 			response = aids.Must(c.Do("POST", toolCallIDURL+"/advance", http.Header{
 				"Content-Type": []string{"application/json"},
 				"Accept":       []string{"application/json"},
-				"If-Match":     []string{tc.ETag.String()},
+				"If-Match":     []string{*tc.ETag},
 			}, result))
 			if response.StatusCode == 412 {
 				response = get()
 			}
-			tc = unmarshalBody[toolcall.ToolCallClient](response.Body)
+			tc = unmarshalBody[mcp.ToolCall](response.Body)
 
 		case "submitted", "running":
 			// Optional: Pause execution
 			time.Sleep(200 * time.Millisecond)
 			response = get()
-			tc = unmarshalBody[toolcall.ToolCallClient](response.Body)
+			tc = unmarshalBody[mcp.ToolCall](response.Body)
 		}
 	}
 	tcp.Terminated(tc)
@@ -122,11 +122,11 @@ func printJson(body jsontext.Value) {
 }
 
 type ToolCallProcessor interface {
-	ShowProgress(tc toolcall.ToolCallClient)
-	ShowPartialResults(tc toolcall.ToolCallClient)
-	Sample(tc toolcall.ToolCallClient) any
-	Elicit(tc toolcall.ToolCallClient) any
-	Terminated(tc toolcall.ToolCallClient)
+	ShowProgress(tc mcp.ToolCall)
+	ShowPartialResults(tc mcp.ToolCall)
+	Sample(tc mcp.ToolCall) any
+	Elicit(tc mcp.ToolCall) any
+	Terminated(tc mcp.ToolCall)
 }
 
 func SpawnMCPServer(path string) (McpServerPortAndKey, func() error) {

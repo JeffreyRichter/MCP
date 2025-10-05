@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 )
 
 const baseURL = "http://localhost:8080"
@@ -186,13 +186,13 @@ func (TestSuite) TestToolCallPIICreateIdempotent() error {
 		return fmt.Errorf("HTTP status code mismatch: first=%d, second=%d", responses[0].StatusCode, responses[1].StatusCode)
 	}
 
-	toolCalls := make([]toolcall.ToolCall, 2)
+	toolCalls := make([]toolcall.Resource, 2)
 	for i, resp := range responses {
 		body, err := io.ReadAll(resp.Body)
 		if aids.IsError(err) {
 			return err
 		}
-		tc := toolcall.ToolCall{}
+		tc := toolcall.Resource{}
 		if err := json.Unmarshal(body, &tc); aids.IsError(err) {
 			return fmt.Errorf("failed to unmarshal response %d: %w", i, err)
 		}

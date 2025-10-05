@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -77,13 +77,13 @@ type (
 	}
 )
 
-func (c *countToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
+func (c *countToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	var request countToolCallRequest
 	if stop := r.UnmarshalBody(&request); stop {
 		return stop
 	}
 	tc.Request = aids.MustMarshal(request)
-	tc.Status = aids.New(toolcall.StatusRunning)
+	tc.Status = aids.New(mcp.StatusRunning)
 	result := countToolCallResult{
 		Count:   0,
 		Updates: []string{fmt.Sprintf("Started: %s", time.Now().Format(time.DateTime))},
@@ -97,30 +97,30 @@ func (c *countToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *sv
 	if se := pm.StartPhase(ctx, tc); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *countToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+func (c *countToolInfo) Get(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
 // Cancel the tool call if it is running; otherwise, do nothing
-func (c *countToolInfo) Cancel(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
+func (c *countToolInfo) Cancel(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
 	switch *tc.Status {
-	case toolcall.StatusSuccess, toolcall.StatusFailed, toolcall.StatusCanceled:
-		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	case mcp.StatusSuccess, mcp.StatusFailed, mcp.StatusCanceled:
+		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 	}
 
-	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(toolcall.StatusCanceled), nil, nil, nil, nil
+	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(mcp.StatusCanceled), nil, nil, nil, nil
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
-func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) {
+func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.Resource) {
 	time.Sleep(150 * time.Millisecond) // Simulate doing work
 
 	request := aids.MustUnmarshal[countToolCallRequest](tc.Request)
@@ -130,7 +130,7 @@ func (c *countToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcesso
 	tc.Result = aids.MustMarshal(result)
 	tc.Phase = aids.New(fmt.Sprintf("Phase-%c", 'A'+result.Count))
 	if result.Count >= request.CountTo {
-		tc.Status, tc.Phase = aids.New(toolcall.StatusSuccess), nil
+		tc.Status, tc.Phase = aids.New(mcp.StatusSuccess), nil
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))

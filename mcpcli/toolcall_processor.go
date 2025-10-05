@@ -10,8 +10,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
 )
 
 func NewAppToolCallProcessor(stream bool) *appToolCallProcessor {
@@ -23,13 +22,13 @@ type appToolCallProcessor struct {
 	streamIndex int
 }
 
-func (tcp *appToolCallProcessor) ShowProgress(tc toolcall.ToolCallClient) {
+func (tcp *appToolCallProcessor) ShowProgress(tc mcp.ToolCall) {
 	if tc.Progress != nil {
 		FgYellow.Printf("Progress: %v\n", tc.Progress)
 	}
 }
 
-func (tcp *appToolCallProcessor) ShowPartialResults(tc toolcall.ToolCallClient) {
+func (tcp *appToolCallProcessor) ShowPartialResults(tc mcp.ToolCall) {
 	if tc.Result != nil {
 		if !tcp.stream {
 			FgHiBlue.Printf("PartialResult: %v\n", tc.Result)
@@ -54,7 +53,7 @@ func (tcp *appToolCallProcessor) StreamText(text string, charsPerSecond int) {
 	}
 }
 
-func (tcp *appToolCallProcessor) Sample(tc toolcall.ToolCallClient) any {
+func (tcp *appToolCallProcessor) Sample(tc mcp.ToolCall) any {
 	FgHiGreen.Printf("SamplingRequest: %v\n", tc.SamplingRequest)
 	return nil
 }
@@ -62,7 +61,7 @@ func (tcp *appToolCallProcessor) Sample(tc toolcall.ToolCallClient) any {
 var actions = map[string]string{"a": "accept", "d": "decline", "c": "cancel"}
 
 // Elicit handles this part of the MCP spec: https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation
-func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
+func (tcp *appToolCallProcessor) Elicit(tc mcp.ToolCall) any {
 	// fmt.Printf("ElicitationRequest: %v\n", tc.ElicitationRequest)
 	prompt, answer := FgYellow, FgHiWhite
 	prompt.Printf("Elicitation request: %s\n", tc.ElicitationRequest.Message)
@@ -71,7 +70,7 @@ func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
 	answer.Print()
 	fmt.Scan(&action)
 	action = strings.ToLower(strings.TrimSpace(action))[0:1]
-	result := mcp.ElicitResult{Action: actions[action], Content: &map[string]any{}}
+	result := mcp.ElicitationResult{Action: actions[action], Content: &map[string]any{}}
 	if action != "a" {
 		return result // No content if decline or cancel
 	}
@@ -131,7 +130,7 @@ func (tcp *appToolCallProcessor) Elicit(tc toolcall.ToolCallClient) any {
 	return result
 }
 
-func (tcp *appToolCallProcessor) Terminated(tc toolcall.ToolCallClient) {
+func (tcp *appToolCallProcessor) Terminated(tc mcp.ToolCall) {
 	switch *tc.Status { // The tool call terminated
 	case "success":
 		if tcp.stream {

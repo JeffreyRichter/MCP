@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
-	"github.com/JeffreyRichter/mcpsvr/mcp"
-	"github.com/JeffreyRichter/mcpsvr/mcp/toolcall"
+	"github.com/JeffreyRichter/mcp"
+	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/JeffreyRichter/svrcore"
 )
 
@@ -53,31 +53,31 @@ type (
 	}
 )
 
-func (c *streamToolInfo) Create(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
+func (c *streamToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	tc.Result = aids.MustMarshal(streamToolCallResult{Text: []string{}})
-	tc.Status = aids.New(toolcall.StatusRunning)
+	tc.Status = aids.New(mcp.StatusRunning)
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
 	if se := pm.StartPhase(ctx, tc); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
-func (c *streamToolInfo) Get(ctx context.Context, tc *toolcall.ToolCall, r *svrcore.ReqRes) bool {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToClient())
+func (c *streamToolInfo) Get(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
+	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 }
 
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
-func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.ToolCall) {
+func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.Resource) {
 	time.Sleep(10 * time.Second)                                  // Simulate doing work
 	result := aids.MustUnmarshal[streamToolCallResult](tc.Result) // Update the result
 	result.Text = append(result.Text, text[len(result.Text)])
 	tc.Result = aids.MustMarshal(result)
 	if len(result.Text) == len(text) {
-		tc.Status, tc.Phase = aids.New(toolcall.StatusSuccess), nil
+		tc.Status, tc.Phase = aids.New(mcp.StatusSuccess), nil
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))
