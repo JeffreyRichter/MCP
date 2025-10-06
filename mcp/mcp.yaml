@@ -1,0 +1,1176 @@
+openapi: 3.0.0
+info:
+  title: MCP HTTP-REST Transport
+  version: 0.0.0
+tags: []
+paths:
+  /mcp/complete:
+    post:
+      operationId: Complete_complete
+      parameters:
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequest'
+  /mcp/prompts:
+    get:
+      operationId: Prompts_list
+      parameters:
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptList'
+  /mcp/prompts/{name}:
+    post:
+      operationId: Prompts_get
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptRequest'
+  /mcp/resources:
+    get:
+      operationId: Resources_list
+      parameters:
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourcesList'
+  /mcp/resources-templates:
+    get:
+      operationId: ResourceTemplates_list
+      parameters:
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceTemplatesList'
+  /mcp/resources/{name}:
+    get:
+      operationId: Resources_get
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/TextResourceContents'
+                  - $ref: '#/components/schemas/BlobResourceContents'
+  /mcp/roots:
+    put:
+      operationId: Roots_updateRoots
+      parameters: []
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RootsList'
+  /mcp/tools:
+    get:
+      operationId: Tools_list
+      parameters:
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolsList'
+  /mcp/tools/{toolName}/calls:
+    get:
+      operationId: ToolCalls_list
+      parameters:
+        - name: toolName
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallsList'
+  /mcp/tools/{toolName}/calls/advance/{toolCallID}:
+    post:
+      operationId: ToolCalls_advance
+      parameters:
+        - name: toolName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: toolCallID
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCall'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolCallAdvanceRequest'
+  /mcp/tools/{toolName}/calls/cancel/{toolCallID}:
+    post:
+      operationId: ToolCalls_cancel
+      parameters:
+        - name: toolName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: toolCallID
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCall'
+  /mcp/tools/{toolName}/calls/{toolCallID}:
+    put:
+      operationId: ToolCalls_create
+      parameters:
+        - name: toolName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: toolCallID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCall'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolCall'
+    get:
+      operationId: ToolCalls_get
+      parameters:
+        - name: toolName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: toolCallID
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ConditionalHeaders.ifMatch'
+        - $ref: '#/components/parameters/ConditionalHeaders.ifNonMatch'
+        - $ref: '#/components/parameters/ResponseHeaders.accept'
+        - $ref: '#/components/parameters/ResponseHeaders.etag'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCall'
+components:
+  parameters:
+    ConditionalHeaders.ifMatch:
+      name: if-match
+      in: header
+      required: false
+      schema:
+        type: string
+    ConditionalHeaders.ifNonMatch:
+      name: if-non-match
+      in: header
+      required: false
+      schema:
+        type: string
+    ResponseHeaders.accept:
+      name: accept
+      in: header
+      required: true
+      schema:
+        type: string
+        enum:
+          - application/json
+    ResponseHeaders.etag:
+      name: etag
+      in: header
+      required: false
+      schema:
+        type: string
+  schemas:
+    Annotations:
+      type: object
+      properties:
+        audience:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        priority:
+          type: number
+          format: double
+        lastModified:
+          type: string
+    AudioContent:
+      type: object
+      required:
+        - type
+        - data
+        - mimeType
+      properties:
+        type:
+          type: string
+          enum:
+            - audio
+        data:
+          type: string
+        mimeType:
+          type: string
+        annotations:
+          $ref: '#/components/schemas/Annotations'
+        _meta:
+          type: object
+          additionalProperties: {}
+    BaseMetadata:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+    BlobResourceContents:
+      type: object
+      required:
+        - uri
+        - blob
+      properties:
+        uri:
+          type: string
+          description: The URI of this resource.
+        mimeType:
+          type: string
+          description: The MIME type of this resource, if known.
+        _meta:
+          type: object
+          additionalProperties: {}
+          description: 'See [General fields: `_meta`](/specification/2025-06-18/basic/index#meta) for notes on `_meta` usage.'
+        blob:
+          type: string
+          description: A base64-encoded string representing the binary data of the item.
+    BodyHeaders:
+      type: object
+    BooleanSchema:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - boolean
+        title:
+          type: string
+        description:
+          type: string
+        default:
+          type: boolean
+    CompleteRequest:
+      type: object
+      required:
+        - ref
+        - argument
+      properties:
+        ref:
+          anyOf:
+            - $ref: '#/components/schemas/PromptReference'
+            - $ref: '#/components/schemas/ResourceTemplateReference'
+        argument:
+          type: object
+          properties:
+            name:
+              type: string
+              description: The name of the argument
+            value:
+              type: string
+              description: The value of the argument to use for completion matching.
+          required:
+            - name
+            - value
+          description: The argument's information
+        context:
+          type: object
+          properties:
+            arguments:
+              type: object
+              additionalProperties:
+                type: string
+              description: Previously-resolved variables in a URI template or prompt.
+          description: Additional, optional context for completions
+    CompleteResponse:
+      type: object
+      required:
+        - values
+      properties:
+        values:
+          type: array
+          items:
+            type: string
+          description: An array of completion values. Must not exceed 100 items.
+        total:
+          type: integer
+          format: int32
+          description: The total number of completion options available. This can exceed the number of values actually sent in the response.
+        hasMore:
+          type: boolean
+          description: Indicates whether there are additional completion options beyond those provided in the current response, even if the exact total is unknown.
+      description: The server's response to a completion/complete request
+    ContentBlock:
+      anyOf:
+        - $ref: '#/components/schemas/TextContent'
+        - $ref: '#/components/schemas/ImageContent'
+        - $ref: '#/components/schemas/AudioContent'
+    ElicitationRequest:
+      type: object
+      required:
+        - message
+        - requestedSchema
+      properties:
+        message:
+          type: string
+        requestedSchema:
+          type: object
+          properties:
+            type:
+              type: string
+            properties:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/PrimitiveSchemaDefinition'
+            required:
+              type: array
+              items:
+                type: string
+          required:
+            - type
+            - properties
+    ElicitationResult:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum:
+            - accept
+            - decline
+            - cancel
+          description: |-
+            The user action in response to the elicitation.
+            - "accept": User submitted the form/confirmed the action
+            - "decline": User explicitly declined the action
+            - "cancel": User dismissed without making an explicit choice
+        content:
+          type: object
+          additionalProperties: {}
+          description: |-
+            The submitted form data, only present when action is "accept".
+            Contains values matching the requested schema.
+        serverData:
+          type: string
+    EmbeddedResource:
+      type: object
+      required:
+        - type
+        - resource
+      properties:
+        type:
+          type: string
+        resource:
+          anyOf:
+            - $ref: '#/components/schemas/TextResourceContents'
+            - $ref: '#/components/schemas/BlobResourceContents'
+        annotations:
+          $ref: '#/components/schemas/Annotations'
+        _meta:
+          type: object
+          additionalProperties: {}
+    EnumSchema:
+      type: object
+      required:
+        - type
+        - enum
+      properties:
+        type:
+          type: string
+          enum:
+            - string
+        title:
+          type: string
+        description:
+          type: string
+        enum:
+          type: array
+          items:
+            type: string
+        enumNames:
+          type: array
+          items:
+            type: string
+    Error:
+      type: object
+      required:
+        - statusCode
+      properties:
+        statusCode:
+          type: integer
+          format: int32
+        errorCode:
+          type: string
+        message:
+          type: string
+    ImageContent:
+      type: object
+      required:
+        - type
+        - data
+        - mimeType
+      properties:
+        type:
+          type: string
+          enum:
+            - image
+        data:
+          type: string
+        mimeType:
+          type: string
+        annotations:
+          $ref: '#/components/schemas/Annotations'
+        _meta:
+          type: object
+          additionalProperties: {}
+    JSONSchema:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+        properties:
+          type: object
+          additionalProperties: {}
+        required:
+          type: array
+          items:
+            type: string
+    ModelHint:
+      type: object
+      properties:
+        name:
+          type: string
+    ModelPreferences:
+      type: object
+      properties:
+        hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelHint'
+        costPriority:
+          type: number
+          format: double
+        speedPriority:
+          type: number
+          format: double
+        intelligencePriority:
+          type: number
+          format: double
+    NumberSchema:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - number
+            - integer
+        title:
+          type: string
+        description:
+          type: string
+        minimum:
+          type: number
+          format: double
+        maximum:
+          type: number
+          format: double
+    PrimitiveSchemaDefinition:
+      anyOf:
+        - $ref: '#/components/schemas/BooleanSchema'
+        - $ref: '#/components/schemas/NumberSchema'
+        - $ref: '#/components/schemas/StringSchema'
+        - $ref: '#/components/schemas/EnumSchema'
+    Progress:
+      type: object
+      required:
+        - progress
+      properties:
+        progress:
+          type: number
+          format: float
+        total:
+          type: number
+          format: float
+        message:
+          type: string
+    Prompt:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+        description:
+          type: string
+        arguments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromptArgument'
+    PromptArgument:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+        description:
+          type: string
+        required:
+          type: boolean
+    PromptList:
+      type: object
+      required:
+        - prompts
+      properties:
+        prompts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prompt'
+    PromptMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        content:
+          $ref: '#/components/schemas/ContentBlock'
+    PromptReference:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - ref/prompt
+      allOf:
+        - $ref: '#/components/schemas/BaseMetadata'
+      description: Identifies a prompt.
+    PromptRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The name of the prompt or prompt template.
+        arguments:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arguments to use for templating the prompt.
+    PromptResponse:
+      type: object
+      required:
+        - messages
+      properties:
+        description:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromptMessage'
+    Resource:
+      type: object
+      required:
+        - name
+        - uri
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+        uri:
+          type: string
+          description: The URI of this resource.
+        description:
+          type: string
+          description: |-
+            A description of what this resource represents.
+
+            This can be used by clients to improve the LLM's understanding of available resources. It can be thought of like a "hint" to the model.
+        mimeType:
+          type: string
+          description: The MIME type of this resource, if known.
+        annotations:
+          allOf:
+            - $ref: '#/components/schemas/Annotations'
+          description: Optional annotations for the client.
+        size:
+          type: integer
+          format: int64
+          description: |-
+            The size of the raw resource content, in bytes (i.e., before base64 encoding or any tokenization), if known.
+
+            This can be used by Hosts to display file sizes and estimate context window usage.
+        _meta:
+          type: object
+          additionalProperties: {}
+          description: 'See [General fields: `_meta`](/specification/2025-06-18/basic/index#meta) for notes on `_meta` usage.'
+    ResourceContents:
+      type: object
+      required:
+        - uri
+      properties:
+        uri:
+          type: string
+          description: The URI of this resource.
+        mimeType:
+          type: string
+          description: The MIME type of this resource, if known.
+        _meta:
+          type: object
+          additionalProperties: {}
+          description: 'See [General fields: `_meta`](/specification/2025-06-18/basic/index#meta) for notes on `_meta` usage.'
+    ResourceLink:
+      type: object
+      required:
+        - name
+        - uri
+        - type
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+        uri:
+          type: string
+          description: The URI of this resource.
+        description:
+          type: string
+          description: |-
+            A description of what this resource represents.
+
+            This can be used by clients to improve the LLM's understanding of available resources. It can be thought of like a "hint" to the model.
+        mimeType:
+          type: string
+          description: The MIME type of this resource, if known.
+        annotations:
+          allOf:
+            - $ref: '#/components/schemas/Annotations'
+          description: Optional annotations for the client.
+        size:
+          type: integer
+          format: int64
+          description: |-
+            The size of the raw resource content, in bytes (i.e., before base64 encoding or any tokenization), if known.
+
+            This can be used by Hosts to display file sizes and estimate context window usage.
+        _meta:
+          type: object
+          additionalProperties: {}
+          description: 'See [General fields: `_meta`](/specification/2025-06-18/basic/index#meta) for notes on `_meta` usage.'
+        type:
+          type: string
+    ResourceTemplate:
+      type: object
+      required:
+        - name
+        - uriTemplate
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+        uriTemplate:
+          type: string
+          description: A URI template (according to RFC 6570) that can be used to construct resource URIs.
+        description:
+          type: string
+          description: |-
+            A description of what this resource represents.
+
+            This can be used by clients to improve the LLM's understanding of available resources. It can be thought of like a "hint" to the model.
+        mimeType:
+          type: string
+          description: The MIME type of this resource, if known.
+        annotations:
+          allOf:
+            - $ref: '#/components/schemas/Annotations'
+          description: Optional annotations for the client.
+        _meta:
+          type: object
+          additionalProperties: {}
+          description: 'See [General fields: `_meta`](/specification/2025-06-18/basic/index#meta) for notes on `_meta` usage.'
+    ResourceTemplateReference:
+      type: object
+      required:
+        - type
+        - uri
+      properties:
+        type:
+          type: string
+          enum:
+            - ref/resource
+        uri:
+          type: string
+          description: The URI or URI template of the resource.
+      description: A reference to a resource or resource template definition.
+    ResourceTemplatesList:
+      type: object
+      required:
+        - resourceTemplates
+      properties:
+        resourceTemplates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceTemplate'
+    ResourcesList:
+      type: object
+      required:
+        - resources
+      properties:
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Resource'
+    Role:
+      type: string
+      enum:
+        - user
+        - assistant
+    Root:
+      type: object
+      required:
+        - uri
+      properties:
+        uri:
+          type: string
+        name:
+          type: string
+        _meta:
+          type: object
+          additionalProperties: {}
+    RootsList:
+      type: object
+      required:
+        - roots
+      properties:
+        roots:
+          type: array
+          items:
+            $ref: '#/components/schemas/Root'
+    SamplingMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        content:
+          $ref: '#/components/schemas/ContentBlock'
+    SamplingRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/SamplingMessage'
+        modelPreferences:
+          $ref: '#/components/schemas/ModelPreferences'
+        systemPrompt:
+          type: string
+        includeContext:
+          type: string
+          enum:
+            - none
+            - thisServer
+            - allServers
+        temperature:
+          type: number
+          format: double
+        maxTokens:
+          type: integer
+          format: int64
+        stopSequences:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: {}
+    SamplingResult:
+      type: object
+      required:
+        - samplingMessage
+        - model
+      properties:
+        samplingMessage:
+          $ref: '#/components/schemas/SamplingMessage'
+        model:
+          type: string
+        stopReason:
+          anyOf:
+            - type: string
+              enum:
+                - endTurn
+                - stopSequence
+                - maxTokens
+            - type: string
+        serverData:
+          type: string
+    Status:
+      type: string
+      enum:
+        - running
+        - awaitingSamplingResponse
+        - awaitingElicitationResponse
+        - success
+        - failed
+        - canceled
+    StringSchema:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - string
+        title:
+          type: string
+        description:
+          type: string
+        minLength:
+          type: integer
+          format: int32
+        maxLength:
+          type: integer
+          format: int32
+        format:
+          type: string
+          enum:
+            - email
+            - uri
+            - date
+            - date-time
+    TextContent:
+      type: object
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          enum:
+            - text
+        text:
+          type: string
+        annotations:
+          $ref: '#/components/schemas/Annotations'
+        _meta:
+          type: object
+          additionalProperties: {}
+    TextResourceContents:
+      type: object
+      required:
+        - uri
+        - text
+      properties:
+        uri:
+          type: string
+          description: The URI of this resource.
+        mimeType:
+          type: string
+          description: The MIME type of this resource, if known.
+        _meta:
+          type: object
+          additionalProperties: {}
+          description: 'See [General fields: `_meta`](/specification/2025-06-18/basic/index#meta) for notes on `_meta` usage.'
+        text:
+          type: string
+          description: The text of the item. This must only be set if the item can actually be represented as text (not binary data).
+    Tool:
+      type: object
+      required:
+        - name
+        - inputSchema
+      properties:
+        name:
+          type: string
+          description: Intended for programmatic or logical use, but used as a display name in past specs or fallback (if title isn't present).
+        title:
+          type: string
+          description: |-
+            Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+            even by those unfamiliar with domain-specific terminology.
+
+            If not provided, the name should be used for display (except for Tool,
+            where `annotations.title` should be given precedence over using `name`,
+            if present).
+        description:
+          type: string
+        inputSchema:
+          $ref: '#/components/schemas/JSONSchema'
+        outputSchema:
+          $ref: '#/components/schemas/JSONSchema'
+        annotations:
+          $ref: '#/components/schemas/ToolAnnotations'
+        _meta:
+          type: object
+          additionalProperties: {}
+    ToolAnnotations:
+      type: object
+      properties:
+        title:
+          type: string
+        readOnlyHint:
+          type: boolean
+        destructiveHint:
+          type: boolean
+        idempotentHint:
+          type: boolean
+        openWorldHint:
+          type: boolean
+    ToolCall:
+      type: object
+      properties:
+        toolname:
+          type: string
+        id:
+          type: string
+        expiration:
+          type: string
+          format: date-time
+        etag:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status'
+        request:
+          type: object
+          additionalProperties: {}
+        samplingRequest:
+          $ref: '#/components/schemas/SamplingRequest'
+        elicitationRequest:
+          $ref: '#/components/schemas/ElicitationRequest'
+        serverData:
+          type: string
+        progress:
+          $ref: '#/components/schemas/Progress'
+        result:
+          type: object
+          additionalProperties: {}
+        error:
+          type: object
+          additionalProperties: {}
+    ToolCallAdvanceRequest:
+      type: object
+      required:
+        - result
+      properties:
+        serverData:
+          type: string
+        result:
+          anyOf:
+            - $ref: '#/components/schemas/ElicitationResult'
+            - $ref: '#/components/schemas/SamplingResult'
+    ToolCallsList:
+      type: object
+      required:
+        - values
+      properties:
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolCall'
+    ToolsList:
+      type: object
+      required:
+        - tools
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tool'

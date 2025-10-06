@@ -181,7 +181,7 @@ type (
 		Request            jsontext.Value      `json:"request,omitempty"`
 		SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`
 		ElicitationRequest *ElicitationRequest `json:"elicitationRequest,omitempty"`
-		ServerState        *string             `json:"serverState,omitempty"`
+		ServerData         *string             `json:"serverData,omitempty"` // Opaque ToolCall-specific state for round-tripping; allows some servers to avoid a durable state store
 		Progress           jsontext.Value      `json:"progress,omitempty"`
 		Result             jsontext.Value      `json:"result,omitempty"`
 		Error              jsontext.Value      `json:"error,omitempty"`
@@ -191,11 +191,6 @@ type (
 )
 
 type ( // Sampling
-	SamplingMessage struct {
-		Role    Role         `json:"role"`
-		Content ContentBlock `json:"content"` // TextContent | ImageContent | AudioContent
-	}
-
 	SamplingRequest struct { // https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts#L986
 		Messages []SamplingMessage `json:"messages"`
 
@@ -219,6 +214,11 @@ type ( // Sampling
 		Metadata map[string]any `json:"metadata,omitempty"`
 	}
 
+	SamplingMessage struct {
+		Role    Role         `json:"role"`
+		Content ContentBlock `json:"content"` // TextContent | ImageContent | AudioContent
+	}
+
 	ModelPreferences struct {
 		Hints                []ModelHint `json:"hints,omitempty"`
 		CostPriority         *float64    `json:"costPriority,omitempty"`
@@ -234,6 +234,7 @@ type ( // Sampling
 		SamplingMessage SamplingMessage `json:"samplingMessage"`
 		Model           string          `json:"model"`
 		StopReason      *string         `json:"stopReason,omitempty"` // "endTurn" | "stopSequence" | "maxTokens" | string
+		ServerData      *string         `json:"serverData,omitempty"`
 	}
 
 	// Content types
@@ -266,11 +267,6 @@ type ( // Sampling
 )
 
 type ( // Elicitation
-	ElicitationResult struct {
-		Action  string          `json:"action"` // "accept" | "decline" | "cancel"
-		Content *map[string]any `json:"content,omitempty"`
-	}
-
 	ElicitationRequest struct {
 		Message         string `json:"message"`
 		RequestedSchema struct {
@@ -280,14 +276,15 @@ type ( // Elicitation
 		} `json:"requestedSchema"`
 	}
 
-	// Elicitation
-	StringSchema struct {
+	PrimitiveSchemaDefinition interface {
+		isPrimitiveSchema()
+	}
+
+	BooleanSchema struct {
 		Type        string  `json:"type"`
 		Title       *string `json:"title,omitempty"`
 		Description *string `json:"description,omitempty"`
-		MinLength   *int    `json:"minLength,omitempty"`
-		MaxLength   *int    `json:"maxLength,omitempty"`
-		Format      *string `json:"format,omitempty"` // "email" | "uri" | "date" | "date-time"
+		Default     *bool   `json:"default,omitempty"`
 	}
 
 	NumberSchema struct {
@@ -298,11 +295,13 @@ type ( // Elicitation
 		Maximum     *float64 `json:"maximum,omitempty"`
 	}
 
-	BooleanSchema struct {
+	StringSchema struct {
 		Type        string  `json:"type"`
 		Title       *string `json:"title,omitempty"`
 		Description *string `json:"description,omitempty"`
-		Default     *bool   `json:"default,omitempty"`
+		MinLength   *int    `json:"minLength,omitempty"`
+		MaxLength   *int    `json:"maxLength,omitempty"`
+		Format      *string `json:"format,omitempty"` // "email" | "uri" | "date" | "date-time"
 	}
 
 	EnumSchema struct {
@@ -313,7 +312,9 @@ type ( // Elicitation
 		EnumNames   []string `json:"enumNames,omitempty"`
 	}
 
-	PrimitiveSchemaDefinition interface {
-		isPrimitiveSchema()
+	ElicitationResult struct {
+		Action     string          `json:"action"` // "accept" | "decline" | "cancel"
+		Content    *map[string]any `json:"content,omitempty"`
+		ServerData *string         `json:"serverData,omitempty"`
 	}
 )
