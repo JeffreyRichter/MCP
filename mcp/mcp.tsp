@@ -249,20 +249,55 @@ model ToolAnnotations {
   openWorldHint?: boolean;
 }
 
+enum ToolCallStatus {
+  submitted;
+  running;
+  awaitingSamplingResult;
+  awaitingElicitationResult;
+  success;
+  failed;
+  canceled;
+}
+
+@discriminated(#{envelope: "none", discriminatorPropertyName: "status" })
+union ToolCallResponse {
+  submitted: SubmittedToolCall;
+  running: RunningToolCall;
+  awaitingSamplingResult: AwaitingSamplingResultToolCall;
+  awaitingElicitationResult: AwaitingElicitationResultToolCall;
+}
+
+model SubmittedToolCall extends ToolCall {
+  status: ToolCallStatus.submitted;
+}
+
+model RunningToolCall extends ToolCall {
+  status: ToolCallStatus.running;
+}
+
+model AwaitingSamplingResultToolCall extends ToolCall {
+  status: ToolCallStatus.awaitingSamplingResult;
+  samplingRequest: SamplingRequest;
+}
+
+model AwaitingElicitationResultToolCall extends ToolCall {
+  status: ToolCallStatus.awaitingElicitationResult;
+  elicitationRequest: ElicitationRequest;
+}
+
+
 // Tool Calls
 model ToolCall {
   toolname?: string;
   id?: string; // Scoped within tenant & tool name
   expiration?: utcDateTime;
   etag?: string;
-  status?: Status;
-  request?: Record<unknown>;
-  samplingRequest?: SamplingRequest;
-  elicitationRequest?: ElicitationRequest;
+  status?: ToolCallStatus;
+  request?: unknown;
   serverData?: string; // Opaque ToolCall-specific state for round-tripping
   progress?: Progress;
-  result?: Record<unknown>;
-  error?: Record<unknown>;
+  result?: unknown;
+  error?: unknown;
 }
 
 model Progress {
@@ -286,7 +321,7 @@ enum Status {
 }
 
 model ToolCallsList {
-  values: ToolCall[];
+  values: ToolCallResponse[];
 }
 
 // Sampling
@@ -588,7 +623,7 @@ namespace Tools {
       @path toolCallID: string,
       ...ConditionalHeaders,
       ...ResponseHeaders,
-    ): ToolCall;
+    ): ToolCallResponse;
 
     @route("advance")
     @post
@@ -599,7 +634,7 @@ namespace Tools {
       ...ConditionalHeaders,
       ...BodyHeaders,
       ...ResponseHeaders,
-    ): ToolCall;
+    ): ToolCallResponse;
 
     @route("cancel")
     @post
@@ -608,6 +643,6 @@ namespace Tools {
       @path toolCallID: string,
       ...ConditionalHeaders,
       ...ResponseHeaders,
-    ): ToolCall;
+    ): ToolCallResponse;
   }
 }

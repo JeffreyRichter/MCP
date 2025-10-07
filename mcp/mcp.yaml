@@ -184,7 +184,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ToolCall'
+                $ref: '#/components/schemas/ToolCallResponse'
       requestBody:
         required: true
         content:
@@ -215,7 +215,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ToolCall'
+                $ref: '#/components/schemas/ToolCallResponse'
   /mcp/tools/{toolName}/calls/{toolCallID}:
     put:
       operationId: ToolCalls_create
@@ -273,7 +273,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ToolCall'
+                $ref: '#/components/schemas/ToolCallResponse'
 components:
   parameters:
     ConditionalHeaders.ifMatch:
@@ -335,6 +335,34 @@ components:
         _meta:
           type: object
           additionalProperties: {}
+    AwaitingElicitationResultToolCall:
+      type: object
+      required:
+        - status
+        - elicitationRequest
+      properties:
+        status:
+          type: string
+          enum:
+            - awaitingElicitationResult
+        elicitationRequest:
+          $ref: '#/components/schemas/ElicitationRequest'
+      allOf:
+        - $ref: '#/components/schemas/ToolCall'
+    AwaitingSamplingResultToolCall:
+      type: object
+      required:
+        - status
+        - samplingRequest
+      properties:
+        status:
+          type: string
+          enum:
+            - awaitingSamplingResult
+        samplingRequest:
+          $ref: '#/components/schemas/SamplingRequest'
+      allOf:
+        - $ref: '#/components/schemas/ToolCall'
     BaseMetadata:
       type: object
       required:
@@ -939,6 +967,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Root'
+    RunningToolCall:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - running
+      allOf:
+        - $ref: '#/components/schemas/ToolCall'
     SamplingMessage:
       type: object
       required:
@@ -1036,6 +1075,17 @@ components:
             - uri
             - date
             - date-time
+    SubmittedToolCall:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - submitted
+      allOf:
+        - $ref: '#/components/schemas/ToolCall'
     TextContent:
       type: object
       required:
@@ -1127,24 +1177,14 @@ components:
         etag:
           type: string
         status:
-          $ref: '#/components/schemas/Status'
-        request:
-          type: object
-          additionalProperties: {}
-        samplingRequest:
-          $ref: '#/components/schemas/SamplingRequest'
-        elicitationRequest:
-          $ref: '#/components/schemas/ElicitationRequest'
+          $ref: '#/components/schemas/ToolCallStatus'
+        request: {}
         serverData:
           type: string
         progress:
           $ref: '#/components/schemas/Progress'
-        result:
-          type: object
-          additionalProperties: {}
-        error:
-          type: object
-          additionalProperties: {}
+        result: {}
+        error: {}
     ToolCallAdvanceRequest:
       type: object
       required:
@@ -1156,6 +1196,30 @@ components:
           anyOf:
             - $ref: '#/components/schemas/ElicitationResult'
             - $ref: '#/components/schemas/SamplingResult'
+    ToolCallResponse:
+      type: object
+      oneOf:
+        - $ref: '#/components/schemas/SubmittedToolCall'
+        - $ref: '#/components/schemas/RunningToolCall'
+        - $ref: '#/components/schemas/AwaitingSamplingResultToolCall'
+        - $ref: '#/components/schemas/AwaitingElicitationResultToolCall'
+      discriminator:
+        propertyName: status
+        mapping:
+          submitted: '#/components/schemas/SubmittedToolCall'
+          running: '#/components/schemas/RunningToolCall'
+          awaitingSamplingResult: '#/components/schemas/AwaitingSamplingResultToolCall'
+          awaitingElicitationResult: '#/components/schemas/AwaitingElicitationResultToolCall'
+    ToolCallStatus:
+      type: string
+      enum:
+        - submitted
+        - running
+        - awaitingSamplingResult
+        - awaitingElicitationResult
+        - success
+        - failed
+        - canceled
     ToolCallsList:
       type: object
       required:
@@ -1164,7 +1228,7 @@ components:
         values:
           type: array
           items:
-            $ref: '#/components/schemas/ToolCall'
+            $ref: '#/components/schemas/ToolCallResponse'
     ToolsList:
       type: object
       required:
