@@ -2,12 +2,8 @@ package toolcall
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/json/jsontext"
-	"fmt"
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
@@ -54,12 +50,9 @@ type (
 		// Delete deletes the specified tool call from storage or returns a [svrcore.ServerError] if an error occurs.
 		Delete(ctx context.Context, tc *Resource, ac svrcore.AccessConditions) *svrcore.ServerError
 	}
-	serverDataConverter struct {
-		secretKey []byte
-	}
 )
 
-var sdc = &serverDataConverter{secretKey: ([]byte)("your_secret_key")}
+var sde = NewServerDataEncoder("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 
 // ToMCP convert the ToolCallResource to a public-facing MCP ToolCall returned to clients.
 // It omits internal fields: Tenant, IdempotencyKey, Phase, Internal
@@ -68,7 +61,7 @@ func (tc *Resource) ToMCP() mcp.ToolCall { return tc.ToMCPWith(false) }
 func (tc *Resource) ToMCPWith(serverData bool) mcp.ToolCall {
 	sd := (*string)(nil)
 	if serverData {
-		sd = sdc.Encode(aids.MustMarshal(tc)) // Serialize the ToolCall Resource string
+		sd = aids.New(sde.Encode(aids.MustMarshal(tc))) // Serialize the ToolCall Resource string
 	}
 	return mcp.ToolCall{
 		ToolName:           tc.ToolName,
@@ -102,42 +95,6 @@ func (tc *Resource) Copy() Resource {
 	cp := Resource{}
 	aids.Must0(json.Unmarshal(b, &cp))
 	return cp
-}
-
-func (sdc *serverDataConverter) Encode(data []byte) *string {
-	if data == nil {
-		return nil
-	}
-	h := hmac.New(sha256.New, sdc.secretKey) // Compute HMAC for data
-	h.Write(data)
-	mac := h.Sum(nil)
-	data = append(mac, data...)                              // Prepend HMAC to data
-	return aids.New(base64.StdEncoding.EncodeToString(data)) // Encode to base-64 string
-}
-
-func (sdc *serverDataConverter) Decode(serverData *string) (*Resource, error) {
-	if serverData == nil {
-		return nil, fmt.Errorf("serverData is nil")
-	}
-	data, err := base64.StdEncoding.DecodeString(*serverData) // Decode from base-64 string
-	if aids.IsError(err) {
-		return nil, err
-	}
-	// Split HMAC from data
-	h := hmac.New(sha256.New, sdc.secretKey)
-	if len(data) < h.Size() {
-		return nil, fmt.Errorf("serverData must be at least %v bytes (after base-64 decoding)", h.Size())
-	}
-	h.Write(data[h.Size():]) // Compute HMAC for data portion
-	mac := h.Sum(nil)
-	if !hmac.Equal(data[:h.Size()], mac) { // Compare HMACs
-		return nil, fmt.Errorf("serverData integrity check failed (after base-64 decoding)")
-	}
-	var resource Resource
-	if err := json.Unmarshal(data[h.Size():], &resource); err != nil {
-		return nil, err
-	}
-	return &resource, nil
 }
 
 type (

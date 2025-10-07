@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func main() {
 	FgHiBlack.And(BgWhite).Print("MCP Client started\n")
