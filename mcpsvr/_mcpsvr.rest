@@ -1,0 +1,74 @@
+@hostname = localhost
+@port = 8080
+@host = {{hostname}}:{{port}}
+
+###### List Tools
+GET http://{{host}}/mcp/tools
+Accept: application/json
+
+###### Simple Ephemeral Tool Call
+PUT http://{{host}}/mcp/tools/add/calls/ID-1
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: {{$guid}}
+
+{
+    "x":1,
+    "y":2
+}
+
+
+
+###### Start Long-Running Server-Processing Tool Call ###
+PUT http://{{host}}/mcp/tools/count/calls/ID-2
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: {{$guid}}
+
+{
+    "countto":50
+}
+
+### Poll Long-Running Server-Processing Tool Call when status="running"
+GET http://{{host}}/mcp/tools/count/calls/ID-2
+Accept: application/json
+
+
+
+###### Start Long-Running Streaming Tool Call ###
+PUT http://{{host}}/mcp/tools/stream/calls/ID-1
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: {{$guid}}
+
+### Poll Long-Running Streaming Tool Call for ongoing results
+GET http://{{host}}/mcp/tools/stream/calls/ID-1
+Accept: application/json
+
+###### No Server State Tool Call ###
+
+###### Start Elicitation Tool Call ###
+PUT http://{{host}}/mcp/tools/welcome/calls/ID-1
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: {{$guid}}
+
+### Recovery Elicitation Tool Call from Crash or Other Device
+GET http://{{host}}/mcp/tools/welcome/calls/ID-1
+Accept: application/json
+
+### Send Elicitation Result to Advance Elicitation Tool Call
+# @prompt name
+POST http://{{host}}/mcp/tools/welcome/calls/ID-1/advance
+Content-Type: application/json
+Accept: application/json
+
+{
+    "action":"accept",
+    "content":{
+        "name":{{name}}
+    }
+}
+
+
+### Docs: https://marketplace.visualstudio.com/items?itemName=humao.rest-client

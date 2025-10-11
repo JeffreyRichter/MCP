@@ -552,6 +552,7 @@ model BodyHeaders {
 model ResponseHeaders {
   @header accept: "application/json";
   @header etag?: string;
+  @header retryAfter?: int32; // Delay-Seconds; https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Retry-After
 }
 
 model ToolCallAdvanceRequest {

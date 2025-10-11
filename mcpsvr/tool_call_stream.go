@@ -72,7 +72,6 @@ func (c *streamToolInfo) Get(ctx context.Context, tc *toolcall.Resource, r *svrc
 // ProcessPhase advanced the tool call's current phase to its next phase.
 // Return nil to have the updated tc persisted to the tool call Store.
 func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcessor, tc *toolcall.Resource) {
-	time.Sleep(10 * time.Second)                                  // Simulate doing work
 	result := aids.MustUnmarshal[streamToolCallResult](tc.Result) // Update the result
 	result.Text = append(result.Text, text[len(result.Text)])
 	tc.Result = aids.MustMarshal(result)
@@ -81,6 +80,7 @@ func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcess
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))
+	time.Sleep(10 * time.Second) // Simulate doing work
 }
 
 var text = []string{`

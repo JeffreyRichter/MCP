@@ -23,7 +23,6 @@
             ],
             "envFile": "${workspaceFolder}/mcpsvr/.env",
             "args": [
-                "-pid=37500"
             ]
         },
         {

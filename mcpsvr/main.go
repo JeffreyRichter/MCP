@@ -48,7 +48,7 @@ func main() {
 			sharedKey = fmt.Sprintf("%x", b) // Random port & sharedKey
 			go processWatchdog(*pid, time.Second*5)
 		} else {
-			port, sharedKey = "8080", "ForDebuggingOnly"
+			port, sharedKey = "8080", "" //"ForDebuggingOnly"
 		}
 		routes = newLocalMcpPolicies(shutdownMgr.Context, errorLogger)
 

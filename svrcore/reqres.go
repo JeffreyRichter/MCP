@@ -63,7 +63,7 @@ func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWrit
 		RW: &ResponseWriter{ResponseWriter: rw},
 	}
 	rr.RW.rr = rr
-	rw.Header().Set("x-ms-server-id", rr.id) // Set this header now guaranteeing its return to the client
+	rw.Header().Set("Server-Request-Id", rr.id) // Set this header now guaranteeing its return to the client
 
 	rr.l.LogAttrs(rr.R.Context(), slog.LevelInfo, "->", slog.String("id", rr.id),
 		slog.String("method", rr.R.Method), slog.String("url", rr.R.URL.String()))

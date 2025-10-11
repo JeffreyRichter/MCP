@@ -1,5 +1,7 @@
 package svrcore
 
+// https://goperf.dev/02-networking/10k-connections/
+
 import (
 	"context"
 	"fmt"

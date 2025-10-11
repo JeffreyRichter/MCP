@@ -79,63 +79,8 @@ func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrc
 	}
 	tc.Request = aids.MustMarshal(trequest)
 	tc.Status = aids.New(mcp.StatusSuccess)
+	tc.Expiration = nil
 	tc.Result = aids.MustMarshal(&addToolCallResult{Sum: trequest.X + trequest.Y})
-
-	// Create the resource; on success, the ToolCall.ETag field is updated from the response ETag
-	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
-		return r.WriteServerError(se, nil, nil)
-	}
+	// Add is a simple ephemeral tool call so we do NOT put it in the Store
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
-}
-
-func (c *addToolInfo) Get(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
-}
-
-func (c *addToolInfo) Advance(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
-	se := c.ops.store.Get(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch})
-	if se != nil {
-		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
-	}
-	if stop := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: tc.ETag}); stop {
-		return stop
-	}
-	switch *tc.Status {
-	case mcp.StatusAwaitingElicitationResult:
-		var er mcp.ElicitationResult
-		if stop := r.UnmarshalBody(&er); stop {
-			return stop
-		}
-		// TODO: Process the er, update progress?, update status, update result/error
-		tc.Status = aids.New(mcp.StatusSuccess)
-
-	case mcp.StatusAwaitingSamplingResult:
-		var sr mcp.SamplingResult
-		if stop := r.UnmarshalBody(&sr); stop {
-			return stop
-		}
-		// TODO: Process the sr, update progress?, update status, update result/error
-	default:
-		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "tool call status is '%s'; not expecting a result", *tc.Status)
-	}
-
-	se = c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}) // Update the resource
-	if se != nil {
-		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
-	}
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
-}
-
-func (c *addToolInfo) Cancel(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes) bool {
-	/*
-		1.	GET ToolCall resource/etag from client-passed ID
-		2.	If status==terminal, return
-		3.	Set status=Cancelled
-		4.	Update resource (if-match:etag)
-		a.	If update succeeds, send notification to ToolCallNotification queue
-		b.	Else, go to Step #1 to retry. The race is OK because of #2.
-
-	*/
-	body := any(nil)
-	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: c.ops.etag()}, nil, body)
 }

@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json/jsontext"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -31,6 +33,7 @@ type mcpClient struct {
 	*http.Client
 	sharedKey string
 	urlPrefix string
+	dump      bool
 }
 
 func (c *mcpClient) appendPath(path string) string { return c.urlPrefix + path }
@@ -41,10 +44,41 @@ func (c *mcpClient) Do(method string, pathSuffix string, header http.Header, bod
 	if body != nil {
 		bodyReader = strings.NewReader(string(aids.MustMarshal(body)))
 	}
-	r := aids.Must(http.NewRequest(method, c.appendPath(pathSuffix), bodyReader))
-	r.Header = header
-	r.Header.Add("SharedKey", c.sharedKey)
-	return c.Client.Do(r)
+	request := aids.Must(http.NewRequest(method, c.appendPath(pathSuffix), bodyReader))
+	request.Header = header
+	if c.sharedKey != "" {
+		request.Header.Add("SharedKey", c.sharedKey)
+	}
+
+	dumpBody := func(b *io.ReadCloser) string {
+		if *b == nil {
+			return ""
+		}
+		copy := drainBody(b)
+		text := jsontext.Value(aids.Must(io.ReadAll(copy)))
+		text.Indent(jsontext.WithIndent("  "))
+		return string(text)
+	}
+	if c.dump {
+		fmt.Printf("-----> REQUEST:\n%v%v\n", string(aids.Must(httputil.DumpRequest(request, false))), dumpBody(&request.Body))
+	}
+	response, err := c.Client.Do(request)
+	if c.dump {
+		fmt.Printf("<-----RESPONSE:\n%v%v\n", string(aids.Must(httputil.DumpResponse(response, false))), dumpBody(&response.Body))
+	}
+	return response, err
+}
+
+// drainBody reads all of b to memory, sets *b to a copy and returns a copy
+func drainBody(b *io.ReadCloser) (copy io.ReadCloser) {
+	if *b == nil || *b == http.NoBody {
+		return http.NoBody // No copying needed. Preserve the magic sentinel meaning of NoBody.
+	}
+	var buf bytes.Buffer
+	buf.ReadFrom(*b)
+	(*b).Close()
+	*b = io.NopCloser(bytes.NewReader(buf.Bytes()))
+	return io.NopCloser(&buf)
 }
 
 // runToolCall runs a tool call to completion, processing any requests along the way
@@ -59,15 +93,14 @@ func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcess
 	response := (*http.Response)(nil)
 	if initiate {
 		response = aids.Must(c.Do("PUT", toolCallIDURL, http.Header{
-			"Idempotency-Key": []string{"foobar"},
+			"Idempotency-Key": []string{time.Now().Format(time.RFC3339Nano)},
 			"Content-Type":    []string{"application/json"},
 			"Accept":          []string{"application/json"},
 		}, request))
 	} else {
 		response = get()
 	}
-	aids.Assert(response.StatusCode == http.StatusOK || response.StatusCode == http.StatusCreated,
-		fmt.Sprintf("Expected 200 or 201; got %d\n", response.StatusCode))
+	aids.AssertHttpStatus(response, http.StatusOK, http.StatusCreated)
 	tc := unmarshalBody[mcp.ToolCall](response.Body)
 
 	for !tc.Status.Terminated() {
@@ -85,6 +118,7 @@ func (c *mcpClient) runToolCall(toolName, toolCallID string, tcp ToolCallProcess
 				response = get()
 			}
 			tc = unmarshalBody[mcp.ToolCall](response.Body)
+
 		case "awaitingElicitationResult":
 			result := tcp.Elicit(tc)
 			response = aids.Must(c.Do("POST", toolCallIDURL+"/advance", http.Header{

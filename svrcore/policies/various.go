@@ -54,12 +54,15 @@ func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
 			// Saturation: how much load the system is under, relative to its total capacity. This could be the amount of memory used versus available or a thread pool’s active threads versus total number of threads available, in any layer of the system.
 			if time.Since(lastUpdate) > 1*time.Minute {
 				lastUpdate = time.Now()
-				var latestMemStats runtime.MemStats
-				runtime.ReadMemStats(&latestMemStats)        // TODO: Log memory metrics
-				latestNumGoroutine := runtime.NumGoroutine() // TODO: Log # of goroutines?
-				logger.LogAttrs(ctx, slog.LevelInfo, "Runtime", slog.Int("HeapMem", int(latestMemStats.Alloc)), slog.Int("GCs", int(latestMemStats.NumGC)), slog.Int("Goroutines", latestNumGoroutine))
-				logger.LogAttrs(ctx, slog.LevelInfo, "Requests", slog.Int("req/min", requestCountPerMinute.Rate()), slog.Int("req ms/min", requestLatencyPerMinute.Rate()),
-					slog.Int("5xx/min", requestServiceFailuresPerMinute.Rate()))
+				var memStats runtime.MemStats
+				runtime.ReadMemStats(&memStats)
+				logger.LogAttrs(ctx, slog.LevelInfo, "Metrics",
+					slog.Int("req/min", requestCountPerMinute.Rate()),
+					slog.Int("req ms/min", requestLatencyPerMinute.Rate()),
+					slog.Int("5xx/min", requestServiceFailuresPerMinute.Rate()),
+					slog.Int("HeapMem", int(memStats.Alloc)),
+					slog.Int("GCs", int(memStats.NumGC)),
+					slog.Int("Goroutines", runtime.NumGoroutine()))
 			}
 		}()
 		return r.Next(ctx)

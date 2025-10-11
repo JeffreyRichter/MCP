@@ -5,6 +5,7 @@ import (
 	"encoding/json/jsontext"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"runtime/debug"
 	"strconv"
@@ -25,6 +26,32 @@ func Iif[T any](expression bool, trueVal, falseVal T) T {
 
 // IsError returns true if err is nil
 func IsError(err error) bool { return err != nil }
+
+/*func map[S ~[]In, In any, Out any](seq iter.Seq[In], mapTo func(In) Out) iter.Seq[Out] {
+	return func(yield func(Out) bool) {
+		for v := range seq {
+			if !yield(mapTo(v)) {
+				return
+			}
+		}
+	}
+}*/
+
+func AssertHttpStatus(response *http.Response, codes ...int) {
+	for _, code := range codes {
+		if response.StatusCode == code {
+			return
+		}
+	}
+	codeStr := []string{}
+	for _, code := range codes {
+		codeStr = append(codeStr, strconv.Itoa(code))
+	}
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	panic(fmt.Errorf("Response Status: %d; expected %s\nBody:\n%s",
+		response.StatusCode, strings.Join(codeStr, ", "), string(body)))
+}
 
 // Assert panics if condition is false
 func Assert(condition bool, v any) {

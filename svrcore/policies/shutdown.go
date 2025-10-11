@@ -1,3 +1,10 @@
+// TODO: Here's what we want...
+// 1. When process receives SIGINT/SIGTERM/(SIGQUIT: Ctrl+\), set flag indicating shutdown started.
+// 		HealthProbe() returns 503-ServiceUnavailable if shutdown has been requested; else 200-OK.
+// 2. Delay Xxx for load balancer to stop sending traffic.
+// 3. After delay, create context (derived from Background) and pass to http.Server's Shutdown method
+// 4. Immediately cancel http.Server's BaseContext
+
 package policies
 
 import (
@@ -15,6 +22,9 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
+// ShutdownMgr provides a policy that returns 503-ServiceUnavailable if the service is shutting down.
+// It also provides a context that is canceled after a delay when shutdown is requested.
+// This context can be used as the BaseContext for http.Server to cancel all in-flight requests.
 type ShutdownMgr struct {
 	// Context canceled after Config.HealthProbeDelay notifies load balancer to remove node
 	context.Context
@@ -58,7 +68,8 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM) // Register the signals we want the channel to receive
 		switch sig := <-sigs; sig {                          // Block until signal is received
 		case syscall.SIGINT, syscall.SIGTERM: // SIGINT is Ctrl-C, SIGTERM is default termination signal
-			c.ErrorLogger.Info("Signal " + sig.String() + ": Service instance shutting down")
+			c.ErrorLogger.LogAttrs(sm.Context, slog.LevelInfo,
+				"Server shutdown start", slog.String("signal", sig.String()))
 			// 1. Set flag indicating that shutdown has been requested (health probe uses this to notify load balancer to take node out of rotation)
 			sm.shuttingDown.Store(true) // All future requests immedidately return http.StatusServiceUnavailable via this policy
 
@@ -70,7 +81,7 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 			time.Sleep(c.CancellationDelay)
 
 			// 4. No more time given, force node shutdown
-			c.ErrorLogger.Info("All inflight requests complete: Service instance shutting down")
+			c.ErrorLogger.LogAttrs(sm.Context, slog.LevelInfo, "Server shutdown complete")
 			os.Exit(1) // Kill this service instance
 		}
 	}()

@@ -33,7 +33,7 @@ func (p *mcpPolicies) buildToolInfos() {
 	for _, tc := range []ToolInfo{
 		&addToolInfo{ops: p},
 		&countToolInfo{ops: p},
-		&piiToolInfo{ops: p},
+		&welcomeToolInfo{ops: p},
 		&streamToolInfo{ops: p},
 	} {
 		if t := tc.Tool(); t != nil {

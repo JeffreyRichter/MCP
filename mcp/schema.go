@@ -176,7 +176,7 @@ type (
 		ToolName           *string             `json:"toolname"`
 		ID                 *string             `json:"id"` // Scoped within tenant & tool name
 		Expiration         *time.Time          `json:"expiration,omitempty"`
-		ETag               *string             `json:"etag"`
+		ETag               *string             `json:"etag,omitempty"`
 		Status             *Status             `json:"status,omitempty" enum:"running,awaitingSamplingResponse,awaitingElicitationResponse,success,failed,canceled"`
 		Request            jsontext.Value      `json:"request,omitempty"`
 		SamplingRequest    *SamplingRequest    `json:"samplingRequest,omitempty"`

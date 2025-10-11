@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"math"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -39,7 +37,7 @@ func (tcp *appToolCallProcessor) ShowPartialResults(tc mcp.ToolCall) {
 		}
 		result := aids.MustUnmarshal[streamToolCallResult](tc.Result)
 		for ; tcp.streamIndex < len(result.Text); tcp.streamIndex++ { // Something new in result, stream it
-			tcp.StreamText(result.Text[tcp.streamIndex], 90)
+			tcp.StreamText(result.Text[tcp.streamIndex], 100)
 		}
 	}
 }
@@ -123,7 +121,8 @@ func (tcp *appToolCallProcessor) Elicit(tc mcp.ToolCall) any {
 			prompt.Printf("%s-%s (%s%s) [%s, %d-%d characters]: ", *s.Title, *s.Description, s.Type, aids.Iif(required, "*", ""),
 				*s.Format, aids.Iif(s.MinLength == nil, 0, *s.MinLength),
 				aids.Iif(s.MaxLength == nil, 1000, *s.MaxLength))
-			line := aids.Must(bufio.NewReader(os.Stdin).ReadString('\n'))
+			line := ""
+			fmt.Scanln(&line) //aids.Must(bufio.NewReader(os.Stdin).ReadString('\n'))
 			(*result.Content)[propName] = strings.TrimSpace(line)
 		}
 	}

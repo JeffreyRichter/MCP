@@ -63,11 +63,15 @@ func (tc *Resource) ToMCPWith(serverData bool) mcp.ToolCall {
 	if serverData {
 		sd = aids.New(sde.Encode(aids.MustMarshal(tc))) // Serialize the ToolCall Resource string
 	}
+	etag := (*string)(nil)
+	if tc.ETag != nil {
+		etag = aids.New(`\"` + tc.ETag.String() + `\"`) // ex: "\"etagValue\""; json unmarhsal removes outer "s
+	}
 	return mcp.ToolCall{
 		ToolName:           tc.ToolName,
 		ID:                 tc.ID,
 		Expiration:         tc.Expiration,
-		ETag:               aids.New(`\"` + tc.ETag.String() + `\"`), // ex: "\"etagValue\""; json unmarhsal removes outer "s
+		ETag:               etag,
 		Status:             tc.Status,
 		Request:            tc.Request,
 		SamplingRequest:    tc.SamplingRequest,
