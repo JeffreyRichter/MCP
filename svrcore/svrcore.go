@@ -233,10 +233,18 @@ func (p *apiVersionToServeMuxPolicy) next(ctx context.Context, r *ReqRes) bool {
 	}
 
 	hackPostActionForServeHTTP(r.R, true)
-	_ /*muxHandler*/, pattern := avi.serveMux.Handler(r.R) // Gets api-version's ServeMux
-	if pattern == "" {                                     // No pattern: method not supported at all for this URL Path
+	handler, pattern := avi.serveMux.Handler(r.R) // Gets api-version's ServeMux
+	if pattern == "" {                            // No pattern: handler writes 404 or 405
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/501
 		// 501 is the appropriate response when the server does not recognize the request method and is incapable of supporting it for any resource.
+		erw := newErrorResponseWriter(r.RW.Header())
+		handler.ServeHTTP(erw, r.R)
+		switch erw.statusCode { // Customize 404/405 responses here
+		case http.StatusMethodNotAllowed:
+			return r.WriteError(erw.statusCode, nil, nil, "MethodNotAllowed", "Method not allowed for this api-version")
+		case http.StatusNotFound:
+			return r.WriteError(erw.statusCode, nil, nil, "NotFound", "Resource not found for this api-version")
+		}
 		return r.WriteError(http.StatusMethodNotAllowed, nil, nil, "MethodNotAllowed", "Method not allowed for this api-version")
 	}
 	// Wrap reqRes inside a ResponseWriter and smuggle it through the ServeMux via ServeHTTP (which sets PathValues).
@@ -264,3 +272,23 @@ type smuggler struct {
 	r                   *ReqRes         // Used to smuggle the passed-in ReqRes
 	stop                bool            // Used to smuggle the returning continue/stop flag
 }
+
+// errorResponseWriter implements http.ResponseWriter interface
+type errorResponseWriter struct {
+	header     http.Header
+	statusCode int
+}
+
+// newErrorResponseWriter creates a new errorResponseWriter
+func newErrorResponseWriter(h http.Header) *errorResponseWriter {
+	return &errorResponseWriter{header: h} // Write the passed-in header
+}
+
+// Header returns the header map that will be sent by WriteHeader
+func (w *errorResponseWriter) Header() http.Header { return w.header }
+
+// Write writes the data to the connection as part of an HTTP reply
+func (w *errorResponseWriter) Write(data []byte) (int, error) { return len(data), nil }
+
+// WriteHeader sends an HTTP response header with the provided status code
+func (w *errorResponseWriter) WriteHeader(statusCode int) { w.statusCode = statusCode }
