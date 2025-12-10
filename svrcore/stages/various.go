@@ -1,4 +1,4 @@
-package policies
+package stages
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-func NewSharedKeyPolicy(sharedKey string) svrcore.Policy {
+func NewSharedKeyStage(sharedKey string) svrcore.Stage {
 	return func(ctx context.Context, r *svrcore.ReqRes) bool {
 		if sharedKey != "" && (r.R.Header.Get("SharedKey") != sharedKey) {
 			return r.WriteError(http.StatusUnauthorized, nil, nil, "SharedKeyHeaderRequired", "SharedKey header required")
@@ -19,7 +19,7 @@ func NewSharedKeyPolicy(sharedKey string) svrcore.Policy {
 	}
 }
 
-func NewThrottlingPolicy(maxRequestsPerSecond int) svrcore.Policy {
+func NewThrottlingStage(maxRequestsPerSecond int) svrcore.Stage {
 	requestPerSecond := newRateCounter(time.Second)
 	return func(ctx context.Context, r *svrcore.ReqRes) bool {
 		if requestPerSecond.Rate() >= maxRequestsPerSecond {
@@ -29,11 +29,11 @@ func NewThrottlingPolicy(maxRequestsPerSecond int) svrcore.Policy {
 	}
 }
 
-func NewDistributedTracing() svrcore.Policy {
+func NewDistributedTracingStage() svrcore.Stage {
 	return func(ctx context.Context, r *svrcore.ReqRes) bool { return r.Next(ctx) }
 }
 
-func NewMetricsPolicy(logger *slog.Logger) svrcore.Policy {
+func NewMetricsStage(logger *slog.Logger) svrcore.Stage {
 	requestCountPerMinute := newRateCounter(time.Minute)
 	requestLatencyPerMinute := newRateCounter(time.Minute)
 	requestServiceFailuresPerMinute := newRateCounter(time.Minute)

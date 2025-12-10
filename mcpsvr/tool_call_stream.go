@@ -14,7 +14,7 @@ import (
 
 type streamToolInfo struct {
 	defaultToolInfo
-	ops *mcpPolicies
+	ops *mcpStages
 }
 
 func (c *streamToolInfo) Tool() *mcp.Tool {

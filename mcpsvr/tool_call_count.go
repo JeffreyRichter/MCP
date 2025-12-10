@@ -14,7 +14,7 @@ import (
 
 type countToolInfo struct {
 	defaultToolInfo
-	ops *mcpPolicies
+	ops *mcpStages
 }
 
 func (c *countToolInfo) Tool() *mcp.Tool {

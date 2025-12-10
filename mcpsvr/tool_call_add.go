@@ -12,7 +12,7 @@ import (
 
 type addToolInfo struct {
 	defaultToolInfo
-	ops *mcpPolicies
+	ops *mcpStages
 }
 
 func (c *addToolInfo) Tool() *mcp.Tool {

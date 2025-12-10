@@ -1,4 +1,4 @@
-package policies
+package stages
 
 import (
 	"sync"

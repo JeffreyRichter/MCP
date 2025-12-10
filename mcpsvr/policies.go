@@ -20,15 +20,15 @@ import (
 // 3. Define api-version Resource Type Operations struct with field of #1 & define api-specific HTTP operations on this type
 // 4. Construct global singleton instance/variable of #3 wrapping #2 & set api-version routes to these var/methods
 
-// mcpPolicies wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
-type mcpPolicies struct {
+// mcpStages wraps the version-agnostic resources (ToolCalls) with this specific api-version's HTTP operations: behavior wrapping state
+type mcpStages struct {
 	errorLogger *slog.Logger
 	store       toolcall.Store
 	pm          toolcall.PhaseMgr
 	toolInfos   map[string]ToolInfo // ToolName to ToolCaller implementation
 }
 
-func (p *mcpPolicies) buildToolInfos() {
+func (p *mcpStages) buildToolInfos() {
 	p.toolInfos = map[string]ToolInfo{}
 	for _, tc := range []ToolInfo{
 		&addToolInfo{ops: p},
@@ -43,11 +43,11 @@ func (p *mcpPolicies) buildToolInfos() {
 }
 
 // etag returns the ETag for this version's HTTP operations
-func (p *mcpPolicies) etag() *svrcore.ETag { return aids.New(svrcore.ETag("v20250808")) }
+func (p *mcpStages) etag() *svrcore.ETag { return aids.New(svrcore.ETag("v20250808")) }
 
 // lookupToolCall retrieves the ToolInfo and ToolCall from the given request URL (and authentication for tenant).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
-func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.Resource, bool) {
+func (p *mcpStages) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.Resource, bool) {
 	tenant := "sometenant"
 	toolName, toolCallID := r.R.PathValue("toolName"), r.R.PathValue("toolCallID")
 	if toolName == "" {
@@ -64,7 +64,7 @@ func (p *mcpPolicies) lookupToolCall(r *svrcore.ReqRes) (ToolInfo, *toolcall.Res
 }
 
 // toolNameToProcessPhaseFunc converts a toolname to a function that knows how to advance the tool call's phase/state
-func (p *mcpPolicies) toolNameToProcessPhaseFunc(toolName string) toolcall.ProcessPhaseFunc {
+func (p *mcpStages) toolNameToProcessPhaseFunc(toolName string) toolcall.ProcessPhaseFunc {
 	ti, ok := p.toolInfos[toolName]
 	aids.Assert(ok, fmt.Errorf("tool '%s' not found", toolName))
 	return ti.ProcessPhase
@@ -72,7 +72,7 @@ func (p *mcpPolicies) toolNameToProcessPhaseFunc(toolName string) toolcall.Proce
 
 // putToolCallResource creates a new tool call resource (idempotently if a retry occurs).
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid.
-func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) putToolCallResource(ctx context.Context, r *svrcore.ReqRes) bool {
 	ti, tc, stop := p.lookupToolCall(r)
 	if stop {
 		return stop
@@ -112,7 +112,7 @@ func (p *mcpPolicies) putToolCallResource(ctx context.Context, r *svrcore.ReqRes
 // Writes an HTTP error response and returns a *ServerError if the tool name or tool call ID is missing or invalid,
 // the ToolCall resource is not found, or preconditions are not met.
 // This method is used is called by GET & POST (not PUT) because it assumes the resource must already exist.
-func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (ToolInfo, *toolcall.Resource, bool) {
+func (p *mcpStages) preambleToolCallResource(ctx context.Context, r *svrcore.ReqRes) (ToolInfo, *toolcall.Resource, bool) {
 	ti, tc, stop := p.lookupToolCall(r)
 	if stop {
 		return nil, nil, stop
@@ -128,7 +128,7 @@ func (p *mcpPolicies) preambleToolCallResource(ctx context.Context, r *svrcore.R
 }
 
 // getToolCallResource retrieves the ToolCall resource from the request.
-func (p *mcpPolicies) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getToolCallResource(ctx context.Context, r *svrcore.ReqRes) bool {
 	ti, tc, stop := p.preambleToolCallResource(ctx, r)
 	if stop {
 		return stop
@@ -137,7 +137,7 @@ func (p *mcpPolicies) getToolCallResource(ctx context.Context, r *svrcore.ReqRes
 }
 
 // postToolCallAdvance advances the state of a tool call using r's body (CreateMessageResult or ElicitResult)
-func (p *mcpPolicies) postToolCallResourceAdvance(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) postToolCallResourceAdvance(ctx context.Context, r *svrcore.ReqRes) bool {
 	ti, tc, stop := p.preambleToolCallResource(ctx, r)
 	if stop {
 		return stop
@@ -146,7 +146,7 @@ func (p *mcpPolicies) postToolCallResourceAdvance(ctx context.Context, r *svrcor
 }
 
 // postToolCallCancelResource cancels a tool call.
-func (p *mcpPolicies) postToolCallCancelResource(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) postToolCallCancelResource(ctx context.Context, r *svrcore.ReqRes) bool {
 	ti, tc, stop := p.preambleToolCallResource(ctx, r)
 	if stop {
 		return stop
@@ -157,7 +157,7 @@ func (p *mcpPolicies) postToolCallCancelResource(ctx context.Context, r *svrcore
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // getToolList retrieves the list of tools.
-func (p *mcpPolicies) getToolList(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getToolList(ctx context.Context, r *svrcore.ReqRes) bool {
 	if stop := r.CheckPreconditions(svrcore.ResourceValues{AllowedConditionals: svrcore.AllowedConditionalsMatch, ETag: p.etag()}); stop {
 		return true
 	}
@@ -169,23 +169,23 @@ func (p *mcpPolicies) getToolList(ctx context.Context, r *svrcore.ReqRes) bool {
 }
 
 // listToolCalls retrieves the list of tool calls.
-func (p *mcpPolicies) listToolCalls(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) listToolCalls(ctx context.Context, r *svrcore.ReqRes) bool {
 	body := any(nil)
 	return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: p.etag()}, nil, body)
 }
 
 // getResources retrieves the list of resources.
-func (p *mcpPolicies) getResources(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getResources(ctx context.Context, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // getResourcesTemplates retrieves the list of resource templates.
-func (p *mcpPolicies) getResourcesTemplates(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getResourcesTemplates(ctx context.Context, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // getResource retrieves a specific resource by name.
-func (p *mcpPolicies) getResource(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getResource(ctx context.Context, r *svrcore.ReqRes) bool {
 	resourceName := r.R.PathValue("name")
 	if resourceName == "" {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "Resource name is required")
@@ -194,22 +194,22 @@ func (p *mcpPolicies) getResource(ctx context.Context, r *svrcore.ReqRes) bool {
 }
 
 // getPrompts retrieves the list of prompts.
-func (p *mcpPolicies) getPrompts(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getPrompts(ctx context.Context, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // getPrompt retrieves a specific prompt by name.
-func (p *mcpPolicies) getPrompt(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) getPrompt(ctx context.Context, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // putRoots updates the list of root resources.
-func (p *mcpPolicies) putRoots(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) putRoots(ctx context.Context, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 
 // postCompletion returns a text completion.
-func (p *mcpPolicies) postCompletion(ctx context.Context, r *svrcore.ReqRes) bool {
+func (p *mcpStages) postCompletion(ctx context.Context, r *svrcore.ReqRes) bool {
 	return r.WriteSuccess(http.StatusNoContent, &svrcore.ResponseHeader{}, nil, nil)
 }
 

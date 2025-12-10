@@ -23,20 +23,20 @@ import (
 	"github.com/JeffreyRichter/mcpsvr/toolcall/azure"
 	"github.com/JeffreyRichter/mcpsvr/toolcall/local"
 	"github.com/JeffreyRichter/svrcore"
-	"github.com/JeffreyRichter/svrcore/policies"
+	"github.com/JeffreyRichter/svrcore/stages"
 )
 
 var (
 	errorLogger   = slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	metricsLogger = slog.New(slog.NewTextHandler(os.Stderr, nil))
-	shutdownMgr   = policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: errorLogger, HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
+	shutdownMgr   = stages.NewShutdownMgr(stages.ShutdownMgrConfig{ErrorLogger: errorLogger, HealthProbeDelay: time.Second * 2, CancellationDelay: time.Second * 3})
 )
 
 func main() {
 	var c Configuration
 	c.Load()
 
-	var routes *mcpPolicies
+	var routes *mcpStages
 	port, sharedKey := "0", "" // Default to OS-port & no sharedKey
 	switch {
 	case c.Local:
@@ -50,29 +50,29 @@ func main() {
 		} else {
 			port, sharedKey = "8080", "" //"ForDebuggingOnly"
 		}
-		routes = newLocalMcpPolicies(shutdownMgr.Context, errorLogger)
+		routes = newLocalMcpStages(shutdownMgr.Context, errorLogger)
 
 	case c.AzuriteAccount != "":
 		blobCred := aids.Must(azblob.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
 		blobClient := aids.Must(azblob.NewClientWithSharedKeyCredential(c.AzureBlobURL, blobCred, nil))
 		queueCred := aids.Must(azqueue.NewSharedKeyCredential(c.AzuriteAccount, c.AzuriteKey))
 		queueClient := aids.Must(azqueue.NewQueueClientWithSharedKeyCredential(c.AzureQueueURL, queueCred, nil))
-		routes = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+		routes = newAzureMcpStages(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 
 	default:
 		cred := aids.Must(azidentity.NewDefaultAzureCredential(nil))
 		blobClient := aids.Must(azblob.NewClient(c.AzureBlobURL, cred, nil))
 		queueClient := aids.Must(azqueue.NewQueueClient(c.AzureQueueURL, cred, nil))
-		routes = newAzureMcpPolicies(shutdownMgr.Context, errorLogger, blobClient, queueClient)
+		routes = newAzureMcpStages(shutdownMgr.Context, errorLogger, blobClient, queueClient)
 	}
 
-	policies := []svrcore.Policy{
-		shutdownMgr.NewPolicy(),
-		policies.NewMetricsPolicy(metricsLogger),
-		newApiVersionSimulatorPolicy(),
-		policies.NewSharedKeyPolicy(sharedKey),
-		//policies.NewThrottlingPolicy(100),
-		//policies.NewDistributedTracing(),
+	stages := []svrcore.Stage{
+		shutdownMgr.NewStage(),
+		stages.NewMetricsStage(metricsLogger),
+		newApiVersionSimulatorStage(),
+		stages.NewSharedKeyStage(sharedKey),
+		stages.NewThrottlingStage(100),
+		stages.NewDistributedTracingStage(),
 	}
 
 	// Supported scenarios:
@@ -84,9 +84,12 @@ func main() {
 		{ApiVersion: "2025-08-08", BaseApiVersion: "", GetRoutes: routes.Routes20250808},
 	}
 
+	// http.Server
+	// -> Handler that creates ReqRes & starts stage chain
+	//    -> Last stage passes Context/ReqRes to map[api-version]ServeMux
 	s := &http.Server{
 		Handler: svrcore.BuildHandler(svrcore.BuildHandlerConfig{
-			Policies:              policies,
+			Stages:                stages,
 			ApiVersionInfos:       avis,
 			ApiVersionKeyName:     "Api-Version", // Must be canonicalized HTTP header key
 			ApiVersionKeyLocation: svrcore.ApiVersionKeyLocationHeader,
@@ -117,15 +120,15 @@ func main() {
 	}
 }
 
-func newLocalMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger) *mcpPolicies {
-	ops := &mcpPolicies{errorLogger: errorLogger, store: local.NewToolCallStore(shutdownCtx)}
+func newLocalMcpStages(shutdownCtx context.Context, errorLogger *slog.Logger) *mcpStages {
+	ops := &mcpStages{errorLogger: errorLogger, store: local.NewToolCallStore(shutdownCtx)}
 	ops.pm = local.NewPhaseMgr(shutdownCtx, local.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
 	ops.buildToolInfos()
 	return ops
 }
 
-func newAzureMcpPolicies(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *mcpPolicies {
-	ops := &mcpPolicies{errorLogger: errorLogger, store: azure.NewToolCallStore(blobClient)}
+func newAzureMcpStages(shutdownCtx context.Context, errorLogger *slog.Logger, blobClient *azblob.Client, queueClient *azqueue.QueueClient) *mcpStages {
+	ops := &mcpStages{errorLogger: errorLogger, store: azure.NewToolCallStore(blobClient)}
 	pm, err := azure.NewPhaseMgr(shutdownCtx, queueClient, ops.store, azure.PhaseMgrConfig{ErrorLogger: errorLogger, ToolNameToProcessPhaseFunc: ops.toolNameToProcessPhaseFunc})
 	aids.Must0(err)
 	ops.pm = pm
@@ -142,27 +145,27 @@ func noApiVersionRoutes(baseRoutes svrcore.ApiVersionRoutes) svrcore.ApiVersionR
 	// Remove existing URL entirely:               delete(baseRoutes, "<ExistingUrl>")
 	return svrcore.ApiVersionRoutes{
 		"/debug/health": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: shutdownMgr.HealthProbe},
+			"GET": {Stage: shutdownMgr.HealthProbe},
 		},
 		"/debug/pprof": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Index(rr.RW, rr.R); return false }},
+			"GET": {Stage: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Index(rr.RW, rr.R); return false }},
 		},
 		"/debug/cmdline": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Cmdline(rr.RW, rr.R); return false }},
+			"GET": {Stage: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Cmdline(rr.RW, rr.R); return false }},
 		},
 		"/debug/profile": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Profile(rr.RW, rr.R); return false }},
+			"GET": {Stage: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Profile(rr.RW, rr.R); return false }},
 		},
 		"/debug/symbol": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Symbol(rr.RW, rr.R); return false }},
+			"GET": {Stage: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Symbol(rr.RW, rr.R); return false }},
 		},
 		"/debug/trace": map[string]*svrcore.MethodInfo{
-			"GET": {Policy: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Trace(rr.RW, rr.R); return false }},
+			"GET": {Stage: func(ctx context.Context, rr *svrcore.ReqRes) bool { pprof.Trace(rr.RW, rr.R); return false }},
 		},
 	}
 }
 
-func newApiVersionSimulatorPolicy() svrcore.Policy {
+func newApiVersionSimulatorStage() svrcore.Stage {
 	return func(ctx context.Context, r *svrcore.ReqRes) bool {
 		if !strings.HasPrefix(r.R.URL.Path, "/debug/") {
 			r.R.Header.Set("api-version", "2025-08-08")

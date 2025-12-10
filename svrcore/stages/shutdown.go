@@ -5,7 +5,7 @@
 // 3. After delay, create context (derived from Background) and pass to http.Server's Shutdown method
 // 4. Immediately cancel http.Server's BaseContext
 
-package policies
+package stages
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	"github.com/JeffreyRichter/svrcore"
 )
 
-// ShutdownMgr provides a policy that returns 503-ServiceUnavailable if the service is shutting down.
+// ShutdownMgr provides a stage that returns 503-ServiceUnavailable if the service is shutting down.
 // It also provides a context that is canceled after a delay when shutdown is requested.
 // This context can be used as the BaseContext for http.Server to cancel all in-flight requests.
 type ShutdownMgr struct {
@@ -46,7 +46,7 @@ func (sm *ShutdownMgr) HealthProbe(ctx context.Context, r *svrcore.ReqRes) bool 
 	return r.WriteSuccess(http.StatusOK, nil, nil, nil)
 }
 
-// ShutdownMgrConfig holds the configuration for the shutdown policy.
+// ShutdownMgrConfig holds the configuration for the shutdown stage.
 type ShutdownMgrConfig struct {
 	ErrorLogger *slog.Logger
 	// HealthProbeDelay indicates the time the load balancer takes to stop sending traffic to the process.
@@ -71,7 +71,7 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 			c.ErrorLogger.LogAttrs(sm.Context, slog.LevelInfo,
 				"Server shutdown start", slog.String("signal", sig.String()))
 			// 1. Set flag indicating that shutdown has been requested (health probe uses this to notify load balancer to take node out of rotation)
-			sm.shuttingDown.Store(true) // All future requests immedidately return http.StatusServiceUnavailable via this policy
+			sm.shuttingDown.Store(true) // All future requests immedidately return http.StatusServiceUnavailable via this stage
 
 			// 2. Give some time for health probe/load balancer to stop sending traffic to this node
 			time.Sleep(c.HealthProbeDelay)
@@ -88,9 +88,9 @@ func NewShutdownMgr(c ShutdownMgrConfig) *ShutdownMgr {
 	return sm
 }
 
-// NewPolicy creates a new shutdown policy using ShutdownMgr.
-// This policy returns a 503-ServiceUnavailable if the service is shutting down; else the request is processed normally.
-func (sm *ShutdownMgr) NewPolicy() svrcore.Policy {
+// NewStage creates a new shutdown stage using ShutdownMgr.
+// This stage returns a 503-ServiceUnavailable if the service is shutting down; else the request is processed normally.
+func (sm *ShutdownMgr) NewStage() svrcore.Stage {
 	return func(ctx context.Context, r *svrcore.ReqRes) bool {
 		if sm.ShuttingDown() {
 			return r.WriteError(http.StatusServiceUnavailable, nil, nil, "Server unavailable", "This server instance is shutting down. Please try again.")

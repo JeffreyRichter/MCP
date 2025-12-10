@@ -11,25 +11,25 @@ import (
 
 	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/svrcore"
-	"github.com/JeffreyRichter/svrcore/policies"
+	"github.com/JeffreyRichter/svrcore/stages"
 )
 
-var testSvr *mcpPolicies = newLocalMcpPolicies(context.Background(), slog.Default())
+var testSvr *mcpStages = newLocalMcpStages(context.Background(), slog.Default())
 
 func testServer(t *testing.T) *httptest.Server {
 	logger := slog.Default()
 
-	policies := []svrcore.Policy{
-		policies.NewShutdownMgr(policies.ShutdownMgrConfig{ErrorLogger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewPolicy(),
-		policies.NewThrottlingPolicy(100),
-		policies.NewSharedKeyPolicy(""),
-		policies.NewMetricsPolicy(logger),
-		policies.NewDistributedTracing(),
+	stages := []svrcore.Stage{
+		stages.NewShutdownMgr(stages.ShutdownMgrConfig{ErrorLogger: logger, HealthProbeDelay: time.Second * 3, CancellationDelay: time.Second * 2}).NewStage(),
+		stages.NewThrottlingStage(100),
+		stages.NewSharedKeyStage(""),
+		stages.NewMetricsStage(logger),
+		stages.NewDistributedTracingStage(),
 	}
 	avis := []*svrcore.ApiVersionInfo{{GetRoutes: testSvr.Routes20250808}}
 	handler := svrcore.BuildHandler(
 		svrcore.BuildHandlerConfig{
-			Policies:              policies,
+			Stages:                stages,
 			ApiVersionInfos:       avis,
 			ApiVersionKeyName:     "Api-Version",
 			ApiVersionKeyLocation: svrcore.ApiVersionKeyLocationHeader,

@@ -32,13 +32,13 @@ type ApiVersionRoutes map[ /*url*/ string]map[ /*http method*/ string]*MethodInf
 
 // MethodInfo represents information about a method.
 type MethodInfo struct {
-	Policy      Policy       // Policy represents the policy associated with the method.
+	Stage       Stage        // Stage represents the stage associated with the method.
 	ValidHeader *ValidHeader // ValidHeader represents the valid header associated with the method, if any.
 }
 
-// Policy specifies the function signature for a policy.
+// Stage specifies the function signature for a stage.
 // Returning true if [ReqRes.WriteError] was called and futher processing of the HTTP request should stop.
-type Policy func(context.Context, *ReqRes) bool
+type Stage func(context.Context, *ReqRes) bool
 
 type ApiVersionKeyLocation int
 
@@ -48,8 +48,8 @@ const (
 )
 
 type BuildHandlerConfig struct {
-	// Policies is the slice of policies to execute for each request.
-	Policies []Policy
+	// Stages is the slice of stages to execute for each request.
+	Stages []Stage
 
 	// ApiVersionKeyName is the key name used in the HTTP Request to specify the API version.
 	ApiVersionKeyName string
@@ -82,13 +82,13 @@ type BuildHandlerConfig struct {
 //     On the 2nd+ calls, a non-*ServerError is returned up the stack (see next bullet).
 //   - If the final error is not a *ServiceError (meaning a non-HTTP error occured somewhere while processing).
 func BuildHandler(c BuildHandlerConfig) http.Handler {
-	apiVersionToServeMuxPolicy := newApiVersionToServeMuxPolicy(c.ApiVersionInfos, c.ApiVersionKeyName, c.ApiVersionKeyLocation)
-	policies := append(c.Policies, apiVersionToServeMuxPolicy)
+	apiVersionToServeMuxStage := newApiVersionToServeMuxStage(c.ApiVersionInfos, c.ApiVersionKeyName, c.ApiVersionKeyLocation)
+	stages := append(c.Stages, apiVersionToServeMuxStage)
 
 	// Return the http.Handler called for each request by http.(ListenAnd)Serve(TLS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This is the 1st function called when an HTTP request comes into the service
-		rr, stop := newReqRes(policies, c.Logger, r, w)
+		rr, stop := newReqRes(stages, c.Logger, r, w)
 
 		defer func() { // Guarantees logging errors during request processing & client gets a response
 			stack := &strings.Builder{}
@@ -110,7 +110,7 @@ func BuildHandler(c BuildHandlerConfig) http.Handler {
 			}
 		}()
 
-		if !stop { // No error, start policies; defer above does any error logging & ensures a client response
+		if !stop { // No error, start stages; defer above does any error logging & ensures a client response
 			rr.Next(rr.R.Context())
 		}
 	})
@@ -127,13 +127,13 @@ func (avi apiVersionInfos) find(apiVersion string) *ApiVersionInfo {
 	return avi[n]
 }
 
-type apiVersionToServeMuxPolicy struct {
+type apiVersionToServeMuxStage struct {
 	apiVersionInfos       apiVersionInfos
 	apiVersionKeyName     string
 	apiVersionKeyLocation ApiVersionKeyLocation
 }
 
-func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName string, apiVersionKeyLocation ApiVersionKeyLocation) Policy {
+func newApiVersionToServeMuxStage(avis apiVersionInfos, apiVersionKeyName string, apiVersionKeyLocation ApiVersionKeyLocation) Stage {
 	// Sort the ApiVersionInfos by api-version in ascending order so we can use BinarySearch later
 	slices.SortFunc(avis, func(i, j *ApiVersionInfo) int { return strings.Compare(i.ApiVersion, j.ApiVersion) })
 
@@ -155,11 +155,11 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 		avi.routes = avi.GetRoutes(baseApiVersionRoutes) // Get this api-version's routes passing in the base routes
 
 		avi.serveMux = http.NewServeMux() // Build the http.ServeMux for this api-version's routes
-		for url, methodAndPolicyInfo := range avi.routes {
-			for method, policyInfo := range methodAndPolicyInfo {
-				// Build & return a handler that knows how to create a new ReqRes with w, r & policies & starts policies
-				// The last policy (apiversion) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
-				// The receiving handler unwraps RW to get ReqRes back and looks up httpHandlerToPolicy from ServeMux to invoke route policy
+		for url, methodAndStageInfo := range avi.routes {
+			for method, stageInfo := range methodAndStageInfo {
+				// Build & return a handler that knows how to create a new ReqRes with w, r & stages & starts stages
+				// The last stage (apiversion) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
+				// The receiving handler unwraps RW to get ReqRes back and looks up httpHandlerToStage from ServeMux to invoke route stage
 				pattern := method + " "
 				if method == http.MethodPost {
 					// Convert "POST /foo/bar:action" to "POST /foo/bar/:action" so that ServeMux pattern matching works
@@ -172,19 +172,19 @@ func newApiVersionToServeMuxPolicy(avis apiVersionInfos, apiVersionKeyName strin
 					s := w.(*smuggler)
 					hackPostActionForServeHTTP(r, false)
 					s.r.R = r // Replace old R with new 'r' which has PathValues set
-					s.stop = s.r.validateRequestHeader(policyInfo.ValidHeader)
+					s.stop = s.r.validateRequestHeader(stageInfo.ValidHeader)
 					if !s.stop {
-						s.stop = policyInfo.Policy(s.ctx, s.r) // Smuggle the continue/stop flag  back to our caller
+						s.stop = stageInfo.Stage(s.ctx, s.r) // Smuggle the continue/stop flag  back to our caller
 					}
 				}))
 			}
 		}
 	}
-	return (&apiVersionToServeMuxPolicy{apiVersionInfos: avis, apiVersionKeyName: apiVersionKeyName, apiVersionKeyLocation: apiVersionKeyLocation}).next
+	return (&apiVersionToServeMuxStage{apiVersionInfos: avis, apiVersionKeyName: apiVersionKeyName, apiVersionKeyLocation: apiVersionKeyLocation}).next
 }
 
-// next (last policy) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
-func (p *apiVersionToServeMuxPolicy) next(ctx context.Context, r *ReqRes) bool {
+// next (last stage) gets api-version's ServeMux, wraps reqRes inside a ResponseWriter and calls ServeHTTP.
+func (p *apiVersionToServeMuxStage) next(ctx context.Context, r *ReqRes) bool {
 	requestApiVersions := []string{}
 	location := ""
 	switch p.apiVersionKeyLocation {

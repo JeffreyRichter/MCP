@@ -16,24 +16,32 @@ import (
 	"github.com/JeffreyRichter/internal/aids"
 )
 
-// ReqRes encapsulates the incoming http.Requests and the outgoing http.ResponseWriter and is passed through the set of policies.
+// ReqRes encapsulates the incoming http.Requests and the outgoing http.ResponseWriter and is passed through the set of stages.
 type ReqRes struct {
 	// id is a unique ID for this ReqRes (useful for logging, etc.)
-	id string // TODO: change to guid?
+	id string
+
 	// R identifies the incoming HTTP request
 	R *http.Request
+
 	// H identifies the deserialized standard HTTP headers
 	H *RequestHeader
+
 	// RW is the http.ResponseWriter used to write the HTTP response; it implements io.Writer.
 	// Prefer using [ReqRes.WriteError], [ReqRes.WriteServerError], or [ReqRes.WriteSuccess] instead of using RW directly.
-	RW *ResponseWriter
-	p  []Policy // The slice of policies to execute for this request
-	l  *slog.Logger
-	_  struct{} // Forces use of field names in composite literals
+	RW *responseWriter
+
+	// s is the slice of stages to execute for this request
+	s []Stage
+
+	// l is the logger for anything related to processing the request & its response
+	l *slog.Logger
+
+	_ struct{} // Forces use of field names in composite literals
 }
 
-// ResponseWriter is a custom http.ResponseWriter that captures the status code.
-type ResponseWriter struct {
+// responseWriter is a custom http.responseWriter that captures the status code.
+type responseWriter struct {
 	http.ResponseWriter
 	StatusCode          int
 	numWriteHeaderCalls int // When done request processing, this must be 1 or an error occurred
@@ -42,7 +50,7 @@ type ResponseWriter struct {
 }
 
 // WriteHeader overwrites http.ResponseWriter's WriteHeader method in order to capture the status code.
-func (rww *ResponseWriter) WriteHeader(statusCode int) {
+func (rww *responseWriter) WriteHeader(statusCode int) {
 	rww.StatusCode = statusCode
 	rww.numWriteHeaderCalls++
 	rww.ResponseWriter.WriteHeader(statusCode)
@@ -52,15 +60,15 @@ func (rww *ResponseWriter) WriteHeader(statusCode int) {
 		slog.Int("StatusCode", rww.StatusCode))
 }
 
-// newReqRes creates a new ReqRes with the specified policies, http.Request, & http.ResponseWriter.
-func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
+// newReqRes creates a new ReqRes with the specified stages, http.Request, & http.ResponseWriter.
+func newReqRes(p []Stage, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
 	rr := &ReqRes{
 		id: strconv.FormatInt(time.Now().Unix(), 10),
-		p:  p,
+		s:  p,
 		l:  l,
 		R:  r,
 		H:  &RequestHeader{},
-		RW: &ResponseWriter{ResponseWriter: rw},
+		RW: &responseWriter{ResponseWriter: rw},
 	}
 	rr.RW.rr = rr
 	rw.Header().Set("Server-Request-Id", rr.id) // Set this header now guaranteeing its return to the client
@@ -74,11 +82,11 @@ func newReqRes(p []Policy, l *slog.Logger, r *http.Request, rw http.ResponseWrit
 	return rr, false
 }
 
-// Next sends the ReqRes to the next policy.
+// Next sends the ReqRes to the next stage.
 func (r *ReqRes) Next(ctx context.Context) bool {
-	nextPolicy := r.p[0]
-	r.p = r.p[1:]
-	return nextPolicy(ctx, r)
+	nextStage := r.s[0]
+	r.s = r.s[1:]
+	return nextStage(ctx, r)
 }
 
 // WriteError sets the HTTP response to the specified HTTP status code, response headers, custom headers
