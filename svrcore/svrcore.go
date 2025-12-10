@@ -14,13 +14,19 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
+	stagescore "github.com/JeffreyRichter/internal/stages"
 )
+
+// Stage specifies the function signature for a stage.
+// Returning true if [ReqRes.WriteError] was called and futher processing of the HTTP request should stop.
+type Stage = stagescore.Stage[*ReqRes, bool]
 
 // ApiVersionInfo represents information about an API version.
 type ApiVersionInfo struct {
 	ApiVersion     string
 	BaseApiVersion string
-	RetireAt       time.Time
+	DeprecatedAt   time.Time
+	RetireAt       time.Time // Must be after DeprecatedAt if set
 	GetRoutes      func(baseApiVersionRoutes ApiVersionRoutes) ApiVersionRoutes
 	routes         ApiVersionRoutes
 	serveMux       *http.ServeMux
@@ -36,10 +42,6 @@ type MethodInfo struct {
 	ValidHeader *ValidHeader // ValidHeader represents the valid header associated with the method, if any.
 }
 
-// Stage specifies the function signature for a stage.
-// Returning true if [ReqRes.WriteError] was called and futher processing of the HTTP request should stop.
-type Stage func(context.Context, *ReqRes) bool
-
 type ApiVersionKeyLocation int
 
 const (
@@ -49,7 +51,7 @@ const (
 
 type BuildHandlerConfig struct {
 	// Stages is the slice of stages to execute for each request.
-	Stages []Stage
+	Stages stagescore.Stages[*ReqRes, bool]
 
 	// ApiVersionKeyName is the key name used in the HTTP Request to specify the API version.
 	ApiVersionKeyName string
@@ -211,7 +213,9 @@ func (p *apiVersionToServeMuxStage) next(ctx context.Context, r *ReqRes) bool {
 		return r.WriteError(http.StatusBadRequest, nil, nil, "The '%s' %s must specify a single value", p.apiVersionKeyName, location)
 	}
 
-	isApiVersionRetired := func(avi *ApiVersionInfo) bool { return !avi.RetireAt.IsZero() && time.Now().After(avi.RetireAt) }
+	isApiVersionRetired := func(avi *ApiVersionInfo) bool {
+		return !avi.RetireAt.IsZero() && time.Now().After(avi.RetireAt)
+	}
 
 	if avi == nil || isApiVersionRetired(avi) || avi.serveMux == nil { // api-version not supported
 		supportedApiVersions := "" // Build in reverse order; only show latest preview if after latest version
@@ -230,6 +234,17 @@ func (p *apiVersionToServeMuxStage) next(ctx context.Context, r *ReqRes) bool {
 		}
 		return r.WriteError(http.StatusBadRequest, nil, nil, "UnsupportedApiVersionValue",
 			"Unsupported api-version '%s'. The supported api-versions are '%s'", requestApiVersion, supportedApiVersions)
+	}
+
+	isApiVersionDeprecated := func(avi *ApiVersionInfo) bool {
+		return !isApiVersionRetired(avi) && !avi.DeprecatedAt.IsZero() && time.Now().After(avi.DeprecatedAt)
+	}
+
+	if isApiVersionDeprecated(avi) {
+		r.R.Header.Set("deprecated-api-version",
+			fmt.Sprintf("api-version %s is deprecated and will be retired at %s.'",
+				avi.ApiVersion, avi.RetireAt.Format(time.RFC1123)))
+		// TODO: Add support for recommending a newer api-version?
 	}
 
 	hackPostActionForServeHTTP(r.R, true)

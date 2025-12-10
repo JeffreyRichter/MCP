@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/JeffreyRichter/internal/aids"
+	stagescore "github.com/JeffreyRichter/internal/stages"
 )
 
 // ReqRes encapsulates the incoming http.Requests and the outgoing http.ResponseWriter and is passed through the set of stages.
@@ -32,7 +33,7 @@ type ReqRes struct {
 	RW *responseWriter
 
 	// s is the slice of stages to execute for this request
-	s []Stage
+	s stagescore.Stages[*ReqRes, bool]
 
 	// l is the logger for anything related to processing the request & its response
 	l *slog.Logger
@@ -61,10 +62,15 @@ func (rww *responseWriter) WriteHeader(statusCode int) {
 }
 
 // newReqRes creates a new ReqRes with the specified stages, http.Request, & http.ResponseWriter.
-func newReqRes(p []Stage, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
+func newReqRes(s []Stage, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
+	// Make a copy of the Stages slice because each stange mutes it
+	stagesCopy := make([]Stage, len(s))
+	copy(stagesCopy, s)
+
+	// Copy elements from original to copiedSlice
 	rr := &ReqRes{
 		id: strconv.FormatInt(time.Now().Unix(), 10),
-		s:  p,
+		s:  stagesCopy,
 		l:  l,
 		R:  r,
 		H:  &RequestHeader{},
@@ -83,11 +89,7 @@ func newReqRes(p []Stage, l *slog.Logger, r *http.Request, rw http.ResponseWrite
 }
 
 // Next sends the ReqRes to the next stage.
-func (r *ReqRes) Next(ctx context.Context) bool {
-	nextStage := r.s[0]
-	r.s = r.s[1:]
-	return nextStage(ctx, r)
-}
+func (r *ReqRes) Next(ctx context.Context) bool { return r.s.Next(ctx, r) }
 
 // WriteError sets the HTTP response to the specified HTTP status code, response headers, custom headers
 // (a struct with fields/values or nil), errorCode, and message. rh and customHeader must be pointer-to-structures

@@ -51,7 +51,10 @@ func NewMetricsStage(logger *slog.Logger) svrcore.Stage {
 				requestServiceFailuresPerMinute.Add(1) // Errors: the rate of unexpected service things (5xx) happening.
 			}
 
-			// Saturation: how much load the system is under, relative to its total capacity. This could be the amount of memory used versus available or a thread pool’s active threads versus total number of threads available, in any layer of the system.
+			// Saturation: how much load the system is under, relative to its total capacity.
+			// This could be the amount of memory used versus available or a thread pool’s
+			// active threads versus total number of threads available, in any layer of
+			// the system.
 			if time.Since(lastUpdate) > 1*time.Minute {
 				lastUpdate = time.Now()
 				var memStats runtime.MemStats

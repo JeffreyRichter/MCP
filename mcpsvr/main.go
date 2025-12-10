@@ -85,8 +85,9 @@ func main() {
 	}
 
 	// http.Server
-	// -> Handler that creates ReqRes & starts stage chain
-	//    -> Last stage passes Context/ReqRes to map[api-version]ServeMux
+	// -> internal handler creates ReqRes & starts stage chain
+	//    -> Last stage (internal) passes Context/ReqRes to internal map[api-version]ServeMux
+	// 	 	 -> internal ServeMux handler calls api-version/route stage chain
 	s := &http.Server{
 		Handler: svrcore.BuildHandler(svrcore.BuildHandlerConfig{
 			Stages:                stages,
