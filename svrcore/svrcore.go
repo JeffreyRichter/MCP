@@ -25,7 +25,7 @@ type Stage = stagescore.Stage[*ReqRes, bool]
 type ApiVersionInfo struct {
 	ApiVersion     string
 	BaseApiVersion string
-	DeprecatedAt   time.Time
+	DeprecateAt    time.Time
 	RetireAt       time.Time // Must be after DeprecatedAt if set
 	GetRoutes      func(baseApiVersionRoutes ApiVersionRoutes) ApiVersionRoutes
 	routes         ApiVersionRoutes
@@ -237,7 +237,7 @@ func (p *apiVersionToServeMuxStage) next(ctx context.Context, r *ReqRes) bool {
 	}
 
 	isApiVersionDeprecated := func(avi *ApiVersionInfo) bool {
-		return !isApiVersionRetired(avi) && !avi.DeprecatedAt.IsZero() && time.Now().After(avi.DeprecatedAt)
+		return !isApiVersionRetired(avi) && !avi.DeprecateAt.IsZero() && time.Now().After(avi.DeprecateAt)
 	}
 
 	if isApiVersionDeprecated(avi) {
