@@ -63,14 +63,9 @@ func (rww *responseWriter) WriteHeader(statusCode int) {
 
 // newReqRes creates a new ReqRes with the specified stages, http.Request, & http.ResponseWriter.
 func newReqRes(s []Stage, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
-	// Make a copy of the Stages slice because each stange mutes it
-	stagesCopy := make([]Stage, len(s))
-	copy(stagesCopy, s)
-
-	// Copy elements from original to copiedSlice
 	rr := &ReqRes{
 		id: strconv.FormatInt(time.Now().Unix(), 10),
-		s:  stagesCopy,
+		s:  (stagescore.Stages[*ReqRes, bool])(s).Copy(),
 		l:  l,
 		R:  r,
 		H:  &RequestHeader{},
