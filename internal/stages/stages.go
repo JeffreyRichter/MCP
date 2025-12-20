@@ -12,9 +12,3 @@ func (s *Stages[In, Out]) Next(ctx context.Context, in In) Out {
 	*s = (*s)[1:]
 	return nextStage(ctx, in)
 }
-
-func (s Stages[In, Out]) Copy() Stages[In, Out] {
-	stagesCopy := make([]Stage[In, Out], len(s))
-	copy(stagesCopy, s)
-	return stagesCopy
-}

@@ -65,7 +65,7 @@ func (rww *responseWriter) WriteHeader(statusCode int) {
 func newReqRes(s []Stage, l *slog.Logger, r *http.Request, rw http.ResponseWriter) (*ReqRes, bool) {
 	rr := &ReqRes{
 		id: strconv.FormatInt(time.Now().Unix(), 10),
-		s:  (stagescore.Stages[*ReqRes, bool])(s).Copy(),
+		s:  s,
 		l:  l,
 		R:  r,
 		H:  &RequestHeader{},
