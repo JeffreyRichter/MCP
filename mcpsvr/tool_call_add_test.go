@@ -42,10 +42,10 @@ func TestToolCallAdd(t *testing.T) {
 	}
 
 	b, err := io.ReadAll(resp.Body)
+	resp.Body.Close() // After below if?
 	if aids.IsError(err) {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
 	add := struct{ Result addToolCallResult }{}
 	err = json.Unmarshal(b, &add)
 	if aids.IsError(err) {

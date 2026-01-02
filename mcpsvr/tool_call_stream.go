@@ -79,8 +79,8 @@ func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcess
 		tc.Status, tc.Phase = aids.New(mcp.StatusSuccess), nil
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
-	aids.Assert(se == nil, fmt.Errorf("failed to put tool call resource: %w", se))
-	time.Sleep(10 * time.Second) // Simulate doing work
+	aids.Assert(se != nil, fmt.Errorf("failed to put tool call resource: %w", se)) // JMR: was se == nil
+	time.Sleep(10 * time.Second)                                                   // Simulate doing work
 }
 
 var text = []string{`

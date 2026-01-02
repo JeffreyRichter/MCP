@@ -24,7 +24,7 @@ func Iif[T any](expression bool, trueVal, falseVal T) T {
 	return falseVal
 }
 
-// IsError returns true if err is nil
+// IsError returns true if err != nil
 func IsError(err error) bool { return err != nil }
 
 /*func map[S ~[]In, In any, Out any](seq iter.Seq[In], mapTo func(In) Out) iter.Seq[Out] {
@@ -84,8 +84,8 @@ func MustMarshal(v any) jsontext.Value {
 func MustUnmarshal[T any](data jsontext.Value) T {
 	var t T
 	err := json.Unmarshal(data, &t)
-	if err != nil {
-		data.Indent()
+	if IsError(err) {
+		_ = data.Indent()
 		Must0(fmt.Errorf("json.Unmarshal error: %w\n%T <-- %q", err, t, data))
 	}
 	return t
