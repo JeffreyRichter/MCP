@@ -149,7 +149,7 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 					rwh.Set(jsonFieldName, strconv.Itoa(int(f.Int())))
 				case reflect.Float32, reflect.Float64:
-					rwh.Set(jsonFieldName, strconv.FormatFloat(f.Float(), 'b', 4, 64)) // TODO:fix
+					rwh.Set(jsonFieldName, strconv.FormatFloat(f.Float(), 'g', -1, 64))
 				case reflect.Struct:
 					switch v.Type() {
 					case reflect.TypeFor[time.Time]():

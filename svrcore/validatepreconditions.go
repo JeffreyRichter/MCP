@@ -40,11 +40,11 @@ type AccessConditions struct {
 // PreconditionFailed [for an unsafe method]).
 func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) *ServerError {
 	if !rv.AllowedConditionals.Check(AllowedConditionalsMatch) && (c.IfMatch != nil || c.IfNoneMatch != nil) {
-		return NewServerError(http.StatusBadRequest, "", "if-match and if-none-match headers not supported by this resource")
+			return NewServerError(http.StatusBadRequest, "ConditionalHeadersNotSupported", "if-match and if-none-match headers not supported by this resource")
 	}
 
 	if !rv.AllowedConditionals.Check(AllowedConditionalsModified) && (c.IfModifiedSince != nil || c.IfUnmodifiedSince != nil) {
-		return NewServerError(http.StatusBadRequest, "", "if-modified-since and if-unmodified-since headers not supported by this resource")
+			return NewServerError(http.StatusBadRequest, "ConditionalHeadersNotSupported", "if-modified-since and if-unmodified-since headers not supported by this resource")
 	}
 
 	// Method doesn't alter resource: https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP
@@ -61,11 +61,11 @@ func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) *S
 			// Assuming the resource exists since we have an ETag, so this is a match.
 			// The only way this would fail is if rv.ETag was empty.
 			if rv.ETag == nil {
-				return NewServerError(http.StatusPreconditionFailed, "Resource does not exist", "")
+				return NewServerError(http.StatusPreconditionFailed, "ResourceNotFound", "Resource does not exist")
 			}
 		} else {
 			if rv.ETag == nil || !c.IfMatch.Equals(*rv.ETag) {
-				return NewServerError(http.StatusPreconditionFailed, "Resource etag doesn't match", "")
+				return NewServerError(http.StatusPreconditionFailed, "ETagMismatch", "Resource etag doesn't match")
 			}
 		}
 	}
@@ -74,7 +74,7 @@ func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) *S
 	// If-match is a stronger comparison than if-unmodifed-since
 	if c.IfMatch == nil && c.IfUnmodifiedSince != nil && rv.LastModified != nil {
 		if rv.LastModified.After(*c.IfUnmodifiedSince) {
-			return NewServerError(statusCode, "Resource was modified since", "")
+			return NewServerError(statusCode, "ResourceModified", "Resource was modified since the specified time")
 		}
 	}
 
@@ -84,11 +84,11 @@ func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) *S
 		if *c.IfNoneMatch == ETagAny {
 			// If "*" is used, the request fails if the resource exists.
 			if rv.ETag != nil {
-				return NewServerError(statusCode, "Resource exists", "")
+				return NewServerError(statusCode, "ResourceExists", "Resource already exists")
 			}
 		} else {
 			if rv.ETag != nil && c.IfNoneMatch.Equals(*rv.ETag) {
-				return NewServerError(statusCode, "Resource etag matches", "")
+				return NewServerError(statusCode, "ETagMatches", "Resource etag matches")
 			}
 		}
 	}
@@ -97,7 +97,7 @@ func CheckPreconditions(rv ResourceValues, method string, c AccessConditions) *S
 	// 200 if last-modified later than if-modified-since etag; else 304 & last-modified response header
 	if c.IfNoneMatch == nil && methodIsSafe && c.IfModifiedSince != nil && rv.LastModified != nil {
 		if !rv.LastModified.After(*c.IfModifiedSince) {
-			return NewServerError(statusCode, "Resource not modified since", "")
+			return NewServerError(statusCode, "ResourceNotModified", "Resource not modified since the specified time")
 		}
 	}
 

@@ -210,7 +210,7 @@ func (p *apiVersionToServeMuxStage) next(ctx context.Context, r *ReqRes) bool {
 		avi = p.apiVersionInfos.find(requestApiVersion)
 
 	default: // Too many (>1) version values specified
-		return r.WriteError(http.StatusBadRequest, nil, nil, "The '%s' %s must specify a single value", p.apiVersionKeyName, location)
+		return r.WriteError(http.StatusBadRequest, nil, nil, "TooManyApiVersionValues", "The '%s' %s must specify a single value", p.apiVersionKeyName, location)
 	}
 
 	isApiVersionRetired := func(avi *ApiVersionInfo) bool {
@@ -241,8 +241,8 @@ func (p *apiVersionToServeMuxStage) next(ctx context.Context, r *ReqRes) bool {
 	}
 
 	if isApiVersionDeprecated(avi) {
-		r.R.Header.Set("deprecated-api-version",
-			fmt.Sprintf("api-version %s is deprecated and will be retired at %s.'",
+		r.RW.Header().Set("deprecated-api-version",
+			fmt.Sprintf("api-version %s is deprecated and will be retired at %s",
 				avi.ApiVersion, avi.RetireAt.Format(time.RFC1123)))
 		// TODO: Add support for recommending a newer api-version?
 	}
