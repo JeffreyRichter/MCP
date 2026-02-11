@@ -78,8 +78,8 @@ func (pm *PhaseMgr) DeleteQueue(ctx context.Context) error {
 // Poison messages & other failures are logged.
 func (pm *PhaseMgr) processor(ctx context.Context) {
 	o := &azqueue.DequeueMessagesOptions{
-		NumberOfMessages:  aids.New(int32(10)),
-		VisibilityTimeout: aids.New(int32(pm.config.PhaseExecutionTime.Seconds())),
+		NumberOfMessages:  new(int32(10)),
+		VisibilityTimeout: new(int32(pm.config.PhaseExecutionTime.Seconds())),
 	}
 	for ctx.Err() == nil {
 		time.Sleep(time.Millisecond * 200)
@@ -150,7 +150,7 @@ type phaseProcessor struct {
 
 func (pp *phaseProcessor) ExtendTime(ctx context.Context, phaseExecutionTime time.Duration) {
 	resp, err := pp.mgr.queueClient.UpdateMessage(ctx, pp.messageID, pp.popReceipt, "",
-		&azqueue.UpdateMessageOptions{VisibilityTimeout: aids.New(int32(phaseExecutionTime.Seconds()))})
+		&azqueue.UpdateMessageOptions{VisibilityTimeout: new(int32(phaseExecutionTime.Seconds()))})
 	aids.Assert(!aids.IsError(err), err)
 	pp.popReceipt = *resp.PopReceipt
 }

@@ -20,16 +20,16 @@ func (c *welcomeToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "welcome",
-			Title: aids.New("Send a welcome message"),
+			Title: new("Send a welcome message"),
 		},
-		Description: aids.New("Creates a welcome message for a user, eliciting the user's name."),
+		Description: new("Creates a welcome message for a user, eliciting the user's name."),
 		InputSchema: mcp.JSONSchema{}, // No input parameters
 		OutputSchema: &mcp.JSONSchema{
 			Type: "object",
 			Properties: &map[string]any{
 				"message": map[string]any{
 					"type":        "string",
-					"Description": aids.New("The welcome message"),
+					"Description": new("The welcome message"),
 				},
 			},
 			Required: []string{"message"},
@@ -57,17 +57,17 @@ func (c *welcomeToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *
 			Properties: map[string]mcp.PrimitiveSchemaDefinition{
 				"name": mcp.StringSchema{
 					Type:        "string",
-					Title:       aids.New("Name"),
-					Description: aids.New("The name for the welcome message."),
-					MinLength:   aids.New(1),
-					MaxLength:   aids.New(100),
-					Format:      aids.New("name"),
+					Title:       new("Name"),
+					Description: new("The name for the welcome message."),
+					MinLength:   new(1),
+					MaxLength:   new(100),
+					Format:      new("name"),
 				},
 			},
 			Required: []string{"name"},
 		},
 	}
-	tc.Status = aids.New(mcp.StatusAwaitingElicitationResult)
+	tc.Status = new(mcp.StatusAwaitingElicitationResult)
 
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
@@ -101,15 +101,15 @@ func (c *welcomeToolInfo) Advance(ctx context.Context, tc *toolcall.Resource, r 
 			result := welcomeToolCallResult{Welcome: fmt.Sprintf("Hello %v, nice to meet you!", name)}
 			tc.Result = aids.MustMarshal(result)
 		}
-		tc.Status, tc.ElicitationRequest = aids.New(mcp.StatusSuccess), nil
+		tc.Status, tc.ElicitationRequest = new(mcp.StatusSuccess), nil
 
 	case "decline": // User explicitly declined the request
 		result := welcomeToolCallResult{Welcome: "Hello anonymous, nice to meet you!"}
 		tc.Result = aids.MustMarshal(result)
-		tc.Status, tc.ElicitationRequest = aids.New(mcp.StatusSuccess), nil
+		tc.Status, tc.ElicitationRequest = new(mcp.StatusSuccess), nil
 
 	case "cancel": // User dismissed without making an explicit choice
-		tc.Status, tc.ElicitationRequest, tc.Result = aids.New(mcp.StatusCanceled), nil, nil
+		tc.Status, tc.ElicitationRequest, tc.Result = new(mcp.StatusCanceled), nil, nil
 
 	default:
 		return r.WriteError(http.StatusBadRequest, nil, nil, "BadRequest", "elicitation result: invalid Action must be 'accept', 'reject', or 'decline'.")
@@ -127,7 +127,7 @@ func (c *welcomeToolInfo) Cancel(ctx context.Context, tc *toolcall.Resource, r *
 		return r.WriteSuccess(http.StatusOK, &svrcore.ResponseHeader{ETag: tc.ETag}, nil, tc.ToMCP())
 	}
 
-	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = aids.New(mcp.StatusCanceled), nil, nil, nil, nil
+	tc.Status, tc.Phase, tc.Error, tc.Result, tc.ElicitationRequest = new(mcp.StatusCanceled), nil, nil, nil, nil
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfMatch: r.H.IfMatch, IfNoneMatch: r.H.IfNoneMatch}); se != nil {
 		return r.WriteServerError(se, &svrcore.ResponseHeader{ETag: tc.ETag}, nil)
 	}

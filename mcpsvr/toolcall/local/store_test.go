@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JeffreyRichter/internal/aids"
 	"github.com/JeffreyRichter/mcp"
 	"github.com/JeffreyRichter/mcpsvr/toolcall"
 	"github.com/JeffreyRichter/svrcore"
@@ -18,9 +17,9 @@ func TestLocalToolCallStore_Get_NotFound(t *testing.T) {
 	store := NewToolCallStore(ctx)
 	tc := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
 	}
 	se := store.Get(ctx, tc, svrcore.AccessConditions{})
@@ -37,12 +36,12 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 
 	originalToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Expiration: aids.New(time.Now().Add(24 * time.Hour)),
-		Status:     aids.New(mcp.StatusRunning),
+		Expiration: new(time.Now().Add(24 * time.Hour)),
+		Status:     new(mcp.StatusRunning),
 		Request:    jsontext.Value(`{"param":"value"}`),
 	}
 
@@ -66,9 +65,9 @@ func TestLocalToolCallStore_Put_and_Get(t *testing.T) {
 
 	getToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
 	}
 
@@ -99,11 +98,11 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 
 	tc1 := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusRunning),
+		Status: new(mcp.StatusRunning),
 	}
 
 	se := store.Put(ctx, tc1, svrcore.AccessConditions{})
@@ -113,13 +112,13 @@ func TestLocalToolCallStore_Put_AccessConditions_IfMatch(t *testing.T) {
 
 	tc2 := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusSuccess),
+		Status: new(mcp.StatusSuccess),
 	}
-	accessConditions := svrcore.AccessConditions{IfMatch: aids.New(svrcore.ETag("NoMatch"))}
+	accessConditions := svrcore.AccessConditions{IfMatch: new(svrcore.ETag("NoMatch"))}
 	se = store.Put(ctx, tc2, accessConditions)
 	if se == nil || se.StatusCode != 412 {
 		t.Fatalf("Second put with if-match should give 412, got %d", se.StatusCode)
@@ -136,11 +135,11 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 
 	originalToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusRunning),
+		Status: new(mcp.StatusRunning),
 	}
 	putResult := originalToolCall.Copy()
 	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
@@ -150,9 +149,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfMatch(t *testing.T) {
 
 	getToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
 	}
 
@@ -183,11 +182,11 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 
 	originalToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusRunning),
+		Status: new(mcp.StatusRunning),
 	}
 
 	putResult := originalToolCall.Copy()
@@ -198,9 +197,9 @@ func TestLocalToolCallStore_Get_AccessConditions_IfNoneMatch(t *testing.T) {
 
 	getToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
 	}
 
@@ -218,11 +217,11 @@ func TestLocalToolCallStore_Delete(t *testing.T) {
 
 	originalToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusRunning),
+		Status: new(mcp.StatusRunning),
 	}
 
 	se := store.Put(ctx, originalToolCall, svrcore.AccessConditions{})
@@ -247,11 +246,11 @@ func TestLocalToolCallStore_Delete_AccessConditions(t *testing.T) {
 
 	originalToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusRunning),
+		Status: new(mcp.StatusRunning),
 	}
 	putResult := originalToolCall.Copy()
 	se := store.Put(ctx, &putResult, svrcore.AccessConditions{})
@@ -279,9 +278,9 @@ func TestLocalToolCallStore_Delete_NonExistent(t *testing.T) {
 
 	toolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
 	}
 
@@ -300,11 +299,11 @@ func TestLocalToolCallStore_TenantIsolation(t *testing.T) {
 
 	toolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status: aids.New(mcp.StatusRunning),
+		Status: new(mcp.StatusRunning),
 	}
 
 	se := store.Put(ctx, toolCall, svrcore.AccessConditions{})
@@ -331,11 +330,11 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 
 	originalToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
-		Status:  aids.New(mcp.StatusRunning),
+		Status:  new(mcp.StatusRunning),
 		Request: jsontext.Value(`{"param":"original"}`),
 	}
 	putResult := originalToolCall.Copy()
@@ -349,9 +348,9 @@ func TestLocalToolCallStore_DataIsolation(t *testing.T) {
 
 	getToolCall := &toolcall.Resource{
 		Identity: toolcall.Identity{
-			Tenant:   aids.New("test-tenant"),
-			ToolName: aids.New("test-tool"),
-			ID:       aids.New("test-id"),
+			Tenant:   new("test-tenant"),
+			ToolName: new("test-tool"),
+			ID:       new("test-id"),
 		},
 	}
 

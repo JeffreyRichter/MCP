@@ -120,11 +120,11 @@ func (r *ReqRes) WriteSuccess(statusCode int, rh *ResponseHeader, customHeader a
 	if rh == nil {
 		rh = &ResponseHeader{}
 	}
-	body, err := []byte{}, error(nil)
+	body, err := ([]byte)(nil), error(nil)
 	if bodyStruct != nil {
 		body = aids.MustMarshal(bodyStruct)
 		// If bodyStruct passed, automatically set these response headers
-		rh.ContentLength, rh.ContentType = aids.New(len(body)), aids.New("application/json")
+		rh.ContentLength, rh.ContentType = new(len(body)), new("application/json")
 	}
 	fields2Header := func(rwh http.Header, ptrToStruct any) {
 		if ptrToStruct == nil {

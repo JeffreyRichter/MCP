@@ -154,7 +154,7 @@ func (sdc *serverDataConverter) Encode(data []byte) *string {
 	h.Write(data)
 	mac := h.Sum(nil)
 	data = append(mac, data...)                              // Prepend HMAC to data
-	return aids.New(base64.StdEncoding.EncodeToString(data)) // Encode to base-64 string
+	return new(base64.StdEncoding.EncodeToString(data)) // Encode to base-64 string
 }
 
 func (sdc *serverDataConverter) Decode(serverData *string) (*Resource, error) {

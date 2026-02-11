@@ -19,19 +19,19 @@ func (c *addToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "add",
-			Title: aids.New("Add two numbers"),
+			Title: new("Add two numbers"),
 		},
-		Description: aids.New("Add two numbers"),
+		Description: new("Add two numbers"),
 		InputSchema: mcp.JSONSchema{
 			Type: "object",
 			Properties: &map[string]any{
 				"x": map[string]any{
 					"type":        "integer",
-					"Description": aids.New("The first number"),
+					"Description": new("The first number"),
 				},
 				"y": map[string]any{
 					"type":        "integer",
-					"Description": aids.New("The second number"),
+					"Description": new("The second number"),
 				},
 			},
 			Required: []string{"x", "y"},
@@ -41,17 +41,17 @@ func (c *addToolInfo) Tool() *mcp.Tool {
 			Properties: &map[string]any{
 				"result": map[string]any{
 					"type":        "integer",
-					"Description": aids.New("The result of the addition"),
+					"Description": new("The result of the addition"),
 				},
 			},
 			Required: []string{"result"},
 		},
 		Annotations: &mcp.ToolAnnotations{
-			Title:           aids.New("Add two numbers"),
-			ReadOnlyHint:    aids.New(false),
-			DestructiveHint: aids.New(false),
-			IdempotentHint:  aids.New(true),
-			OpenWorldHint:   aids.New(true),
+			Title:           new("Add two numbers"),
+			ReadOnlyHint:    new(false),
+			DestructiveHint: new(false),
+			IdempotentHint:  new(true),
+			OpenWorldHint:   new(true),
 		},
 		Meta: mcp.Meta{"foo": "bar", "baz": "qux"},
 	}
@@ -78,7 +78,7 @@ func (c *addToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrc
 		return stop
 	}
 	tc.Request = aids.MustMarshal(trequest)
-	tc.Status = aids.New(mcp.StatusSuccess)
+	tc.Status = new(mcp.StatusSuccess)
 	tc.Expiration = nil
 	tc.Result = aids.MustMarshal(&addToolCallResult{Sum: trequest.X + trequest.Y})
 	// Add is a simple ephemeral tool call so we do NOT put it in the Store

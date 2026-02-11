@@ -61,11 +61,11 @@ func (tc *Resource) ToMCP() mcp.ToolCall { return tc.ToMCPWith(false) }
 func (tc *Resource) ToMCPWith(serverData bool) mcp.ToolCall {
 	sd := (*string)(nil)
 	if serverData {
-		sd = aids.New(sde.Encode(aids.MustMarshal(tc))) // Serialize the ToolCall Resource string
+		sd = new(sde.Encode(aids.MustMarshal(tc))) // Serialize the ToolCall Resource string
 	}
 	etag := (*string)(nil)
 	if tc.ETag != nil {
-		etag = aids.New(`\"` + tc.ETag.String() + `\"`) // ex: "\"etagValue\""; json unmarhsal removes outer "s
+		etag = new(`\"` + tc.ETag.String() + `\"`) // ex: "\"etagValue\""; json unmarhsal removes outer "s
 	}
 	return mcp.ToolCall{
 		ToolName:           tc.ToolName,
@@ -86,9 +86,9 @@ func (tc *Resource) ToMCPWith(serverData bool) mcp.ToolCall {
 // New creates a new ToolCall with the specified tenant, tool name, and tool call ID.
 func New(tenant, toolName, toolCallID string) *Resource {
 	return &Resource{
-		Identity:   Identity{Tenant: aids.New(tenant), ToolName: aids.New(toolName), ID: aids.New(toolCallID)},
-		Expiration: aids.New(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
-		Status:     aids.New(mcp.StatusSubmitted),
+		Identity:   Identity{Tenant: new(tenant), ToolName: new(toolName), ID: new(toolCallID)},
+		Expiration: new(time.Now().Add(24 * time.Hour)), // Default maximum time a tool call lives
+		Status:     new(mcp.StatusSubmitted),
 	}
 }
 

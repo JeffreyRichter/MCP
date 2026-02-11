@@ -21,26 +21,26 @@ func (c *streamToolInfo) Tool() *mcp.Tool {
 	return &mcp.Tool{
 		BaseMetadata: mcp.BaseMetadata{
 			Name:  "stream",
-			Title: aids.New("Get Stream text"),
+			Title: new("Get Stream text"),
 		},
-		Description: aids.New("Get Stream text"),
+		Description: new("Get Stream text"),
 		OutputSchema: &mcp.JSONSchema{
 			Type: "object",
 			Properties: &map[string]any{
 				"text": map[string]any{
 					"type":        "array",
 					"items":       map[string]any{"type": "string"},
-					"Description": aids.New("The stream text"),
+					"Description": new("The stream text"),
 				},
 			},
 			Required: []string{"text"},
 		},
 		Annotations: &mcp.ToolAnnotations{
-			Title:           aids.New("Get Stream text"),
-			ReadOnlyHint:    aids.New(true),
-			DestructiveHint: aids.New(false),
-			IdempotentHint:  aids.New(true),
-			OpenWorldHint:   aids.New(false),
+			Title:           new("Get Stream text"),
+			ReadOnlyHint:    new(true),
+			DestructiveHint: new(false),
+			IdempotentHint:  new(true),
+			OpenWorldHint:   new(false),
 		},
 		Meta: mcp.Meta{"sensitive": "true"},
 	}
@@ -55,7 +55,7 @@ type (
 
 func (c *streamToolInfo) Create(ctx context.Context, tc *toolcall.Resource, r *svrcore.ReqRes, pm toolcall.PhaseMgr) bool {
 	tc.Result = aids.MustMarshal(streamToolCallResult{Text: []string{}})
-	tc.Status = aids.New(mcp.StatusRunning)
+	tc.Status = new(mcp.StatusRunning)
 	if se := c.ops.store.Put(ctx, tc, svrcore.AccessConditions{IfNoneMatch: svrcore.ETagAnyPtr}); se != nil {
 		return r.WriteServerError(se, nil, nil)
 	}
@@ -76,7 +76,7 @@ func (c *streamToolInfo) ProcessPhase(_ context.Context, _ toolcall.PhaseProcess
 	result.Text = append(result.Text, text[len(result.Text)])
 	tc.Result = aids.MustMarshal(result)
 	if len(result.Text) == len(text) {
-		tc.Status, tc.Phase = aids.New(mcp.StatusSuccess), nil
+		tc.Status, tc.Phase = new(mcp.StatusSuccess), nil
 	}
 	se := c.ops.store.Put(context.TODO(), tc, svrcore.AccessConditions{IfMatch: tc.ETag})
 	aids.Assert(se != nil, fmt.Errorf("failed to put tool call resource: %w", se)) // JMR: was se == nil
